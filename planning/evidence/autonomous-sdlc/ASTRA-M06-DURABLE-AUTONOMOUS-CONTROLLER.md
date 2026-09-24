@@ -228,3 +228,33 @@ source `2249950` cannot read schema 0053 and must not be used afterward.
 ## Compatible release verified
 
 The engineering controller in source `48c77b7b4438d621ff9563b913857bcf771f1800` was released through PR 339, GitOps revision `0bc84048e0d8817c6451e6f83dfcf250a17ab3b5`. Exact Argo/images passed at 16:19 UTC and live schema 53/history preservation at 16:20 UTC. See [the compatible release and recovery floor](ASTRA-M06-COMPATIBLE-CONTROLLER-RELEASE.md). Hosted creation remains disabled. This does not satisfy active-workflow restart, source-to-build delivery or M11/M12 acceptance.
+
+## Planner startup interruption recovery — 2026-09-24
+
+The previously recorded multi-record pre-dispatch recovery gap received a bounded
+implementation on `codex/hosted-startup-recovery-20260924`, based on `3f2b7a2`.
+Commit `af6db7dd4934847285795f7eda953436c972be95` derives stable Session, Run,
+stage, context-pack, workspace, and event identities from the persisted
+`start_planner` operation before entering the executor. A replacement controller
+can complete a missing pre-dispatch record set only while the same operation is
+running, its authority remains current, and any existing Run is still queued with
+zero consumption. Existing records must match the original input; conflicts stop
+recovery. Recovery defers worker dispatch until a later reconciliation of the
+completed record set. An explicit pause test confirms that incomplete startup
+creates no Run until the same operation is resumed. Strict session identity checks
+are recovery-specific; the legacy session creation API retains its prior behavior.
+
+The deterministic API test simulates replacement-owner reconciliation after the
+operation and Session have been persisted. It verifies one queued Run, one linked
+stage/context pack, the same operation-derived identity, no dispatch, and
+pause/resume withholding. It is not a real API process restart, disk-reopen test,
+or live cluster acceptance. `cargo test -p pharness-api -- --test-threads=1`
+passed all **303 API tests** plus the admin test. The focused store persistence
+test passed. `cargo clippy -p pharness-api -p pharness-store --all-targets -- -D
+warnings`, package formatting checks, and `git diff --check` passed. The complete
+store suite had one unrelated order-sensitive
+`stage_outcomes_are_immutable_and_effective_pointer_is_transactional` assertion
+fail in the suite; that test passed when run alone. No image was built or pushed,
+no rollout or database migration occurred, and no model or hosted WorkItem
+operation was dispatched. This branch-only implementation does not close M06
+live restart or acceptance criteria; the release and live gates remain open.

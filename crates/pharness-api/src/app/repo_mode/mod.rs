@@ -30,7 +30,7 @@ pub(in crate::app) use self::stages::start_repo_builder;
 #[cfg(test)]
 pub(in crate::app) use self::stages::start_repo_planner;
 pub(in crate::app) use self::stages::{
-    continue_repo_stage_chain, record_repo_chain_continuation_failure,
+    continue_repo_stage_chain, record_repo_chain_continuation_failure, PlannerStartupIdentity,
 };
 #[cfg(test)]
 pub(in crate::app) use self::state::seal_repo_inapplicable_tail;

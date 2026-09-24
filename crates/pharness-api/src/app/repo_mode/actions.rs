@@ -8,7 +8,10 @@ use super::source_delivery::{
     retry_repo_source_delivery,
 };
 use super::stage_authorization::authorize_repo_stage_chain;
-use super::stages::{start_repo_followup_stage, start_repo_planner};
+use super::stages::{
+    start_repo_followup_stage, start_repo_planner, start_repo_planner_with_identity,
+    PlannerStartupIdentity,
+};
 use super::state::{append_repo_audit, repo_metadata, repo_work_item_state_hash};
 use crate::app::clock::current_millis;
 use crate::app::hashing::canonical_material_hash;
@@ -29,6 +32,8 @@ pub(in crate::app) struct RepoWorkItemActionExecutionRequest {
     pub state_hash: String,
     pub inference_policies: Option<crate::dto::StageChainInferencePolicyRequest>,
     pub execution_policies: Option<crate::dto::StageChainExecutionPolicyRequest>,
+    pub planner_startup: Option<PlannerStartupIdentity>,
+    pub defer_planner_dispatch: bool,
 }
 
 pub(in crate::app) async fn execute_repo_work_item_action(
@@ -43,9 +48,33 @@ pub(in crate::app) async fn execute_repo_work_item_action(
         state_hash,
         inference_policies,
         execution_policies,
+        planner_startup,
+        defer_planner_dispatch,
     } = request;
     ensure_repo_mode_enabled(state)?;
     let metadata = repo_metadata(state, work_item_id).await?;
+    if defer_planner_dispatch && planner_startup.is_none() {
+        return Err(ApiError::conflict(
+            "deferred Planner dispatch requires a recorded controller startup identity",
+        ));
+    }
+    if defer_planner_dispatch && action_id != "start_planner" {
+        return Err(ApiError::conflict(
+            "only a recorded Planner startup may defer dispatch during recovery",
+        ));
+    }
+    if planner_startup.is_some() && metadata.workflow_policy.is_none() {
+        return Err(ApiError::conflict(
+            "controller Planner startup recovery is limited to hosted WorkItems",
+        ));
+    }
+    if let Some(startup) = planner_startup.as_ref() {
+        if *startup != PlannerStartupIdentity::for_operation(&startup.workflow_operation_id)? {
+            return Err(ApiError::conflict(
+                "controller Planner startup identity does not match its operation",
+            ));
+        }
+    }
     let work_item = state
         .store
         .get_work_item(work_item_id)
@@ -112,31 +141,51 @@ pub(in crate::app) async fn execute_repo_work_item_action(
         }
         None => None,
     };
-    let action = derive_repo_actions(
-        &metadata,
-        RepoActionInputs {
-            attempts: (work_item.attempt_count, work_item.max_attempts),
-            work_plan: work_plan.as_ref(),
-            change_set: change_set.as_ref(),
-            source_delivery_intent: source_delivery_intent.as_ref(),
-            executions: &executions,
-            chain: chain.as_ref(),
-            pending_annotation_effects: &pending_annotation_effects,
-            pending_budget_extension: pending_budget_extension.as_ref(),
-            current_run: current_run.as_ref(),
-            retryable_budget_extension: retryable_budget_extension.as_ref(),
-        },
-    )?
-    .into_iter()
-    .find(|action| action.id == action_id)
-    .ok_or_else(|| ApiError::conflict("Repo Mode action is no longer available"))?;
-    if action.state_hash != state_hash {
-        return Err(ApiError::conflict(
-            "Repo Mode action preview is stale; refresh and retry",
-        ));
-    }
-    if action.status != "ready" {
-        return Err(ApiError::conflict("Repo Mode action is blocked"));
+    let recovering_planner_startup =
+        action_id == "start_planner" && defer_planner_dispatch && planner_startup.is_some();
+    if recovering_planner_startup {
+        let startup = planner_startup.as_ref().expect("checked above");
+        let operation = state
+            .store
+            .get_workflow_operation(&startup.workflow_operation_id)
+            .await?
+            .ok_or_else(|| ApiError::conflict("Planner recovery operation is unavailable"))?;
+        if operation.action != "start_planner"
+            || operation.status != "running"
+            || operation.input_hash != state_hash
+            || operation.resource_refs["planner_startup"] != json!(startup)
+        {
+            return Err(ApiError::conflict(
+                "Planner recovery does not match its persisted operation authority",
+            ));
+        }
+    } else {
+        let action = derive_repo_actions(
+            &metadata,
+            RepoActionInputs {
+                attempts: (work_item.attempt_count, work_item.max_attempts),
+                work_plan: work_plan.as_ref(),
+                change_set: change_set.as_ref(),
+                source_delivery_intent: source_delivery_intent.as_ref(),
+                executions: &executions,
+                chain: chain.as_ref(),
+                pending_annotation_effects: &pending_annotation_effects,
+                pending_budget_extension: pending_budget_extension.as_ref(),
+                current_run: current_run.as_ref(),
+                retryable_budget_extension: retryable_budget_extension.as_ref(),
+            },
+        )?
+        .into_iter()
+        .find(|action| action.id == action_id)
+        .ok_or_else(|| ApiError::conflict("Repo Mode action is no longer available"))?;
+        if action.state_hash != state_hash {
+            return Err(ApiError::conflict(
+                "Repo Mode action preview is stale; refresh and retry",
+            ));
+        }
+        if action.status != "ready" {
+            return Err(ApiError::conflict("Repo Mode action is blocked"));
+        }
     }
     match action_id {
         "recover_stage_startup" => {
@@ -257,7 +306,21 @@ pub(in crate::app) async fn execute_repo_work_item_action(
                 .await?;
             Ok(json!({"annotation_decision":decision,"result":result}))
         }
-        "start_planner" => start_repo_planner(state, work_item_id, &actor, &reason).await,
+        "start_planner" => {
+            if let Some(startup) = planner_startup.as_ref() {
+                start_repo_planner_with_identity(
+                    state,
+                    work_item_id,
+                    &actor,
+                    &reason,
+                    Some(startup),
+                    defer_planner_dispatch,
+                )
+                .await
+            } else {
+                start_repo_planner(state, work_item_id, &actor, &reason).await
+            }
+        }
         "approve_work_plan" | "reject_work_plan" => {
             let plan = work_plan.ok_or_else(|| ApiError::conflict("WorkPlan is unavailable"))?;
             if plan.status != "proposed" {

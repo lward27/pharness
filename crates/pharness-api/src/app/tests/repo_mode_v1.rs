@@ -1860,6 +1860,8 @@ async fn zero_turn_stage_startup_recovery_refunds_attempt_and_seals_evidence() {
             state_hash: action.state_hash.clone(),
             inference_policies: None,
             execution_policies: None,
+            planner_startup: None,
+            defer_planner_dispatch: false,
         },
     )
     .await
