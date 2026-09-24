@@ -258,3 +258,22 @@ fail in the suite; that test passed when run alone. No image was built or pushed
 no rollout or database migration occurred, and no model or hosted WorkItem
 operation was dispatched. This branch-only implementation does not close M06
 live restart or acceptance criteria; the release and live gates remain open.
+
+### Store-suite parallel database isolation follow-up — 2026-09-24
+
+The follow-up parallel `cargo test -p pharness-store` run reproduced three
+failures in the delivery migration tests: duplicate schema objects and a SQLite
+lock. Their shared `path()` helper named temporary databases using only the
+process ID and millisecond timestamp, so parallel tests could open the same
+file. The suite passed with one test thread, confirming the parallel collision.
+The helper now adds a process-local atomic sequence to each filename. After the
+fix, the full store suite passed **62/62** in parallel; the three migration
+tests passed in three consecutive eight-thread runs. `cargo clippy -p
+pharness-store --all-targets -- -D warnings` and `cargo fmt -p pharness-store --
+--check` passed. The earlier single-run `stage_outcomes_are_immutable_and_effective_pointer_is_transactional`
+failure was not reproduced in the passing full-suite runs; this fix addresses
+the independently reproduced migration-test database collision. A workspace-
+wide formatting check still reports pre-existing diffs in `pharness-worker`,
+which this change leaves untouched. This remains local test evidence only: no
+image, rollout, migration, or hosted WorkItem operation occurred, and M06 live
+restart acceptance remains open.
