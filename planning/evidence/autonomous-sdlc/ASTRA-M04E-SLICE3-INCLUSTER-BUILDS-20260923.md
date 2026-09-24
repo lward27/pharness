@@ -45,12 +45,15 @@ even though its OCI digest and historical revision label are correct. The old
 model-gateway artifact remains a valid `72fe079` build, but it must be rebuilt
 alongside runtime from one shared current source SHA for a coherent candidate.
 
-On 2026-09-24, current-main server dry-runs passed for `runtime` and
-`model-gateway` using `clone-build-push`, context `lucas_engineering`, namespace
-`tekton-pipelines`, and `tekton-ci-build`. Their proposed deterministic names
-are `pharness-runtime-3e8cbefec2a1` and
-`pharness-model-gateway-3e8cbefec2a1`; neither PipelineRun was created by these
-dry-runs. The builder endpoint was Ready on
+On 2026-09-24, initial server dry-runs passed for `runtime` and `model-gateway`
+at `3e8cbef`. PR #417 later advanced main to `f6a6425` with planning-only
+changes; no application build inputs changed. The preflights were repeated at
+that main head and passed using `clone-build-push`, context `lucas_engineering`,
+namespace `tekton-pipelines`, and `tekton-ci-build`. Their deterministic names
+are `pharness-runtime-f6a6425fceb9` and
+`pharness-model-gateway-f6a6425fceb9`; neither PipelineRun was created by these
+dry-runs. Re-run preflight against the exact remote-main SHA immediately before
+any later dispatch. The builder endpoint was Ready on
 `ubuntu-lucas-engineering-build`, and Argo `tekton-ci` was Synced/Healthy at
 Lucas main `9de1e2d236b87a1bdb96a0278ddfb7bddfd33a00`. A new registry push still
 requires explicit authorization for these two image repositories. Any
