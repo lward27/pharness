@@ -122,6 +122,44 @@ impl SqliteStore {
         Ok(())
     }
 
+    /// Create a session for restart recovery, accepting an existing identity
+    /// only when its immutable startup fields still match exactly.
+    pub async fn create_session_idempotent(
+        &self,
+        session: CreateSession,
+    ) -> Result<(), StoreError> {
+        let now = now_string();
+        sqlx::query(
+            r#"
+            INSERT INTO sessions (id, title, cwd, created_at, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?4)
+            ON CONFLICT(id) DO NOTHING
+            "#,
+        )
+        .bind(session.id.as_str())
+        .bind(&session.title)
+        .bind(&session.cwd)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+        let row = sqlx::query("SELECT title, cwd FROM sessions WHERE id = ?1")
+            .bind(session.id.as_str())
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "session".into(),
+                id: session.id.to_string(),
+            })?;
+        if row.try_get::<String, _>("title")? != session.title
+            || row.try_get::<String, _>("cwd")? != session.cwd
+        {
+            return Err(StoreError::Conflict(
+                "session identity already exists with different content".into(),
+            ));
+        }
+        Ok(())
+    }
+
     pub async fn create_run(&self, run: CreateRun) -> Result<StoredRun, StoreError> {
         let now = now_string();
         let execution_target_json = serde_json::to_string(&run.execution_target_json)?;
@@ -702,10 +740,12 @@ impl SqliteStore {
     }
 
     pub async fn append_event(&self, event: &AgentEvent) -> Result<(), StoreError> {
+        let payload_json = serde_json::to_string(&event.payload)?;
         sqlx::query(
             r#"
             INSERT INTO events (id, session_id, run_id, seq, type, ts, payload_json)
             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            ON CONFLICT(id) DO NOTHING
             "#,
         )
         .bind(event.event_id.as_str())
@@ -714,9 +754,29 @@ impl SqliteStore {
         .bind(event.seq as i64)
         .bind(event.kind.as_str())
         .bind(now_string())
-        .bind(serde_json::to_string(&event.payload)?)
+        .bind(&payload_json)
         .execute(&self.pool)
         .await?;
+        let row = sqlx::query(
+            "SELECT session_id, run_id, seq, type, payload_json FROM events WHERE id = ?1",
+        )
+        .bind(event.event_id.as_str())
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or_else(|| StoreError::NotFound {
+            entity: "event".into(),
+            id: event.event_id.to_string(),
+        })?;
+        if row.try_get::<String, _>("session_id")? != event.session_id.as_str()
+            || row.try_get::<String, _>("run_id")? != event.run_id.as_str()
+            || row.try_get::<i64, _>("seq")? != event.seq as i64
+            || row.try_get::<String, _>("type")? != event.kind.as_str()
+            || row.try_get::<String, _>("payload_json")? != payload_json
+        {
+            return Err(StoreError::Conflict(
+                "event identity already exists with different content".into(),
+            ));
+        }
         Ok(())
     }
 
@@ -7123,6 +7183,24 @@ mod tests {
             .await
             .unwrap();
         store
+            .create_session_idempotent(CreateSession {
+                id: session_id.clone(),
+                title: "test".to_string(),
+                cwd: ".".to_string(),
+            })
+            .await
+            .unwrap();
+        assert!(matches!(
+            store
+                .create_session_idempotent(CreateSession {
+                    id: session_id.clone(),
+                    title: "conflicting title".to_string(),
+                    cwd: ".".to_string(),
+                })
+                .await,
+            Err(StoreError::Conflict(_))
+        ));
+        store
             .create_run(CreateRun {
                 id: run_id.clone(),
                 session_id: session_id.clone(),
@@ -7145,6 +7223,30 @@ mod tests {
             })
             .await
             .unwrap();
+        store
+            .append_event(&AgentEvent {
+                event_id: EventId::new("evt_1"),
+                session_id: session_id.clone(),
+                run_id: run_id.clone(),
+                seq: 1,
+                kind: EventKind::RunStarted,
+                payload: serde_json::json!({"ok": true}),
+            })
+            .await
+            .unwrap();
+        assert!(matches!(
+            store
+                .append_event(&AgentEvent {
+                    event_id: EventId::new("evt_1"),
+                    session_id: session_id.clone(),
+                    run_id: run_id.clone(),
+                    seq: 1,
+                    kind: EventKind::RunStarted,
+                    payload: serde_json::json!({"ok": false}),
+                })
+                .await,
+            Err(StoreError::Conflict(_))
+        ));
 
         let run = store.get_run(&run_id).await.unwrap().unwrap();
         let events = store.list_events(&run_id).await.unwrap();

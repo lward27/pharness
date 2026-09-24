@@ -3,7 +3,8 @@ use super::repo_mode_v1::repo_fixture_with_workflow;
 use crate::app::hosted_workflow::{qualified_stage, stages as hosted};
 use pharness_core::{InferencePolicyRef, InferenceStage, RunId, SessionId};
 use pharness_store::{
-    CreateInferencePolicyQualification, CreateRun, CreateSession, WorkspaceListFilter,
+    BeginWorkflowOperation, CreateInferencePolicyQualification, CreateRun, CreateSession,
+    FinishWorkflowReconciliation, RunListFilter, WorkspaceListFilter,
 };
 use serde_json::json;
 use std::sync::Arc;
@@ -856,4 +857,321 @@ async fn planner_submission_readiness_follows_saved_prompt_not_current_defaults(
         pharness_runhost::planner_submission_contract_for_binding(&binding),
         None
     );
+}
+
+#[tokio::test]
+async fn hosted_planner_recovers_a_pre_dispatch_session_with_the_same_operation_identity() {
+    let source_repo = "https://github.com/example/hosted-planner-startup.git";
+    let mut state = super::characterization::test_state_with_hosted_build(
+        "/bin/false".into(),
+        source_repo.into(),
+    )
+    .await;
+    enable_gateway(&mut state);
+    let mut workflow_policy: pharness_core::hosted_sdlc::HostedWorkflowPolicySnapshot =
+        serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../crates/pharness-core/tests/fixtures/hosted-workflow.json"
+        )))
+        .unwrap();
+    workflow_policy.agent_profiles.clear();
+    for (key, id, stage) in [
+        ("plan", "repo-planner", InferenceStage::Plan),
+        ("implement", "repo-builder", InferenceStage::Implement),
+        ("repair", "repo-repair", InferenceStage::Implement),
+        (
+            "test_diagnosis",
+            "repo-test-diagnoser",
+            InferenceStage::Test,
+        ),
+        ("verify", "repo-verifier", InferenceStage::Verify),
+    ] {
+        qualification_fixture(&state, stage, id, 2).await;
+        let (profile, selection) = qualified_stage(&state, key, id, stage, None).await.unwrap();
+        workflow_policy.agent_profiles.push(profile);
+        workflow_policy.stage_inference[key] = selection;
+    }
+    let fixture = super::repo_mode_v1::repo_fixture_with_policy(
+        "hosted_planner_pre_dispatch_recovery",
+        false,
+        state,
+        Some(workflow_policy),
+    )
+    .await;
+    let metadata = fixture
+        .state
+        .store
+        .get_repo_work_item_metadata(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let planner_profile = hosted::pinned_profile(&metadata, "repo-planner")
+        .unwrap()
+        .unwrap();
+    let planner_policy = hosted::pinned_policy_ref(&metadata, "repo-planner")
+        .unwrap()
+        .unwrap();
+    crate::app::inference::create_planned_selection(
+        &fixture.state,
+        crate::app::inference::PlannedSelectionRequest {
+            subject_kind: "work_item",
+            subject_id: &fixture.work_item_id,
+            stage: InferenceStage::Plan,
+            profile: &json!(planner_profile),
+            requested: Some(&planner_policy),
+            actor: "controller",
+            reason: "record the exact hosted Planner selection for recovery",
+            state_hash: metadata.workflow_policy_hash.as_deref().unwrap(),
+        },
+    )
+    .await
+    .unwrap();
+    let action =
+        crate::app::repo_mode::repo_controller_actions(&fixture.state, &fixture.work_item_id)
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|action| action.id == "start_planner" && action.status == "ready")
+            .expect("hosted Planner action should be ready in this local fixture");
+    let operation_hash = crate::app::hashing::canonical_material_hash(&json!([
+        fixture.work_item_id,
+        "start_planner",
+        action.state_hash
+    ]))
+    .unwrap();
+    let operation_id = format!(
+        "workflowop_{}",
+        operation_hash.trim_start_matches("sha256:")
+    );
+    let startup =
+        crate::app::repo_mode::PlannerStartupIdentity::for_operation(&operation_id).unwrap();
+    let metadata = fixture
+        .state
+        .store
+        .get_repo_work_item_metadata(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let now = crate::app::clock::current_millis() as i64;
+    let claim = fixture
+        .state
+        .store
+        .claim_due_workflow("interrupted-planner-api", now, 60_000)
+        .await
+        .unwrap()
+        .unwrap();
+    let repository_lock = format!("repository:{}", metadata.repository_id);
+    let operation = fixture
+        .state
+        .store
+        .begin_workflow_operation(
+            &claim,
+            BeginWorkflowOperation {
+                id: &operation_id,
+                action: "start_planner",
+                input_hash: &action.state_hash,
+                effect: "development",
+                resource_keys: &["coding", repository_lock.as_str()],
+            },
+            now,
+        )
+        .await
+        .unwrap();
+    let refs = json!({
+        "action_resource":fixture.work_item_id,
+        "before_run_ids":[],
+        "planner_startup":startup,
+    });
+    fixture
+        .state
+        .store
+        .record_workflow_operation(
+            &claim,
+            &operation.id,
+            "running",
+            &refs,
+            "simulate process interruption after session creation",
+            now,
+        )
+        .await
+        .unwrap();
+    let work_item = fixture
+        .state
+        .store
+        .get_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    fixture
+        .state
+        .store
+        .create_session(CreateSession {
+            id: SessionId::new(startup.session_id.clone()),
+            title: format!("Repo Planner: {}", work_item.title),
+            cwd: fixture.state.worker.effective_cwd("/workspace"),
+        })
+        .await
+        .unwrap();
+    let finished_at = crate::app::clock::current_millis() as i64;
+    fixture
+        .state
+        .store
+        .finish_workflow_reconciliation(
+            &claim,
+            FinishWorkflowReconciliation {
+                next_due_at: finished_at + 60_000,
+                condition: "waiting",
+                reason: "simulate API restart after partial startup",
+                observed_state_hash: None,
+            },
+            finished_at,
+        )
+        .await
+        .unwrap();
+    fixture
+        .state
+        .store
+        .wake_workflow(
+            &fixture.work_item_id,
+            crate::app::clock::current_millis() as i64,
+        )
+        .await
+        .unwrap();
+
+    let reconciliation = fixture
+        .state
+        .store
+        .get_workflow_reconciliation(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    fixture
+        .state
+        .store
+        .set_workflow_control(
+            &fixture.work_item_id,
+            reconciliation.control_version,
+            "paused",
+            "operator",
+            "withhold incomplete Planner startup recovery",
+            crate::app::clock::current_millis() as i64,
+        )
+        .await
+        .unwrap();
+    fixture
+        .state
+        .store
+        .wake_workflow(
+            &fixture.work_item_id,
+            crate::app::clock::current_millis() as i64,
+        )
+        .await
+        .unwrap();
+    assert!(
+        crate::app::hosted_controller::reconcile_once(&fixture.state, "replacement-api")
+            .await
+            .unwrap()
+    );
+    assert!(fixture
+        .state
+        .store
+        .get_run(&RunId::new(startup.run_id.clone()))
+        .await
+        .unwrap()
+        .is_none());
+    let paused = fixture
+        .state
+        .store
+        .get_workflow_reconciliation(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(paused.control, "paused");
+    assert_eq!(
+        paused.condition_reason,
+        "Planner startup is incomplete; no new records are created while work is stopped."
+    );
+    let resumed = fixture
+        .state
+        .store
+        .set_workflow_control(
+            &fixture.work_item_id,
+            paused.control_version,
+            "active",
+            "operator",
+            "resume the same authorized Planner startup",
+            crate::app::clock::current_millis() as i64,
+        )
+        .await
+        .unwrap();
+    assert_eq!(resumed.control, "active");
+    fixture
+        .state
+        .store
+        .wake_workflow(
+            &fixture.work_item_id,
+            crate::app::clock::current_millis() as i64,
+        )
+        .await
+        .unwrap();
+    assert!(
+        crate::app::hosted_controller::reconcile_once(&fixture.state, "replacement-api")
+            .await
+            .unwrap()
+    );
+    let runs = fixture
+        .state
+        .store
+        .list_runs(RunListFilter {
+            work_item_id: Some(fixture.work_item_id.clone()),
+            limit: 200,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        runs.len(),
+        1,
+        "reconciliation: {:?}; operation: {:?}",
+        fixture
+            .state
+            .store
+            .get_workflow_reconciliation(&fixture.work_item_id)
+            .await
+            .unwrap(),
+        fixture
+            .state
+            .store
+            .get_workflow_operation(&operation_id)
+            .await
+            .unwrap(),
+    );
+    let run = &runs[0];
+    assert_eq!(run.id.as_str(), startup.run_id);
+    assert_eq!(run.status, "queued", "recovery must not dispatch the Run");
+    assert_eq!(
+        run.execution_target_json["hosted_planner_startup_identity"],
+        json!(startup)
+    );
+    let executions = fixture
+        .state
+        .store
+        .list_stage_executions(&fixture.work_item_id)
+        .await
+        .unwrap();
+    assert_eq!(executions.len(), 1);
+    assert_eq!(executions[0].run_id.as_ref(), Some(&run.id));
+    assert_eq!(
+        executions[0].context_pack_id.as_deref(),
+        Some(startup.context_pack_id.as_str())
+    );
+    let operation = fixture
+        .state
+        .store
+        .get_workflow_operation(&operation_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(operation.status, "running");
+    assert_eq!(operation.resource_refs["run_id"], startup.run_id);
 }

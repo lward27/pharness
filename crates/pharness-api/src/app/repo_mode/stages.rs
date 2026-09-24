@@ -17,6 +17,39 @@ use pharness_store::{
 };
 use serde_json::{json, Value};
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(in crate::app) struct PlannerStartupIdentity {
+    pub workflow_operation_id: String,
+    pub session_id: String,
+    pub run_id: String,
+    pub stage_execution_id: String,
+    pub context_pack_id: String,
+    pub workspace_id: String,
+    pub event_id: String,
+}
+
+impl PlannerStartupIdentity {
+    pub(in crate::app) fn for_operation(operation_id: &str) -> Result<Self, ApiError> {
+        let digest = canonical_material_hash(&json!({"workflow_operation_id":operation_id}))?;
+        let suffix = digest
+            .strip_prefix("sha256:")
+            .unwrap_or(&digest)
+            .chars()
+            .take(32)
+            .collect::<String>();
+        Ok(Self {
+            workflow_operation_id: operation_id.into(),
+            session_id: format!("ses_hosted_{suffix}"),
+            run_id: format!("run_hosted_{suffix}"),
+            stage_execution_id: format!("stageexec_hosted_{suffix}"),
+            context_pack_id: format!("context_hosted_{suffix}"),
+            workspace_id: format!("ws_hosted_{suffix}"),
+            event_id: format!("evt_hosted_{suffix}"),
+        })
+    }
+}
+
 /// Every stage, including a bounded repair, uses the originally approved plan.
 /// A new plan or expired grant cannot acquire authority from an existing chain.
 fn validate_chain_snapshot(
@@ -61,6 +94,17 @@ pub(in crate::app) async fn start_repo_planner(
     actor: &str,
     reason: &str,
 ) -> Result<Value, ApiError> {
+    start_repo_planner_with_identity(state, work_item_id, actor, reason, None, false).await
+}
+
+pub(in crate::app) async fn start_repo_planner_with_identity(
+    state: &AppState,
+    work_item_id: &str,
+    actor: &str,
+    reason: &str,
+    startup: Option<&PlannerStartupIdentity>,
+    defer_dispatch: bool,
+) -> Result<Value, ApiError> {
     let metadata = repo_metadata(state, work_item_id).await?;
     hosted::validate_planned(state, &metadata, "repo-planner").await?;
     let planned_execution = crate::app::agent_hosts::latest_planned_execution_selection(
@@ -80,6 +124,16 @@ pub(in crate::app) async fn start_repo_planner(
         .get_work_item(work_item_id)
         .await?
         .ok_or_else(|| ApiError::not_found("work_item", work_item_id))?;
+    if startup.is_some()
+        && !matches!(
+            work_item.status.as_str(),
+            "proposed" | "submitted" | "executing"
+        )
+    {
+        return Err(ApiError::conflict(
+            "Planner startup cannot resume after the WorkItem leaves its active startup state",
+        ));
+    }
     let outcomes = state
         .store
         .list_effective_stage_outcomes(work_item_id)
@@ -102,19 +156,43 @@ pub(in crate::app) async fn start_repo_planner(
             .find(|profile| profile.id == "repo-planner")
             .ok_or_else(|| ApiError::internal("compiled repo-planner profile is unavailable"))?
     };
-    let stage_execution_id = new_prefixed_id("stageexec");
-    let context_pack_id = new_prefixed_id("context");
-    let run_id = RunId::new(new_prefixed_id("run"));
-    let session_id = SessionId::new(new_prefixed_id("ses"));
-    let plan_sequence = state
-        .store
-        .list_stage_executions(work_item_id)
-        .await?
-        .iter()
-        .filter(|execution| execution.stage_key == pharness_core::RepoStageKey::Plan.as_str())
-        .count() as u64
-        + 1;
-    let context = json!({
+    let stage_execution_id = startup
+        .map(|identity| identity.stage_execution_id.clone())
+        .unwrap_or_else(|| new_prefixed_id("stageexec"));
+    let context_pack_id = startup
+        .map(|identity| identity.context_pack_id.clone())
+        .unwrap_or_else(|| new_prefixed_id("context"));
+    let run_id = RunId::new(
+        startup
+            .map(|identity| identity.run_id.clone())
+            .unwrap_or_else(|| new_prefixed_id("run")),
+    );
+    let session_id = SessionId::new(
+        startup
+            .map(|identity| identity.session_id.clone())
+            .unwrap_or_else(|| new_prefixed_id("ses")),
+    );
+    let prior_executions = state.store.list_stage_executions(work_item_id).await?;
+    let existing_stage = state.store.get_stage_execution(&stage_execution_id).await?;
+    let plan_sequence = existing_stage
+        .as_ref()
+        .map(|execution| execution.sequence)
+        .unwrap_or_else(|| {
+            prior_executions
+                .iter()
+                .filter(|execution| {
+                    execution.stage_key == pharness_core::RepoStageKey::Plan.as_str()
+                        && execution.id != stage_execution_id
+                })
+                .count() as u64
+                + 1
+        });
+    let existing_run = if startup.is_some() {
+        state.store.get_run(&run_id).await?
+    } else {
+        None
+    };
+    let computed_context = json!({
         "schema_version":pharness_core::AGENT_CONTEXT_SCHEMA,
         "current_intent":{"title":work_item.title,"intent":work_item.intent,"acceptance":metadata.acceptance_command_names},
         "pinned_product":{"snapshot_id":metadata.product_model_snapshot_id,"snapshot_hash":metadata.product_model_snapshot_hash},
@@ -129,31 +207,86 @@ pub(in crate::app) async fn start_repo_planner(
         "operator_decisions":annotation_context(&annotations),
         "evidence_catalog":evidence.catalog,
     });
-    let estimated_tokens = u64::try_from(context.to_string().len() / 4).unwrap_or(u64::MAX);
+    let existing_context_pack = if startup.is_some() {
+        state.store.get_agent_context_pack(&context_pack_id).await?
+    } else {
+        None
+    };
+    if let Some(pack) = &existing_context_pack {
+        if pack.work_item_id != work_item_id
+            || pack.stage_execution_id != stage_execution_id
+            || canonical_material_hash(&pack.context)? != pack.content_hash
+        {
+            return Err(ApiError::conflict(
+                "the recorded Planner context pack conflicts with its startup identity",
+            ));
+        }
+    }
+    let recorded_context = existing_context_pack
+        .as_ref()
+        .map(|pack| pack.context.clone())
+        .or_else(|| {
+            existing_run
+                .as_ref()
+                .and_then(|run| run.execution_target_json.get("agent_context").cloned())
+        });
+    if recorded_context
+        .as_ref()
+        .is_some_and(|recorded| recorded != &computed_context)
+    {
+        return Err(ApiError::conflict(
+            "Planner inputs changed during startup recovery; no rebind or dispatch is permitted",
+        ));
+    }
+    let context = recorded_context.unwrap_or(computed_context);
+    let estimated_tokens = existing_context_pack
+        .as_ref()
+        .map(|pack| pack.estimated_tokens)
+        .unwrap_or_else(|| u64::try_from(context.to_string().len() / 4).unwrap_or(u64::MAX));
     if estimated_tokens > 16_000 {
         return Err(ApiError::conflict(
             "mandatory Planner context exceeds the 16,000-token context-pack limit",
         ));
     }
     let planner_workspace = if planned_execution.is_some() {
-        Some(
-            state
-                .store
-                .create_workspace(CreateWorkspace {
-                    id: new_prefixed_id("ws"),
-                    work_item_id: work_item_id.into(),
-                    run_id: Some(run_id.clone()),
-                    status: "provisioning".into(),
-                    source_repo: work_item.source_repo.clone(),
-                    source_ref: work_item.source_ref.clone(),
-                    resolved_commit: work_item.source_commit.clone(),
-                    branch: Some(format!("pharness/{work_item_id}/planner-{plan_sequence}")),
-                    retention_status: "retained".into(),
-                    actor: Some(actor.into()),
-                    reason: Some(reason.into()),
-                })
-                .await?,
-        )
+        let workspace = CreateWorkspace {
+            id: startup
+                .map(|identity| identity.workspace_id.clone())
+                .unwrap_or_else(|| new_prefixed_id("ws")),
+            work_item_id: work_item_id.into(),
+            run_id: Some(run_id.clone()),
+            status: "provisioning".into(),
+            source_repo: work_item.source_repo.clone(),
+            source_ref: work_item.source_ref.clone(),
+            resolved_commit: work_item.source_commit.clone(),
+            branch: Some(format!("pharness/{work_item_id}/planner-{plan_sequence}")),
+            retention_status: "retained".into(),
+            actor: Some(actor.into()),
+            reason: Some(reason.into()),
+        };
+        let existing = if startup.is_some() {
+            state.store.get_workspace(&workspace.id).await?
+        } else {
+            None
+        };
+        if let Some(existing) = existing {
+            if existing.work_item_id != workspace.work_item_id
+                || existing.run_id != workspace.run_id
+                || existing.status != workspace.status
+                || existing.source_repo != workspace.source_repo
+                || existing.source_ref != workspace.source_ref
+                || existing.resolved_commit != workspace.resolved_commit
+                || existing.branch != workspace.branch
+                || existing.retention_status != workspace.retention_status
+            {
+                return Err(ApiError::conflict(
+                    "the recorded Planner workspace conflicts with its startup identity",
+                ));
+            }
+            Some(existing)
+        } else {
+            Some(state.store.create_workspace(workspace).await?)
+        }
     } else {
         None
     };
@@ -164,7 +297,7 @@ pub(in crate::app) async fn start_repo_planner(
     };
     state
         .store
-        .create_session(CreateSession {
+        .create_session_idempotent(CreateSession {
             id: session_id.clone(),
             title: format!("Repo Planner: {}", work_item.title),
             cwd: cwd.clone(),
@@ -254,37 +387,82 @@ pub(in crate::app) async fn start_repo_planner(
                 branch: workspace.branch.clone().unwrap_or_default(),
                 resolved_commit: None,
             });
-    let run = state
-        .store
-        .create_run(CreateRun {
-            id: run_id.clone(),
-            session_id: session_id.clone(),
-            user_task: format!(
-                "Produce a bounded WorkPlan for this exact intent and acceptance contract: {}",
-                work_item.intent
-            ),
-            cwd: cwd.clone(),
-            max_turns: profile.budget.initial_turns,
-            initial_status: "queued".into(),
-            execution_target_json: hosted::bind_run(&metadata, "repo-planner", json!({
-                "kind":if planned_execution.is_some() {"agent_host_workspace"} else {state.worker.execution_target_kind()},
-                "agent_execution":agent_execution_marker,
-                "inference":inference_marker,
-                "repo_mode":{"stage_execution_id":stage_execution_id,"stage":"plan","context_pack_id":context_pack_id,"workspace_access":"read_only"},
-                "planner_submission_contract":planner_submission_contract,
-                "agent_profile":profile,
-                "agent_context":context,
-                "agent_evidence_payloads":evidence.payloads,
-                "run_scope":scope.to_optional_json(),
-                "run_budget":profile.budget,
-                "workspace_source":workspace_source,
-                "environment_profile_id":work_item.environment_profile_id,
-                "repository_contract":work_item.repository_contract_json,
-                "selected_acceptance_commands":work_item.acceptance_criteria,
-                "runner_profile":runner_profile,
-            }))?,
+    let expected_agent_evidence_payloads = Value::Array(evidence.payloads.clone());
+    let agent_evidence_payloads = existing_run
+        .as_ref()
+        .and_then(|run| {
+            run.execution_target_json
+                .get("agent_evidence_payloads")
+                .cloned()
         })
-        .await?;
+        .unwrap_or_else(|| expected_agent_evidence_payloads.clone());
+    if agent_evidence_payloads != expected_agent_evidence_payloads {
+        return Err(ApiError::conflict(
+            "Planner evidence changed during startup recovery; no rebind or dispatch is permitted",
+        ));
+    }
+    let user_task = format!(
+        "Produce a bounded WorkPlan for this exact intent and acceptance contract: {}",
+        work_item.intent
+    );
+    let mut planner_execution_target = json!({
+        "kind":if planned_execution.is_some() {"agent_host_workspace"} else {state.worker.execution_target_kind()},
+        "agent_execution":agent_execution_marker,
+        "inference":inference_marker,
+        "repo_mode":{"stage_execution_id":stage_execution_id,"stage":"plan","context_pack_id":context_pack_id,"workspace_access":"read_only"},
+        "planner_submission_contract":planner_submission_contract,
+        "agent_profile":profile,
+        "agent_context":context,
+        "agent_evidence_payloads":agent_evidence_payloads,
+        "run_scope":scope.to_optional_json(),
+        "run_budget":profile.budget,
+        "workspace_source":workspace_source,
+        "environment_profile_id":work_item.environment_profile_id,
+        "repository_contract":work_item.repository_contract_json,
+        "selected_acceptance_commands":work_item.acceptance_criteria,
+        "runner_profile":runner_profile,
+    });
+    if let Some(startup) = startup {
+        planner_execution_target["hosted_planner_startup_identity"] = json!(startup);
+    }
+    let execution_target_json =
+        hosted::bind_run(&metadata, "repo-planner", planner_execution_target)?;
+    let create_run = CreateRun {
+        id: run_id.clone(),
+        session_id: session_id.clone(),
+        user_task: user_task.clone(),
+        cwd: cwd.clone(),
+        max_turns: profile.budget.initial_turns,
+        initial_status: "queued".into(),
+        execution_target_json: execution_target_json.clone(),
+    };
+    let run = if let Some(run) = existing_run {
+        let consumed = run.budget_consumption.turns_used != 0
+            || run.budget_consumption.tokens_used != 0
+            || run.finished_at.is_some();
+        let budget_matches = run.run_budget == profile.budget
+            || run.run_budget == pharness_core::RunBudget::default();
+        if run.session_id != session_id
+            || run.cwd != cwd
+            || run.user_task != user_task
+            || run.max_turns != profile.budget.initial_turns
+            || run.execution_target_json != execution_target_json
+            || run.status != "queued"
+            || consumed
+            || !budget_matches
+            || run
+                .created_by
+                .as_deref()
+                .is_some_and(|created_by| created_by != actor)
+        {
+            return Err(ApiError::conflict(
+                "the recorded Planner Run conflicts with its pre-dispatch startup identity",
+            ));
+        }
+        run
+    } else {
+        state.store.create_run(create_run).await?
+    };
     let run = state
         .store
         .set_run_budget(
@@ -302,49 +480,94 @@ pub(in crate::app) async fn start_repo_planner(
         .store
         .set_run_created_by(&run.id, Some(actor.into()))
         .await?;
+    let context_hash = canonical_material_hash(&context)?;
     let input_snapshot = json!({
         "context_pack_id":context_pack_id,
-        "context_hash":canonical_material_hash(&context)?,
+        "context_hash":context_hash,
         "profile_id":profile.id,
         "profile_version":profile.version,
         "profile_hash":profile.profile_hash,
         "source_commit":work_item.source_commit,
     });
+    let expected_input_hash = canonical_material_hash(&input_snapshot)?;
+    let expected_workspace_id = planner_workspace
+        .as_ref()
+        .map(|workspace| workspace.id.clone());
+    let execution = if let Some(existing) = existing_stage {
+        if existing.work_item_id != work_item_id
+            || existing.stage_key != pharness_core::RepoStageKey::Plan.as_str()
+            || existing.sequence != plan_sequence
+            || existing.status != "queued"
+            || existing.agent_profile_id.as_deref() != Some(profile.id.as_str())
+            || existing.agent_profile_version.as_deref() != Some(profile.version.as_str())
+            || existing.agent_profile_hash.as_deref() != Some(profile.profile_hash.as_str())
+            || existing
+                .context_pack_id
+                .as_deref()
+                .is_some_and(|id| id != context_pack_id)
+            || existing.run_id.as_ref() != Some(&run.id)
+            || existing.workspace_id != expected_workspace_id
+            || existing.input_snapshot != input_snapshot
+            || existing.input_hash != expected_input_hash
+        {
+            return Err(ApiError::conflict(
+                "the recorded Planner stage conflicts with its pre-dispatch startup identity",
+            ));
+        }
+        existing
+    } else {
+        state
+            .store
+            .create_stage_execution(CreateStageExecution {
+                id: stage_execution_id.clone(),
+                work_item_id: work_item_id.into(),
+                stage_key: pharness_core::RepoStageKey::Plan.as_str().into(),
+                sequence: plan_sequence,
+                status: "queued".into(),
+                agent_profile_id: Some(profile.id.clone()),
+                agent_profile_version: Some(profile.version.clone()),
+                agent_profile_hash: Some(profile.profile_hash.clone()),
+                context_pack_id: None,
+                run_id: Some(run.id.clone()),
+                workspace_id: expected_workspace_id,
+                input_hash: expected_input_hash,
+                input_snapshot,
+            })
+            .await?
+    };
+    let pack = if let Some(pack) = existing_context_pack {
+        pack
+    } else {
+        state
+            .store
+            .create_agent_context_pack(CreateAgentContextPack {
+                id: context_pack_id.clone(),
+                work_item_id: work_item_id.into(),
+                stage_execution_id: execution.id.clone(),
+                content_hash: context_hash,
+                context,
+                estimated_tokens,
+            })
+            .await?
+    };
     let execution = state
         .store
-        .create_stage_execution(CreateStageExecution {
-            id: stage_execution_id.clone(),
-            work_item_id: work_item_id.into(),
-            stage_key: pharness_core::RepoStageKey::Plan.as_str().into(),
-            sequence: plan_sequence,
-            status: "queued".into(),
-            agent_profile_id: Some(profile.id.clone()),
-            agent_profile_version: Some(profile.version.clone()),
-            agent_profile_hash: Some(profile.profile_hash.clone()),
-            context_pack_id: None,
-            run_id: Some(run.id.clone()),
-            workspace_id: planner_workspace
-                .as_ref()
-                .map(|workspace| workspace.id.clone()),
-            input_hash: canonical_material_hash(&input_snapshot)?,
-            input_snapshot,
-        })
-        .await?;
-    let pack = state
-        .store
-        .create_agent_context_pack(CreateAgentContextPack {
-            id: context_pack_id,
-            work_item_id: work_item_id.into(),
-            stage_execution_id: execution.id.clone(),
-            content_hash: canonical_material_hash(&context)?,
-            context,
-            estimated_tokens,
-        })
-        .await?;
+        .get_stage_execution(&execution.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("Planner stage disappeared during startup recovery"))?;
+    if execution.context_pack_id.as_deref() != Some(pack.id.as_str()) {
+        return Err(ApiError::conflict(
+            "Planner stage does not reference its recorded context pack",
+        ));
+    }
     state
         .store
         .append_event(&AgentEvent {
-            event_id: EventId::new(new_prefixed_id("evt")),
+            event_id: EventId::new(
+                startup
+                    .map(|identity| identity.event_id.clone())
+                    .unwrap_or_else(|| new_prefixed_id("evt")),
+            ),
             session_id,
             run_id: run.id.clone(),
             seq: 1,
@@ -352,17 +575,24 @@ pub(in crate::app) async fn start_repo_planner(
             payload: json!({"source":"repo_mode_controller","stage":"plan","stage_execution_id":execution.id,"actor":actor,"reason":reason}),
         })
         .await?;
-    let item = state
-        .store
-        .update_repo_work_item_status(
-            work_item_id,
-            "executing",
-            actor,
-            "repo-planner AgentRun started",
-            false,
-        )
-        .await?;
-    let lease = if let (Some(planned), Some(workspace)) = (planned_execution, &planner_workspace) {
+    let item = match state.store.get_work_item(work_item_id).await? {
+        Some(item) if item.status == "executing" => item,
+        _ => {
+            state
+                .store
+                .update_repo_work_item_status(
+                    work_item_id,
+                    "executing",
+                    actor,
+                    "repo-planner AgentRun started",
+                    false,
+                )
+                .await?
+        }
+    };
+    let lease = if defer_dispatch {
+        None
+    } else if let (Some(planned), Some(workspace)) = (planned_execution, &planner_workspace) {
         Some(
             crate::app::agent_hosts::queue_bound_run(
                 state,

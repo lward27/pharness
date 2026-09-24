@@ -8,6 +8,20 @@ use pharness_store::{
 };
 use serde_json::{json, Value};
 
+fn parse_planner_startup_identity(
+    operation_id: &str,
+    value: Value,
+) -> Result<repo_mode::PlannerStartupIdentity, ApiError> {
+    let startup: repo_mode::PlannerStartupIdentity = serde_json::from_value(value)
+        .map_err(|_| ApiError::conflict("recorded Planner startup identity is invalid"))?;
+    if startup != repo_mode::PlannerStartupIdentity::for_operation(operation_id)? {
+        return Err(ApiError::conflict(
+            "recorded Planner startup identity does not match its operation",
+        ));
+    }
+    Ok(startup)
+}
+
 pub(super) async fn execute_operation(
     state: &AppState,
     claim: &StoredWorkflowReconciliation,
@@ -46,6 +60,16 @@ pub(super) async fn execute_operation(
             now(),
         )
         .await?;
+    let planner_startup = refs
+        .get("planner_startup")
+        .cloned()
+        .map(|value| parse_planner_startup_identity(&operation.id, value))
+        .transpose()?;
+    if operation.action == "start_planner" && planner_startup.is_none() {
+        return Err(ApiError::conflict(
+            "hosted Planner dispatch requires a persisted startup identity",
+        ));
+    }
     let result = if operation.action == "continue_stage" {
         let predecessor = snapshot
             .runs
@@ -74,6 +98,8 @@ pub(super) async fn execute_operation(
                 state_hash: operation.input_hash.clone(),
                 inference_policies: None,
                 execution_policies: None,
+                planner_startup,
+                defer_planner_dispatch: false,
             },
         )
         .await
@@ -158,7 +184,12 @@ pub(super) async fn reconcile_operation(
         } else {
             return Err(ApiError::conflict("the pending action is stale"));
         };
-        let refs = json!({"action_resource":resource,"before_run_ids":snapshot.runs.iter().map(|r| r.id.as_str()).collect::<Vec<_>>()});
+        let mut refs = json!({"action_resource":resource,"before_run_ids":snapshot.runs.iter().map(|r| r.id.as_str()).collect::<Vec<_>>()});
+        if operation.action == "start_planner" {
+            refs["planner_startup"] = json!(
+                super::super::repo_mode::PlannerStartupIdentity::for_operation(&operation.id)?
+            );
+        }
         let keys = operation
             .resource_keys
             .iter()
@@ -182,6 +213,100 @@ pub(super) async fn reconcile_operation(
         return Box::pin(execute_operation(state, claim, snapshot, operation, refs)).await;
     }
     let mut refs = operation.resource_refs.clone();
+    if operation.action == "start_planner" {
+        if let Some(value) = refs.get("planner_startup").cloned() {
+            let startup = parse_planner_startup_identity(&operation.id, value)?;
+            let run_id = pharness_core::RunId::new(startup.run_id.clone());
+            let run = state.store.get_run(&run_id).await?;
+            let execution = state
+                .store
+                .get_stage_execution(&startup.stage_execution_id)
+                .await?;
+            let pack = state
+                .store
+                .get_agent_context_pack(&startup.context_pack_id)
+                .await?;
+            let work_item = state
+                .store
+                .get_work_item(&claim.work_item_id)
+                .await?
+                .ok_or_else(|| ApiError::not_found("work_item", &claim.work_item_id))?;
+            let workspace_missing = if run
+                .as_ref()
+                .is_some_and(|run| run.execution_target_json["workspace_source"].is_object())
+            {
+                state
+                    .store
+                    .get_workspace(&startup.workspace_id)
+                    .await?
+                    .is_none()
+            } else {
+                false
+            };
+            let incomplete = run.is_none()
+                || execution.is_none()
+                || pack.is_none()
+                || workspace_missing
+                || work_item.status != "executing";
+            if incomplete {
+                if claim.control != "active" || expired {
+                    return Ok(condition(
+                        if expired { "wait_expired" } else { &claim.control },
+                        "Planner startup is incomplete; no new records are created while work is stopped.",
+                    ));
+                }
+                if let Some(run) = run.as_ref() {
+                    if run.status != "queued"
+                        || run.budget_consumption.turns_used != 0
+                        || run.budget_consumption.tokens_used != 0
+                        || run.finished_at.is_some()
+                    {
+                        return Err(ApiError::conflict(
+                            "incomplete Planner startup has a non-queued or consumed Run; no replay is safe",
+                        ));
+                    }
+                }
+                let action_ready = snapshot.actions.iter().any(|action| {
+                    action.id == "start_planner"
+                        && action.status == "ready"
+                        && action.state_hash == operation.input_hash
+                });
+                if run.is_none() && !action_ready {
+                    return Err(ApiError::conflict(
+                        "incomplete Planner startup no longer matches its original action authority",
+                    ));
+                }
+                repo_mode::execute_repo_work_item_action(
+                    state,
+                    &claim.work_item_id,
+                    "start_planner",
+                    RepoWorkItemActionExecutionRequest {
+                        actor: "controller:hosted-workflow".into(),
+                        reason: format!(
+                            "Automatic {} under saved workflow {}",
+                            operation.action,
+                            snapshot
+                                .metadata
+                                .workflow_policy_hash
+                                .as_deref()
+                                .unwrap_or_default()
+                        ),
+                        state_hash: operation.input_hash.clone(),
+                        inference_policies: None,
+                        execution_policies: None,
+                        planner_startup: Some(startup),
+                        defer_planner_dispatch: true,
+                    },
+                )
+                .await?;
+                let updated = Snapshot::load(state, &claim.work_item_id).await?;
+                return Box::pin(reconcile_operation(
+                    state, claim, &updated, operation, false, false,
+                ))
+                .await;
+            }
+        }
+    }
     if operation.action == "authorize_source_delivery" {
         return super::source::reconcile(state, claim, snapshot, &operation, expired).await;
     }

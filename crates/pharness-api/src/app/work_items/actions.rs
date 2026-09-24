@@ -84,6 +84,8 @@ pub(in crate::app) async fn execute_work_item_action(
                 state_hash: request.state_hash,
                 inference_policies: request.inference_policies,
                 execution_policies: request.execution_policies,
+                planner_startup: None,
+                defer_planner_dispatch: false,
             },
         )
         .await?;
