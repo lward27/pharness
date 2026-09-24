@@ -66,8 +66,12 @@ command -v "$KUBECTL_BIN" >/dev/null || {
   exit 1
 }
 if [[ "$needs_bundle" == true ]]; then
-  command -v docker >/dev/null || {
-    echo "docker is required only to fetch the in-cluster native bundle artifact" >&2
+  command -v python3 >/dev/null || {
+    echo "python3 is required to fetch and verify the in-cluster native bundle artifact" >&2
+    exit 1
+  }
+  command -v tar >/dev/null || {
+    echo "tar is required to package the verified native bundle" >&2
     exit 1
   }
 fi
@@ -93,7 +97,7 @@ verify_source_revision() {
 }
 
 kubectl() {
-  "$KUBECTL_BIN" --context "$CLUSTER_CONTEXT" -n "$PIPELINE_NAMESPACE" "$@"
+  command "$KUBECTL_BIN" --context "$CLUSTER_CONTEXT" -n "$PIPELINE_NAMESPACE" "$@"
 }
 
 check_cluster_builder() {
@@ -148,11 +152,7 @@ component_dockerfile() {
 }
 
 TEMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/pharness-incluster-build.XXXXXX")"
-BUNDLE_CONTAINER_ID=""
 cleanup() {
-  if [[ -n "${BUNDLE_CONTAINER_ID:-}" ]]; then
-    docker rm "$BUNDLE_CONTAINER_ID" >/dev/null 2>&1 || true
-  fi
   if [[ -n "${TEMP_ROOT:-}" && -d "$TEMP_ROOT" && "$TEMP_ROOT" == */pharness-incluster-build.* ]]; then
     rm -rf -- "$TEMP_ROOT"
   fi
@@ -345,27 +345,26 @@ run_component() {
 }
 
 package_native_bundle() {
-  local immutable_image container_id bundle_dir package_output
+  local immutable_image fetch_output bundle_dir package_output
   immutable_image="${NATIVE_BUNDLE_IMAGE%:git-*}@${NATIVE_BUNDLE_DIGEST}"
   [[ "$NATIVE_BUNDLE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
     echo "cluster bundle build did not return an immutable digest" >&2
     return 1
   }
-  docker pull --quiet "$immutable_image" >/dev/null
-  container_id="$(docker create "$immutable_image")"
-  BUNDLE_CONTAINER_ID="$container_id"
-  bundle_dir="${TEMP_ROOT}/bundle-extract"
-  mkdir -p "$bundle_dir"
-  if ! docker cp "${container_id}:/pharness-codex-host" "$bundle_dir/" >/dev/null; then
-    docker rm "$container_id" >/dev/null 2>&1 || true
-    echo "could not extract the bundle files from the immutable cluster artifact" >&2
+  [[ "$immutable_image" == "registry.lucas.engineering/pharness-codex-host-bundle@${NATIVE_BUNDLE_DIGEST}" ]] || {
+    echo "cluster bundle build returned an unexpected immutable image reference" >&2
     return 1
-  fi
-  docker rm "$container_id" >/dev/null
-  BUNDLE_CONTAINER_ID=""
+  }
+  bundle_dir="${TEMP_ROOT}/bundle-oci-extract"
+  mkdir -p "$bundle_dir"
+  fetch_output="$(python3 "${SCRIPT_DIR}/pharness-fetch-oci-bundle.py" \
+    --image "$immutable_image" \
+    --revision "$REVISION" \
+    --output-dir "$bundle_dir")"
+  bundle_dir="$(jq -er '.bundle_dir' <<<"$fetch_output")"
   package_output="$("${SCRIPT_DIR}/pharness-package-codex-host.sh" \
     --revision "$REVISION" \
-    --bundle-dir "${bundle_dir}/pharness-codex-host")"
+    --bundle-dir "$bundle_dir")"
   NATIVE_BUNDLE_ARCHIVE="$(jq -er '.archive_path' <<<"$package_output")"
   NATIVE_BUNDLE_ARCHIVE_SHA256="$(jq -er '.sha256' <<<"$package_output")"
 }
