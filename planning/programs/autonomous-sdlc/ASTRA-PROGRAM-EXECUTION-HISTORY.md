@@ -435,3 +435,13 @@ failure when run with the suite, though it passes in isolation. This is local
 engineering evidence only: no image, rollout, migration, or hosted WorkItem
 dispatch. M06 restart/live acceptance remains open. See the
 [detailed startup recovery record](../../evidence/autonomous-sdlc/ASTRA-M06-DURABLE-AUTONOMOUS-CONTROLLER.md#planner-startup-interruption-recovery--2026-09-24).
+
+### M06 store-suite isolation follow-up — 2026-09-24
+
+A parallel store-suite rerun exposed three delivery migration tests sharing a
+temporary SQLite filename (process ID plus millisecond timestamp). The
+test-only path helper now adds an atomic per-process suffix. The parallel store
+suite passes 62/62, and the migration subset passes three consecutive
+eight-thread runs; store all-target Clippy and package formatting checks pass.
+This fixes test isolation only. It is not API process-restart or live M06
+acceptance evidence; the M04E release approval and rollout gate is unchanged.
