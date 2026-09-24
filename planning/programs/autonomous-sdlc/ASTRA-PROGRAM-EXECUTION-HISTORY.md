@@ -420,3 +420,18 @@ egress regression found by the [dispatch-path audit](../../evidence/autonomous-s
 - **Finance preservation**: service-window bracket preserved=True (81 tables, 0 missing/rewritten); pre-deploy→post delta is only this session's additions plus one `organizations` row whose only changed field is `updated_at` (a no-content `ON CONFLICT` timestamp touch, `product.rs:19-22`), not a data rewrite.
 
 Evidence: [readiness-restore record](../../evidence/autonomous-sdlc/ASTRA-M04E-111FB9B-CONNECTED-LOOP-READINESS-RESTORE.md) (+ serving identities, service window, DB preservation, readiness assessment). No connected-loop dispatch, no V2 flag change, no policy re-qualification, no NetworkPolicy/egress change, no schema migration. Next: Slice 3 (re-qualify planner/test-diagnosis/verifier on `111fb9b`), then Slice 4 (enable the V2 gate and run the first connected attempt).
+
+## M06 Planner startup recovery — 2026-09-24
+
+While the M04E Slice 3 release gate remains the program's active next acceptance
+slice, independent M06 implementation proceeded on branch
+`codex/hosted-startup-recovery-20260924`, based on `3f2b7a2`. The implementation
+persists operation-derived Planner startup identities and safely reconstructs
+partial pre-dispatch records without redispatch; paused recovery remains inert.
+Commit `af6db7dd4934847285795f7eda953436c972be95` passed all 303 API tests plus
+the admin test, API/store all-target Clippy, package formatting, and the focused
+store persistence test. The full store suite still has one order-sensitive test
+failure when run with the suite, though it passes in isolation. This is local
+engineering evidence only: no image, rollout, migration, or hosted WorkItem
+dispatch. M06 restart/live acceptance remains open. See the
+[detailed startup recovery record](../../evidence/autonomous-sdlc/ASTRA-M06-DURABLE-AUTONOMOUS-CONTROLLER.md#planner-startup-interruption-recovery--2026-09-24).
