@@ -19,7 +19,7 @@ Consult the master for current status rather than starting an older plan indepen
 
 | Document | Status | Boundary |
 | --- | --- | --- |
-| [ASTRA M04E Slice 3: Exact-policy V2 stage requalification](ASTRA-M04E-V2-STAGE-POLICY-REQUALIFICATION-SLICE.md) | qualification stopped; transport fix unreleased | Planner passed. Test Diagnosis timed out. Payload-safe request-correlated gateway diagnostics and proxy probe-noise correction now pass local tests, but require immutable build/release and live identity verification before one new exact-policy preflight; V2 remains disabled. |
+| [ASTRA M04E Slice 3: Exact-policy V2 stage requalification](ASTRA-M04E-V2-STAGE-POLICY-REQUALIFICATION-SLICE.md) | qualification stopped at Test Diagnosis timeout; transport images built but not deployed | Planner passed. Both `72fe079` runtime images are pushed and registry-verified; next requires separate release approval, reviewed image pins, and live identity verification before any new exact-policy preflight. V2 remains disabled. |
 
 The [Lamina console](../implemented/milestones/pharness-lamina-operator-console-redesign-milestone-2026-09-04.md)
 is already accepted and is the UI baseline. Do not replay its redesign or split new
