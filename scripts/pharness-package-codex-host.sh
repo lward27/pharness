@@ -102,7 +102,7 @@ test -f "${bundle_root}/CHECKSUMS.sha256" || {
 }
 (
   cd "$bundle_root"
-  sha256sum -c CHECKSUMS.sha256
+  sha256sum -c CHECKSUMS.sha256 >&2
 )
 
 mkdir -p "$OUTPUT_DIR"

@@ -19,6 +19,10 @@ if grep -Eq 'sha256sum[[:space:]]+--(check|status)' "$PACKAGE_SCRIPT"; then
   echo "native bundle packaging uses non-portable sha256sum long options" >&2
   exit 1
 fi
+if ! rg -Fq 'sha256sum -c CHECKSUMS.sha256 >&2' "$PACKAGE_SCRIPT"; then
+  echo "native bundle checksum progress must stay off the JSON stdout stream" >&2
+  exit 1
+fi
 
 printf 'portable bundle checksum\n' >"${TEST_ROOT}/payload"
 (
