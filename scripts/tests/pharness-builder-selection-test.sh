@@ -3,8 +3,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REVISION=0000000000000000000000000000000000000000
 
-# Invalid selections must fail before Docker, Git mutation, or a build starts.
-for script in pharness-build-local.sh pharness-build.sh pharness-package-codex-host.sh; do
+# Invalid local-builder selections must fail before Docker or a build starts.
+for script in pharness-build-local.sh pharness-package-codex-host.sh; do
   args=(--revision "$REVISION")
   [[ "$script" == pharness-package-codex-host.sh ]] || args=(ui --revision "$REVISION")
   for builder in '' '--other-option' 'host/with/path' 'host with spaces'; do
@@ -14,6 +14,13 @@ for script in pharness-build-local.sh pharness-build.sh pharness-package-codex-h
     grep -Eq 'normalized|explicit|Explicit' <<<"$output"
   done
 done
+
+# The main entry point now routes to the cluster target; local Buildx remains
+# an explicitly separate command.
+grep -Fq 'pharness-build-incluster.sh' "${SCRIPT_DIR}/../pharness-build.sh"
+if grep -Fq 'exec "${SCRIPT_DIR}/pharness-build-local.sh"' "${SCRIPT_DIR}/../pharness-build.sh"; then
+  echo "default build entry point still delegates to local Buildx" >&2; exit 1
+fi
 
 # All release paths propagate the selected worker and keep the fixed platform.
 for script in pharness-build-local.sh pharness-package-codex-host.sh; do
