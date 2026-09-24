@@ -16,6 +16,7 @@ from urllib.request import Request, urlopen
 
 
 REGISTRY = "registry.lucas.engineering"
+USER_AGENT = "pharness-oci-fetch/1.0"
 MAX_METADATA_BYTES = 8 * 1024 * 1024
 MAX_LAYER_BYTES = 2 * 1024 * 1024 * 1024
 MAX_UNPACKED_BYTES = 3 * 1024 * 1024 * 1024
@@ -60,10 +61,15 @@ def verify_config(config, revision):
         raise ValueError("bundle OCI source label is unexpected")
 
 
+def registry_request(url, accept=None):
+    headers = {"User-Agent": USER_AGENT}
+    if accept:
+        headers["Accept"] = accept
+    return Request(url, headers=headers)
+
+
 def read_metadata(url, accept=None):
-    headers = {"Accept": accept} if accept else {}
-    request = Request(url, headers=headers)
-    with urlopen(request, timeout=30) as response:
+    with urlopen(registry_request(url, accept), timeout=30) as response:
         payload = response.read(MAX_METADATA_BYTES + 1)
     if len(payload) > MAX_METADATA_BYTES:
         raise ValueError("OCI manifest/config exceeds the metadata size limit")
@@ -207,12 +213,13 @@ def fetch_bundle(reference, revision, output_dir):
     descriptor_size = layer.get("size")
     if not isinstance(descriptor_size, int) or descriptor_size < 0 or descriptor_size > MAX_LAYER_BYTES:
         raise ValueError("OCI layer size is invalid or exceeds the download limit")
-    descriptor, layer_path = tempfile.mkstemp(prefix=".pharness-oci-layer-", suffix=".tar.gz", dir=destination)
+    descriptor, layer_path = tempfile.mkstemp(prefix=".pharness-oci-layer-", suffix=".tar.gz",
+                                               dir=destination.parent)
     digest = hashlib.sha256()
     total = 0
     try:
         with os.fdopen(descriptor, "wb") as output:
-            request = Request(base + "blobs/" + quote(layer_digest, safe=":"))
+            request = registry_request(base + "blobs/" + quote(layer_digest, safe=":"))
             with urlopen(request, timeout=60) as response:
                 while True:
                     chunk = response.read(1024 * 1024)
@@ -244,7 +251,15 @@ def main():
     args = parser.parse_args()
     try:
         result = fetch_bundle(args.image, args.revision, args.output_dir)
-    except (HTTPError, URLError, OSError, ValueError, tarfile.TarError, json.JSONDecodeError) as error:
+    except HTTPError as error:
+        print(json.dumps({"status": "failed", "reason": "HTTPError", "http_status": error.code}),
+              file=__import__("sys").stderr)
+        return 1
+    except ValueError as error:
+        print(json.dumps({"status": "failed", "reason": "ValueError", "detail": str(error)}),
+              file=__import__("sys").stderr)
+        return 1
+    except (URLError, OSError, tarfile.TarError) as error:
         print(json.dumps({"status": "failed", "reason": type(error).__name__}), file=__import__("sys").stderr)
         return 1
     print(json.dumps(result))
