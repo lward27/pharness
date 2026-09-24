@@ -56,7 +56,7 @@ FROM runtime AS bundle-verification
 USER 0
 ARG PHARNESS_BUILD_REVISION=unknown
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends file \
+    && apt-get install -y --no-install-recommends file gzip tar \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-codex-host /pharness-codex-host/bin/pharness-codex-host
 COPY --from=codex /out/codex /pharness-codex-host/bin/codex
@@ -103,9 +103,25 @@ RUN set -eu; \
     find . -type f ! -name CHECKSUMS.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > CHECKSUMS.sha256; \
     sha256sum -c CHECKSUMS.sha256 >/dev/null
 
+# Keep an unpacked local-export target for the explicitly selected local Buildx
+# workflow. The release pipeline pushes the packaged `bundle` target below.
+FROM scratch AS bundle-files
+COPY --from=bundle-verification /pharness-codex-host /pharness-codex-host
+
+FROM bundle-verification AS bundle-archive
+ARG PHARNESS_BUILD_REVISION=unknown
+RUN set -eu; \
+    archive="pharness-codex-host-${PHARNESS_BUILD_REVISION}-linux-amd64.tar.gz"; \
+    mkdir -p /pharness-bundle-artifacts; \
+    tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
+      -cf - -C / pharness-codex-host \
+      | gzip -n > "/pharness-bundle-artifacts/${archive}"; \
+    cd /pharness-bundle-artifacts; \
+    sha256sum "$archive" > "${archive}.sha256"
+
 FROM scratch AS bundle
 ARG PHARNESS_BUILD_REVISION=unknown
 LABEL org.opencontainers.image.source="https://github.com/lward27/pharness" \
       org.opencontainers.image.revision="${PHARNESS_BUILD_REVISION}" \
       org.opencontainers.image.title="PHarness native Codex host bundle"
-COPY --from=bundle-verification /pharness-codex-host /pharness-codex-host
+COPY --from=bundle-archive /pharness-bundle-artifacts/ /

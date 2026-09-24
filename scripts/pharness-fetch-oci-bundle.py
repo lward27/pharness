@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""Fetch and safely extract the single-layer PHarness bundle OCI artifact."""
+"""Fetch and verify the packaged PHarness bundle archive from its OCI artifact."""
 import argparse
 import hashlib
 import json
 import os
 import re
 import shutil
-import stat
 import tarfile
 import tempfile
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
@@ -19,12 +18,15 @@ REGISTRY = "registry.lucas.engineering"
 USER_AGENT = "pharness-oci-fetch/1.0"
 MAX_METADATA_BYTES = 8 * 1024 * 1024
 MAX_LAYER_BYTES = 2 * 1024 * 1024 * 1024
-MAX_UNPACKED_BYTES = 3 * 1024 * 1024 * 1024
+MAX_ARTIFACT_BYTES = 2 * 1024 * 1024 * 1024
 MANIFEST_ACCEPT = ", ".join((
     "application/vnd.oci.image.manifest.v1+json",
     "application/vnd.docker.distribution.manifest.v2+json",
 ))
-ROOT_DIRECTORY = "pharness-codex-host"
+
+
+def archive_filename(revision):
+    return f"pharness-codex-host-{revision}-linux-amd64.tar.gz"
 
 
 def image_parts(reference):
@@ -42,6 +44,17 @@ def image_parts(reference):
 
 def digest_bytes(data):
     return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+def digest_file(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as source:
+        while True:
+            chunk = source.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def verify_config(config, revision):
@@ -76,98 +89,42 @@ def read_metadata(url, accept=None):
     return payload
 
 
-def safe_parts(name):
-    if not name or name.startswith("/") or "\\" in name:
-        raise ValueError("OCI layer contains an absolute or invalid path")
-    parts = tuple(part for part in PurePosixPath(name).parts if part not in ("", "."))
-    if not parts or any(part == ".." for part in parts) or parts[0] != ROOT_DIRECTORY:
-        raise ValueError("OCI layer contains a path outside the expected bundle root")
-    return parts
-
-
-def safe_link_target(parts, target, hardlink=False):
-    if not target or target.startswith("/") or "\\" in target:
-        raise ValueError("OCI layer contains an absolute or invalid link target")
-    if hardlink:
-        return safe_parts(target)
-    resolved = list(parts[:-1])
-    for part in PurePosixPath(target).parts:
-        if part in ("", "."):
-            continue
-        if part == "..":
-            if len(resolved) <= 1:
-                raise ValueError("OCI symlink escapes the bundle root")
-            resolved.pop()
-        else:
-            resolved.append(part)
-    if not resolved or resolved[0] != ROOT_DIRECTORY:
-        raise ValueError("OCI symlink escapes the bundle root")
-    return tuple(resolved)
-
-
-def extract_layer(layer_path, destination):
+def extract_archive_layer(layer_path, destination, revision):
     destination = Path(destination).resolve()
     destination.mkdir(parents=True, exist_ok=True)
     if any(destination.iterdir()):
-        raise ValueError("OCI extraction destination must be empty")
-
-    directories = []
-    hardlinks = []
-    symlinks = []
-    extracted_bytes = 0
+        raise ValueError("OCI artifact destination must be empty")
+    archive_name = archive_filename(revision)
+    checksum_name = archive_name + ".sha256"
+    expected_names = {archive_name, checksum_name}
+    extracted = set()
     with tarfile.open(layer_path, mode="r:gz") as archive:
         members = archive.getmembers()
-        if len(members) > 20000:
-            raise ValueError("OCI layer contains too many entries")
+        if len(members) != len(expected_names):
+            raise ValueError("OCI bundle artifact must contain exactly the archive and checksum files")
         for member in members:
-            parts = safe_parts(member.name)
-            target = destination.joinpath(*parts)
-            if member.isdir():
-                target.mkdir(parents=True, exist_ok=True)
-                directories.append((target, member.mode))
-            elif member.isfile():
-                if member.size < 0 or member.size > MAX_UNPACKED_BYTES - extracted_bytes:
-                    raise ValueError("OCI layer exceeds the unpacked size limit")
-                target.parent.mkdir(parents=True, exist_ok=True)
-                if target.exists() or target.is_symlink():
-                    raise ValueError("OCI layer contains duplicate file paths")
-                source = archive.extractfile(member)
-                if source is None:
-                    raise ValueError("OCI layer file contents are unavailable")
-                with source, target.open("xb") as output:
-                    shutil.copyfileobj(source, output, length=1024 * 1024)
-                os.chmod(target, stat.S_IMODE(member.mode) & 0o777)
-                extracted_bytes += member.size
-            elif member.islnk():
-                hardlinks.append((parts, safe_link_target(parts, member.linkname, hardlink=True)))
-            elif member.issym():
-                safe_link_target(parts, member.linkname)
-                symlinks.append((parts, member.linkname))
-            else:
-                raise ValueError("OCI layer contains an unsupported special file")
+            if member.name not in expected_names or not member.isfile() or member.name in extracted:
+                raise ValueError("OCI bundle artifact contains an unexpected or duplicate entry")
+            size_limit = 256 if member.name == checksum_name else MAX_ARTIFACT_BYTES
+            if member.size < 0 or member.size > size_limit:
+                raise ValueError("OCI bundle artifact file exceeds the size limit")
+            source = archive.extractfile(member)
+            if source is None:
+                raise ValueError("OCI bundle artifact file contents are unavailable")
+            target = destination / member.name
+            with source, target.open("xb") as output:
+                shutil.copyfileobj(source, output, length=1024 * 1024)
+            extracted.add(member.name)
 
-    for parts, target_parts in hardlinks:
-        destination_path = destination.joinpath(*parts)
-        source_path = destination.joinpath(*target_parts)
-        if destination_path.exists() or destination_path.is_symlink() or source_path.is_symlink() or not source_path.is_file():
-            raise ValueError("OCI layer hardlink does not refer to a regular bundle file")
-        destination_path.parent.mkdir(parents=True, exist_ok=True)
-        os.link(source_path, destination_path)
-
-    for parts, target in symlinks:
-        destination_path = destination.joinpath(*parts)
-        if destination_path.exists() or destination_path.is_symlink():
-            raise ValueError("OCI layer contains duplicate link paths")
-        destination_path.parent.mkdir(parents=True, exist_ok=True)
-        os.symlink(target, destination_path)
-
-    for directory, mode in reversed(directories):
-        os.chmod(directory, stat.S_IMODE(mode) & 0o777)
-
-    bundle = destination / ROOT_DIRECTORY
-    if not (bundle / "REVISION").is_file() or not (bundle / "CHECKSUMS.sha256").is_file():
-        raise ValueError("OCI layer is missing the verified PHarness bundle markers")
-    return bundle
+    if extracted != expected_names:
+        raise ValueError("OCI bundle artifact is missing an expected file")
+    archive_path = destination / archive_name
+    checksum_path = destination / checksum_name
+    archive_sha256 = digest_file(archive_path)
+    expected_checksum = f"{archive_sha256}  {archive_name}\n".encode()
+    if checksum_path.read_bytes() != expected_checksum:
+        raise ValueError("cluster-built bundle archive does not match its checksum file")
+    return archive_path, checksum_path, archive_sha256
 
 
 def fetch_bundle(reference, revision, output_dir):
@@ -232,13 +189,17 @@ def fetch_bundle(reference, revision, output_dir):
                     output.write(chunk)
         if total != descriptor_size or "sha256:" + digest.hexdigest() != layer_digest:
             raise ValueError("registry layer size or digest mismatch")
-        bundle = extract_layer(layer_path, destination)
+        archive_path, checksum_path, archive_sha256 = extract_archive_layer(
+            layer_path, destination, revision
+        )
     finally:
         try:
             os.unlink(layer_path)
         except FileNotFoundError:
             pass
-    return {"bundle_dir": str(bundle), "image_digest": manifest_digest,
+    return {"archive": archive_path.name, "archive_path": str(archive_path),
+            "checksum_path": str(checksum_path), "sha256": archive_sha256,
+            "image_digest": manifest_digest,
             "config_digest": config_digest, "layer_digest": layer_digest,
             "layer_size_bytes": total, "platform": "linux/amd64"}
 

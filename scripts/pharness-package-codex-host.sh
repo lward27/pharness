@@ -74,7 +74,7 @@ else
     --builder "$BUILDER" \
     --platform linux/amd64 \
     --pull \
-    --target bundle \
+    --target bundle-files \
     --file "${REPOSITORY_ROOT}/deploy/docker/Dockerfile.codex-host" \
     --build-arg "PHARNESS_BUILD_REVISION=${REVISION}" \
     --build-arg TARGETARCH=amd64 \
