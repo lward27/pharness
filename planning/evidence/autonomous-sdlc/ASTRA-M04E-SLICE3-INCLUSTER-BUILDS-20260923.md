@@ -31,3 +31,28 @@ Independent registry verification used the Distribution API to fetch each manife
 At observation time, Argo `pharness` was `Synced/Healthy` at configuration revision `72fe079d99cc8fa8ade7fe46cb30e6d234bb5604`, while the live API and gateway remained on older pinned digests `sha256:4703d103ed30fd3d4fd9850a32187f59431c6ede4d2819b9f22b36c54042308c` and `sha256:89bb45c3c80b6103123845e72c46de928798f11b26aef48a47a472bda8cf6a63`. The new artifacts have not been pulled into or served by PHarness; no deployment pin, workload, model setting, evaluation, qualification or connected WorkItem was changed or started. Coding Reliability V2 remains disabled.
 
 The next gate is a separately reviewed and explicitly approved immutable image-pin/release change, followed by rollout observation and verification of the actually served API/gateway identities and readiness. Only then may the exact-policy inputs be re-read and a new Test Diagnosis protocol preflight be considered under the active slice's stop rules. This build evidence does not authorize deployment or a model-backed operation.
+
+## Source-drift reconciliation — 2026-09-24
+
+The original build receipt above remains valid for its exact `72fe079` source and
+digests, but it no longer identifies current PHarness application source. PR
+[#414](https://github.com/lward27/pharness/pull/414) merged M06 Planner-startup
+API changes in `af6db7dd4934847285795f7eda953436c972be95`. Current PHarness
+`origin/main` is `3e8cbefec2a1894d9d53d35f2aa262b564292870`; the diff from
+`72fe079` includes changes in nine `crates/pharness-api` source/test files.
+Therefore the old runtime image is stale for a current-main release candidate,
+even though its OCI digest and historical revision label are correct. The old
+model-gateway artifact remains a valid `72fe079` build, but it must be rebuilt
+alongside runtime from one shared current source SHA for a coherent candidate.
+
+On 2026-09-24, current-main server dry-runs passed for `runtime` and
+`model-gateway` using `clone-build-push`, context `lucas_engineering`, namespace
+`tekton-pipelines`, and `tekton-ci-build`. Their proposed deterministic names
+are `pharness-runtime-3e8cbefec2a1` and
+`pharness-model-gateway-3e8cbefec2a1`; neither PipelineRun was created by these
+dry-runs. The builder endpoint was Ready on
+`ubuntu-lucas-engineering-build`, and Argo `tekton-ci` was Synced/Healthy at
+Lucas main `9de1e2d236b87a1bdb96a0278ddfb7bddfd33a00`. A new registry push still
+requires explicit authorization for these two image repositories. Any
+subsequent GitOps pin/rollout remains a distinct, separately approved release
+effect; no Test Diagnosis or other model operation is authorized by this note.
