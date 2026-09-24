@@ -24,9 +24,10 @@ Usage: $0 <runtime|ui|python-runner|node-runner|model-gateway|eval-runner|codex-
   [--preflight-only]
 
 OCI image builds run in lucas_engineering via Tekton Pipeline ${PIPELINE_NAME}.
-codex-host and all also build the native bundle target in the cluster and fetch
-that immutable artifact for local archive/checksum handling. No local Buildx
-compilation is used; pharness-build-local.sh remains the explicit local path.
+codex-host and all also verify, archive, and checksum the native bundle inside
+the cluster, then fetch that immutable archive by digest. No local Buildx
+compilation or bundle packaging is used; pharness-build-local.sh remains the
+explicit local path.
 EOF
   exit 2
 }
@@ -67,11 +68,7 @@ command -v "$KUBECTL_BIN" >/dev/null || {
 }
 if [[ "$needs_bundle" == true ]]; then
   command -v python3 >/dev/null || {
-    echo "python3 is required to fetch and verify the in-cluster native bundle artifact" >&2
-    exit 1
-  }
-  command -v tar >/dev/null || {
-    echo "tar is required to package the verified native bundle" >&2
+    echo "python3 is required to fetch and verify the in-cluster native bundle archive" >&2
     exit 1
   }
 fi
@@ -345,7 +342,7 @@ run_component() {
 }
 
 package_native_bundle() {
-  local immutable_image fetch_output bundle_dir package_output
+  local immutable_image fetch_output artifact_dir archive_name output_dir archive_path checksum_path
   immutable_image="${NATIVE_BUNDLE_IMAGE%:git-*}@${NATIVE_BUNDLE_DIGEST}"
   [[ "$NATIVE_BUNDLE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
     echo "cluster bundle build did not return an immutable digest" >&2
@@ -355,18 +352,39 @@ package_native_bundle() {
     echo "cluster bundle build returned an unexpected immutable image reference" >&2
     return 1
   }
-  bundle_dir="${TEMP_ROOT}/bundle-oci-extract"
-  mkdir -p "$bundle_dir"
+  artifact_dir="${TEMP_ROOT}/bundle-oci-artifact"
+  mkdir -p "$artifact_dir"
   fetch_output="$(python3 "${SCRIPT_DIR}/pharness-fetch-oci-bundle.py" \
     --image "$immutable_image" \
     --revision "$REVISION" \
-    --output-dir "$bundle_dir")"
-  bundle_dir="$(jq -er '.bundle_dir' <<<"$fetch_output")"
-  package_output="$("${SCRIPT_DIR}/pharness-package-codex-host.sh" \
-    --revision "$REVISION" \
-    --bundle-dir "$bundle_dir")"
-  NATIVE_BUNDLE_ARCHIVE="$(jq -er '.archive_path' <<<"$package_output")"
-  NATIVE_BUNDLE_ARCHIVE_SHA256="$(jq -er '.sha256' <<<"$package_output")"
+    --output-dir "$artifact_dir")"
+  archive_name="$(jq -er '.archive' <<<"$fetch_output")"
+  [[ "$archive_name" == "pharness-codex-host-${REVISION}-linux-amd64.tar.gz" ]] || {
+    echo "cluster bundle artifact returned an unexpected archive name" >&2
+    return 1
+  }
+  NATIVE_BUNDLE_ARCHIVE_SHA256="$(jq -er '.sha256' <<<"$fetch_output")"
+  [[ "$NATIVE_BUNDLE_ARCHIVE_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
+    echo "cluster bundle artifact returned an invalid archive checksum" >&2
+    return 1
+  }
+  output_dir="${PHARNESS_BUNDLE_OUTPUT_DIR:-${REPOSITORY_ROOT}/dist}"
+  mkdir -p "$output_dir"
+  output_dir="$(cd "$output_dir" && pwd)"
+  archive_path="${output_dir}/${archive_name}"
+  checksum_path="${archive_path}.sha256"
+  if [[ -e "$archive_path" || -e "$checksum_path" ]]; then
+    if [[ ! -f "$archive_path" || ! -f "$checksum_path" ]] || \
+      ! cmp -s "${artifact_dir}/${archive_name}" "$archive_path" || \
+      ! cmp -s "${artifact_dir}/${archive_name}.sha256" "$checksum_path"; then
+      echo "refusing to overwrite a different bundle artifact at ${archive_path}" >&2
+      return 1
+    fi
+  else
+    cp "${artifact_dir}/${archive_name}" "$archive_path"
+    cp "${artifact_dir}/${archive_name}.sha256" "$checksum_path"
+  fi
+  NATIVE_BUNDLE_ARCHIVE="$archive_path"
 }
 
 verify_source_revision

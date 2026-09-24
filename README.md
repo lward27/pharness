@@ -61,9 +61,10 @@ Tekton pipeline and its rootless BuildKit daemon on the dedicated AMD64 builder
 node. It pins each PipelineRun to the exact verified source SHA, uses the
 build-only no-token service account, and leaves deployment/restart empty. The
 Codex-host image and native bundle are separate named Dockerfile targets; the
-bundle is built and verified in the cluster, then fetched by immutable digest
-for archive/checksum packaging. The previous explicitly selected local Buildx
-route remains available as [pharness-build-local.sh](scripts/pharness-build-local.sh).
+bundle is built, verified, archived, and checksummed in the cluster. The
+finished archive and checksum are fetched by immutable digest. The previous
+explicitly selected local Buildx route remains available as
+[pharness-build-local.sh](scripts/pharness-build-local.sh).
 [release pinning](scripts/pharness-release-pin.sh) takes the same source revision
 and all seven digests. It validates a separate clean GitOps release change.
 The scripts do not replace merge authorization or live release verification.

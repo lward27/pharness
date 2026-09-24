@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_SCRIPT="${SCRIPT_DIR}/../pharness-package-codex-host.sh"
+DOCKERFILE="${SCRIPT_DIR}/../../deploy/docker/Dockerfile.codex-host"
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/pharness-bundle-checksum.XXXXXX")"
 
 cleanup() {
@@ -21,6 +22,11 @@ if grep -Eq 'sha256sum[[:space:]]+--(check|status)' "$PACKAGE_SCRIPT"; then
 fi
 if ! rg -Fq 'sha256sum -c CHECKSUMS.sha256 >&2' "$PACKAGE_SCRIPT"; then
   echo "native bundle checksum progress must stay off the JSON stdout stream" >&2
+  exit 1
+fi
+if ! rg -Fq -- '--target bundle-files' "$PACKAGE_SCRIPT" || \
+  ! rg -Fq 'FROM scratch AS bundle-files' "$DOCKERFILE"; then
+  echo "the explicit local Buildx route must keep its unpacked bundle export target" >&2
   exit 1
 fi
 

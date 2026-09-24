@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_SCRIPT="${SCRIPT_DIR}/../pharness-build-incluster.sh"
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/pharness-incluster-build-test.XXXXXX")"
 REVISION=0123456789abcdef0123456789abcdef01234567
+DOCKERFILE="${SCRIPT_DIR}/../../deploy/docker/Dockerfile.codex-host"
 
 cleanup() {
   if [[ -n "${TEST_ROOT:-}" && -d "$TEST_ROOT" && "$TEST_ROOT" == */pharness-incluster-build-test.* ]]; then
@@ -61,7 +62,13 @@ case "${1:-}" in
         ;;
       pipelinerun/*)
         if [[ -f "${PHARNESS_TEST_RUN_RECORD:-}" ]]; then
-          jq -c '.' "$PHARNESS_TEST_RUN_RECORD"
+          requested_name="${2#pipelinerun/}"
+          recorded_name="$(jq -r '.metadata.name // empty' "$PHARNESS_TEST_RUN_RECORD")"
+          if [[ "$requested_name" == "$recorded_name" ]]; then
+            jq -c '.' "$PHARNESS_TEST_RUN_RECORD"
+          else
+            printf '%s\n' '{}'
+          fi
         else
           printf '%s\n' '{}'
         fi
@@ -104,6 +111,47 @@ case "${1:-}" in
 esac
 MOCK_KUBECTL
 chmod +x "${TEST_ROOT}/bin/kubectl"
+
+cat >"${TEST_ROOT}/bin/python3" <<'MOCK_PYTHON'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "${1:-}" == *pharness-fetch-oci-bundle.py ]] || {
+  echo "unexpected Python invocation: $*" >&2
+  exit 96
+}
+shift
+image=""
+revision=""
+output_dir=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --image) image="${2:-}"; shift 2 ;;
+    --revision) revision="${2:-}"; shift 2 ;;
+    --output-dir) output_dir="${2:-}"; shift 2 ;;
+    *) echo "unexpected fetcher argument: $1" >&2; exit 97 ;;
+  esac
+done
+archive="pharness-codex-host-${revision}-linux-amd64.tar.gz"
+mkdir -p "$output_dir"
+printf 'cluster-archived bundle for %s\n' "$revision" >"${output_dir}/${archive}"
+archive_sha256="$(sha256sum "${output_dir}/${archive}" | awk '{print $1}')"
+printf '%s  %s\n' "$archive_sha256" "$archive" >"${output_dir}/${archive}.sha256"
+jq -n --arg archive "$archive" --arg path "${output_dir}/${archive}" \
+  --arg sha256 "$archive_sha256" --arg image "$image" \
+  '{archive:$archive,archive_path:$path,sha256:$sha256,image:$image}'
+MOCK_PYTHON
+chmod +x "${TEST_ROOT}/bin/python3"
+
+if ! rg -Fq 'FROM bundle-verification AS bundle-archive' "$DOCKERFILE" || \
+  ! rg -Fq 'gzip -n' "$DOCKERFILE" || \
+  ! rg -Fq 'sha256sum "$archive"' "$DOCKERFILE"; then
+  echo "the Dockerfile must package and checksum the native bundle in BuildKit" >&2
+  exit 1
+fi
+if rg -Fq 'pharness-package-codex-host.sh' "$BUILD_SCRIPT"; then
+  echo "the in-cluster build path must not package the bundle on the client" >&2
+  exit 1
+fi
 
 if output="$(PATH="${TEST_ROOT}/bin:${PATH}" \
   PHARNESS_TEST_REPO="$(cd "${SCRIPT_DIR}/../.." && pwd)" \
@@ -173,5 +221,31 @@ jq -e '.status == "builds_completed" and .production_rollout == false
   and .components[0].digest == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   and .components[0].immutable_ref == "registry.lucas.engineering/pharness-runtime@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' \
   <<<"$output" >/dev/null
+
+# A completed codex-host build fetches the archive already packaged in the OCI
+# artifact and only copies those verified bytes into the configured output dir.
+if output="$(PATH="${TEST_ROOT}/bin:${PATH}" \
+  PHARNESS_TEST_REPO="$(cd "${SCRIPT_DIR}/../.." && pwd)" \
+  PHARNESS_TEST_REVISION="$REVISION" \
+  PHARNESS_TEST_KUBECTL_CALLS="${TEST_ROOT}/bundle-run-calls.log" \
+  PHARNESS_TEST_MANIFEST="${TEST_ROOT}/bundle-run-manifest.json" \
+  PHARNESS_TEST_RUN_RECORD="${TEST_ROOT}/bundle-run-record.json" \
+  PHARNESS_BUNDLE_OUTPUT_DIR="${TEST_ROOT}/dist" \
+  PHARNESS_KUBECTL="${TEST_ROOT}/bin/kubectl" \
+  bash "$BUILD_SCRIPT" codex-host --revision "$REVISION" 2>&1)"; then
+  :
+else
+  echo "$output" >&2
+  exit 1
+fi
+jq -e '.status == "builds_completed" and .native_bundle_built == true
+  and (.native_bundle.archive | endswith("pharness-codex-host-'"$REVISION"'-linux-amd64.tar.gz"))
+  and (.native_bundle.archive_sha256 | test("^[0-9a-f]{64}$"))' <<<"$output" >/dev/null
+[[ "$(rg -c 'create -f ' "${TEST_ROOT}/bundle-run-calls.log")" -eq 2 ]]
+jq -e '([.spec.params[] | select(.name == "build-target" and .value == "bundle")] | length) == 1' \
+  "${TEST_ROOT}/bundle-run-manifest.json" >/dev/null
+archive_path="${TEST_ROOT}/dist/pharness-codex-host-${REVISION}-linux-amd64.tar.gz"
+[[ -f "$archive_path" && -f "${archive_path}.sha256" ]]
+[[ "$(sha256sum "$archive_path" | awk '{print $1}')" == "$(awk '{print $1}' "${archive_path}.sha256")" ]]
 
 echo "in-cluster build target renders immutable, non-deploying Tekton runs"

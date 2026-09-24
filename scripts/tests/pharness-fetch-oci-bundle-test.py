@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import importlib.util
+import hashlib
 import io
 import json
 import tempfile
@@ -40,41 +41,70 @@ class OciBundleExtractionTests(unittest.TestCase):
                     archive.addfile(member)
         return path
 
-    def test_extracts_files_and_safe_links(self):
+    def make_artifact(self, revision, archive_bytes=b"bundle archive"):
+        archive_name = FETCH.archive_filename(revision)
+        archive_sha256 = hashlib.sha256(archive_bytes).hexdigest()
+        checksum = f"{archive_sha256}  {archive_name}\n".encode()
+        return archive_name, archive_bytes, checksum, archive_sha256
+
+    def test_extracts_cluster_packaged_archive_and_checksum(self):
+        revision = "0123456789abcdef0123456789abcdef01234567"
+        archive_name, archive_bytes, checksum, archive_sha256 = self.make_artifact(revision)
         with tempfile.TemporaryDirectory() as temp:
             archive = self.make_layer(temp, [
-                ("pharness-codex-host", "dir", b""),
-                ("pharness-codex-host/bin", "dir", b""),
-                ("pharness-codex-host/bin/codex", "file", b"codex-binary"),
-                ("pharness-codex-host/bin/codex-linux-sandbox", "hardlink", b"pharness-codex-host/bin/codex"),
-                ("pharness-codex-host/CHECKSUMS.sha256", "file", b"verified\n"),
-                ("pharness-codex-host/REVISION", "file", b"0" * 40 + b"\n"),
-                ("pharness-codex-host/current", "symlink", b"bin/codex"),
+                (archive_name, "file", archive_bytes),
+                (archive_name + ".sha256", "file", checksum),
             ])
             output = Path(temp) / "out"
-            bundle = FETCH.extract_layer(archive, output)
-            self.assertEqual((bundle / "bin/codex").read_bytes(), b"codex-binary")
-            self.assertEqual((bundle / "bin/codex-linux-sandbox").read_bytes(), b"codex-binary")
-            self.assertTrue((bundle / "current").is_symlink())
+            archive_path, checksum_path, extracted_sha256 = FETCH.extract_archive_layer(
+                archive, output, revision
+            )
+            self.assertEqual(archive_path.read_bytes(), archive_bytes)
+            self.assertEqual(checksum_path.read_bytes(), checksum)
+            self.assertEqual(extracted_sha256, archive_sha256)
 
     def test_rejects_path_traversal(self):
+        revision = "0123456789abcdef0123456789abcdef01234567"
+        archive_name, archive_bytes, _, _ = self.make_artifact(revision)
         with tempfile.TemporaryDirectory() as temp:
             archive = self.make_layer(temp, [
-                ("pharness-codex-host/REVISION", "file", b"0" * 40),
+                (archive_name, "file", archive_bytes),
                 ("../outside", "file", b"bad"),
             ])
             with self.assertRaises(ValueError):
-                FETCH.extract_layer(archive, Path(temp) / "out")
+                FETCH.extract_archive_layer(archive, Path(temp) / "out", revision)
             self.assertFalse((Path(temp) / "outside").exists())
 
-    def test_rejects_symlink_escape(self):
+    def test_rejects_links_and_unexpected_artifacts(self):
+        revision = "0123456789abcdef0123456789abcdef01234567"
+        archive_name, archive_bytes, checksum, _ = self.make_artifact(revision)
         with tempfile.TemporaryDirectory() as temp:
             archive = self.make_layer(temp, [
-                ("pharness-codex-host/REVISION", "file", b"0" * 40),
-                ("pharness-codex-host/escape", "symlink", b"../../outside"),
+                (archive_name, "symlink", b"../../outside"),
+                (archive_name + ".sha256", "file", checksum),
             ])
             with self.assertRaises(ValueError):
-                FETCH.extract_layer(archive, Path(temp) / "out")
+                FETCH.extract_archive_layer(archive, Path(temp) / "out", revision)
+
+        with tempfile.TemporaryDirectory() as temp:
+            archive = self.make_layer(temp, [
+                (archive_name, "file", archive_bytes),
+                (archive_name + ".sha256", "file", checksum),
+                ("unexpected", "file", b"extra"),
+            ])
+            with self.assertRaises(ValueError):
+                FETCH.extract_archive_layer(archive, Path(temp) / "out", revision)
+
+    def test_rejects_bundle_archive_checksum_mismatch(self):
+        revision = "0123456789abcdef0123456789abcdef01234567"
+        archive_name, archive_bytes, _, _ = self.make_artifact(revision)
+        with tempfile.TemporaryDirectory() as temp:
+            archive = self.make_layer(temp, [
+                (archive_name, "file", archive_bytes),
+                (archive_name + ".sha256", "file", b"0" * 64 + b"  " + archive_name.encode() + b"\n"),
+            ])
+            with self.assertRaises(ValueError):
+                FETCH.extract_archive_layer(archive, Path(temp) / "out", revision)
 
     def test_registry_reference_is_pinned_and_scoped(self):
         digest = "sha256:" + "a" * 64
@@ -112,11 +142,11 @@ class OciBundleExtractionTests(unittest.TestCase):
 
     def test_fetch_verifies_and_extracts_an_immutable_oci_bundle(self):
         revision = "0123456789abcdef0123456789abcdef01234567"
+        archive_name, archive_bytes, checksum, archive_sha256 = self.make_artifact(revision)
         with tempfile.TemporaryDirectory() as temp:
             layer_path = self.make_layer(temp, [
-                ("pharness-codex-host", "dir", b""),
-                ("pharness-codex-host/CHECKSUMS.sha256", "file", b"verified\n"),
-                ("pharness-codex-host/REVISION", "file", (revision + "\n").encode()),
+                (archive_name, "file", archive_bytes),
+                (archive_name + ".sha256", "file", checksum),
             ])
             layer = layer_path.read_bytes()
             config = json.dumps({
@@ -154,8 +184,12 @@ class OciBundleExtractionTests(unittest.TestCase):
 
             self.assertEqual(result["image_digest"], manifest_digest)
             self.assertEqual(result["platform"], "linux/amd64")
-            self.assertEqual((Path(result["bundle_dir"]) / "REVISION").read_text().strip(), revision)
-            self.assertEqual([path.name for path in output.iterdir()], ["pharness-codex-host"])
+            self.assertEqual(result["archive"], archive_name)
+            self.assertEqual(result["sha256"], archive_sha256)
+            self.assertEqual(Path(result["archive_path"]).read_bytes(), archive_bytes)
+            self.assertEqual(Path(result["checksum_path"]).read_bytes(), checksum)
+            self.assertEqual(sorted(path.name for path in output.iterdir()),
+                             sorted([archive_name, archive_name + ".sha256"]))
 
 
 if __name__ == "__main__":
