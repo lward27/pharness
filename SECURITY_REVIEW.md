@@ -1,14 +1,14 @@
 # Pharness & Lucas Engineering — Security Review
 
 **Scope:** `/home/wardl/Personal/pharness` (Rust control plane: `pharness-api`, `pharness-worker`, `pharness-runhost`, `pharness-model-gateway`, `pharness-codex-host`, `pharness-core`) and `/home/wardl/Personal/lucas_engineering` (Helm/K8s cluster-ops repo, incl. the `openclaw` agent deployment).
-**Method:** Original review (2026-09-18): static source/manifests only. Reconciliation (2026-09-23): current PHarness source/config, sanitized live PHarness readiness, bounded read-only Lucas-cluster object-name checks, and local Gitleaks workflow validation with a synthetic key; no exploit attempts or credential values emitted.
-**Original review date:** 2026-09-18. **Reconciled:** 2026-09-23.
+**Method:** Original review (2026-09-18): static source/manifests only. Reconciliation (2026-09-23): current PHarness source/config, sanitized live PHarness readiness, bounded read-only Lucas-cluster object-name checks, and local Gitleaks workflow validation with a synthetic key. Source/CI refresh (2026-09-24): PHarness `main` at `3f2b7a2`, its workspace-command guard/tests, and the merged secret-scan workflow result; no exploit attempts or credential values emitted.
+**Original review date:** 2026-09-18. **Reconciled:** 2026-09-23; **source/CI refreshed:** 2026-09-24.
 
 > All secret values below are redacted. Where a finding names a secret, only its *location and nature* are given, never its value.
 
-## Reconciliation update — 2026-09-23
+## Reconciliation update — 2026-09-23; source/CI refresh — 2026-09-24
 
-The original findings below are a static snapshot from 2026-09-18. They were checked against PHarness `main` at `cffa63f2cf41168883e798ded07d2bb9c2e65639`; this update records disposition without exposing credential material or rewriting the original analysis.
+The original findings below are a static snapshot from 2026-09-18. The 2026-09-23 reconciliation checked them against PHarness `main` at `cffa63f2cf41168883e798ded07d2bb9c2e65639`. This refresh records the current PHarness `main` source at `3f2b7a2a949f810a7764967d435f61e23d173c13` and current CI state without exposing credential material or rewriting the original analysis.
 
 | Finding | Current disposition |
 | --- | --- |
@@ -18,11 +18,11 @@ The original findings below are a static snapshot from 2026-09-18. They were che
 | C2/C3/H3 — OpenClaw | No OpenClaw paths were found in current Lucas `main` (`7eb5784`), and bounded cluster listing found no matching Deployment/StatefulSet, ConfigMap, ServiceAccount, ClusterRoleBinding, Pod, or Ingress. The 2026-09-18 findings are historical for the then-reviewed configuration; no OpenClaw change was needed or made here. Re-check before any redeployment. |
 | M1 — constant-time comparison | Already fixed in the current tree: `auth.rs::token_matches` compares SHA-256 digests with `subtle::ConstantTimeEq`. |
 | M2 — empty operator-token fail-open | Already fixed at startup in `pharness-api/src/main.rs`: a non-loopback bind is rejected unless at least one operator token is configured. Token-free loopback development remains supported. |
-| Secret-scanning control | Added locally in this branch as [`.github/workflows/secret-scan.yml`](.github/workflows/secret-scan.yml): checksum-pinned Gitleaks scans only commits introduced by a PR/push, with read-only workflow permissions. Its exact-value allowlist [`.gitleaks.toml`](.gitleaks.toml) suppresses only the scanner's false positive on the known public `served.api_revision` Git commit ID; it is independent of commit fingerprints and does not exempt the path or line. The workflow has not run in GitHub and is not merge-blocking until merged and configured as a required branch-protection check. It does not scan or remediate the historical exposed token. |
+| Secret-scanning control | Merged in PHarness `main` as [`.github/workflows/secret-scan.yml`](.github/workflows/secret-scan.yml): checksum-pinned Gitleaks scans only commits introduced by a PR/push, with read-only workflow permissions. Its exact-value allowlist [`.gitleaks.toml`](.gitleaks.toml) suppresses only the scanner's false positive on the known public `served.api_revision` Git commit ID; it is independent of commit fingerprints and does not exempt the path or line. GitHub Actions reported success on `3f2b7a2` ([run](https://github.com/lward27/pharness/actions/runs/36047924850)). The `main` branch is not protected, so the check is not merge-blocking. It does not scan or remediate the historical exposed token. |
 | L2 — committed `.DS_Store` files | Fixed in current Lucas `main` (`7eb5784`): neither reviewed file is tracked, the worktree is clean, and `.gitignore:3` ignores `.DS_Store` at all depths. |
-| L1 — workspace command argument policy | Remains defense-in-depth only; arguments are executed directly, not through a shell. An executable-specific allowlist remains the stronger future improvement. |
+| L1 — workspace command argument policy | The current `main` blocklist rejects `&`, `|`, `$`, `{`, and `}` as well as the previously covered shell-composition tokens; tests cover standalone `&` and `|`. This is defense in depth because arguments are executed directly, not through a shell. An executable-specific allowlist remains the stronger future improvement. |
 
-The low-effort source fixes H2, M1, and M2 are already present in remote history, so this continuation does not duplicate them. The current launch config removal is also upstream. A new-commit secret scanner is implemented locally but must be merged and observed passing before it can be called an active control. Its scan range intentionally avoids failing on the known historical token; that credential still requires rotation/revocation and history handling. No credential value was read into terminal output or evidence. A full Git-history purge, credential rotation, API-ingress redesign, and OpenClaw privilege reduction have not been performed: they require coordinated secret/GitOps or separate-repository handling.
+The low-effort source fixes H2, M1, M2, and the L1 token-blocklist gap are present in remote history. The current launch-config removal is also upstream. The new-commit secret scanner is merged and has a successful run on current `main`, but `main` is not protected and therefore does not enforce the check before merge. Its scan range intentionally avoids failing on the known historical token; that credential still requires rotation/revocation and history handling. No credential value was read into terminal output or evidence. A full Git-history purge, credential rotation, API-ingress redesign, and OpenClaw privilege reduction have not been performed: they require coordinated secret/GitOps or separate-repository handling.
 
 ---
 
@@ -38,7 +38,7 @@ The low-effort source fixes H2, M1, and M2 are already present in remote history
 | 6 | **HIGH — historical/absent** | lucas | Old `openclaw` gateway ingress finding; no matching current ingress found |
 | 7 | **MEDIUM — fixed** | pharness | Bearer-token comparison uses constant-time digest equality |
 | 8 | **MEDIUM — fixed** | pharness | Startup rejects non-loopback binds with no operator tokens |
-| 9 | **LOW** | pharness | `run_workspace_command` shell-token blocklist is incomplete (mitigated: not shell-run) |
+| 9 | **LOW — fixed** | pharness | `run_workspace_command` rejects shell-composition tokens (defense in depth; not shell-run) |
 | 10 | **LOW — fixed** | lucas | Previously committed `.DS_Store` files are no longer tracked and are ignored in current `main` |
 | 11 | **INFO** | both | Several controls are well-built (documented below as "verified mitigations") |
 
@@ -92,7 +92,8 @@ The low-effort source fixes H2, M1, and M2 are already present in remote history
 - **File:** `crates/pharness-runhost/src/lib.rs:1920-1987` (`validate_workspace_command`)
 - **What:** blocks `;`, `&&`, `||`, backtick, `$(`, `>`, `<` in args but **not** standalone `&` or `|`.
 - **Why it's low:** these commands are launched via `Command::new(executable).args(args)` — **not** through `/bin/sh -c` — so shell metacharacters in args are passed literally to the target binary and are *not* interpreted as shell operators. The residual risk is only if a target binary treats an argument as a program/option (e.g. `-c`/`--eval`, which `contains_inline_program` already blocks for `python`/`node`).
-- **Remediation (defense-in-depth):** prefer an explicit allowlist of executables + a per-executable argument policy rather than a global denylist; consider blocking `&`/`|`/`$`/`{`/`}` uniformly.
+- **Current disposition:** fixed in current `main` (`bc59f30`): the global argument blocklist rejects `&`, `|`, `$`, `{`, and `}` in addition to the original tokens. `workspace_command_rejects_package_network_and_shell_composition` covers `&&`, `|`, and standalone `&`; the direct-exec boundary and inline-program checks remain in place.
+- **Further hardening:** an explicit executable allowlist plus per-executable argument policy remains stronger than a global denylist, but this is follow-up hardening rather than an open instance of the reported token gap.
 
 ### L2 (INFO). Committed `.DS_Store` files (fixed in current Lucas `main`)
 - **Historical files:** `lucas_engineering/.DS_Store`, `lucas_engineering/charts/.DS_Store`.
