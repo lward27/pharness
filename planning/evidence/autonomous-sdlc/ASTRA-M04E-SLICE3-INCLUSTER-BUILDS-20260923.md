@@ -1,13 +1,14 @@
 # ASTRA M04E Slice 3 — in-cluster OCI build evidence
 
 Date: 2026-09-23 (America/New_York); Tekton completion timestamps are 2026-09-24 UTC.
-Status: both images built and pushed from exact current `main`; **not deployed or released**.
+Status: both images built and pushed from the exact PHarness `main` head at dispatch (`72fe079`); **not deployed or released**.
 
 ## Source identity
 
 - PHarness `main` and `origin/main` were reconciled to `72fe079d99cc8fa8ade7fe46cb30e6d234bb5604` before dispatch. A fresh `git ls-remote` immediately before the build returned the same revision.
 - Both Tekton `fetch-source` tasks cloned that exact full SHA from `https://github.com/lward27/pharness.git`.
 - This revision includes the Slice 3 transport diagnostics merged by PR [#404](https://github.com/lward27/pharness/pull/404) and the later mainline updates in PR [#405](https://github.com/lward27/pharness/pull/405). The previous failed build at `53f6909` remains retained separately in [the original stop record](ASTRA-M04E-SLICE3-RELEASE-BUILD-STOP.md); it was not rewritten or retried.
+- After these builds, planning/evidence-only PR [#406](https://github.com/lward27/pharness/pull/406) advanced `main` to `273f0a18cd62d3e6ba0ea5e2d9fc70f4fc240279`. It changed no Dockerfile, Cargo source, lockfile or build context; the OCI source labels correctly remain bound to the exact `72fe079` tree built here.
 
 ## Builder and pipeline
 
