@@ -1305,21 +1305,12 @@ fn repository_git_environment(
     askpass: &std::path::Path,
 ) -> Vec<(std::ffi::OsString, std::ffi::OsString)> {
     let mut env = vec![
-        (
-            "PATH".into(),
-            "/usr/local/bin:/usr/bin:/bin".into(),
-        ),
+        ("PATH".into(), "/usr/local/bin:/usr/bin:/bin".into()),
         ("HOME".into(), "/tmp".into()),
         ("LANG".into(), "C.UTF-8".into()),
-        (
-            "PHARNESS_SOURCE_READER_TOKEN".into(),
-            source_reader_token,
-        ),
+        ("PHARNESS_SOURCE_READER_TOKEN".into(), source_reader_token),
         ("GIT_TERMINAL_PROMPT".into(), "0".into()),
-        (
-            "GIT_ASKPASS".into(),
-            askpass.as_os_str().to_os_string(),
-        ),
+        ("GIT_ASKPASS".into(), askpass.as_os_str().to_os_string()),
         ("GIT_CONFIG_GLOBAL".into(), "/dev/null".into()),
         ("GIT_CONFIG_NOSYSTEM".into(), "1".into()),
     ];
@@ -4748,13 +4739,13 @@ mod tests {
         argo_application_terminal, argo_sync_patch_payload, ensure_tracked_workspace_unchanged,
         evaluate_github_required_checks, fetch_internal_context, git_delivery_command_error_code,
         git_delivery_command_error_code_for_stderr, git_observer_error_code, git_patch_for_apply,
-        github_observer_json, github_observer_json_with_public_fallback,
-        load_preparation_contract, parse_github_pull_request_observation, parse_github_repository,
-        pipeline_run_terminal, prepare_declared_runtime, repository_git_environment,
-        tracked_workspace_state, update_kustomization_image,
-        validate_git_delivery_context, validate_onboarding_patch_changed_paths,
-        validate_resumed_workspace_identity, workspace_git_args, ArgoApplicationTerminal,
-        GitDeliveryContext, GitDeliveryObservationContext, PipelineRunTerminal,
+        github_observer_json, github_observer_json_with_public_fallback, load_preparation_contract,
+        parse_github_pull_request_observation, parse_github_repository, pipeline_run_terminal,
+        prepare_declared_runtime, repository_git_environment, tracked_workspace_state,
+        update_kustomization_image, validate_git_delivery_context,
+        validate_onboarding_patch_changed_paths, validate_resumed_workspace_identity,
+        workspace_git_args, ArgoApplicationTerminal, GitDeliveryContext,
+        GitDeliveryObservationContext, PipelineRunTerminal,
     };
     use pharness_core::{
         AcceptanceCommand, AgentNetworkPolicy, DependencyLock, PackageInstallationPolicy,
@@ -4805,14 +4796,8 @@ mod tests {
             })
             .collect();
         assert!(map.contains(&("HOME".to_string(), "/tmp".to_string())));
-        assert!(map.contains(&(
-            "GIT_CONFIG_GLOBAL".to_string(),
-            "/dev/null".to_string()
-        )));
-        assert!(map.contains(&(
-            "GIT_ASKPASS".to_string(),
-            "/tmp/askpass.sh".to_string()
-        )));
+        assert!(map.contains(&("GIT_CONFIG_GLOBAL".to_string(), "/dev/null".to_string())));
+        assert!(map.contains(&("GIT_ASKPASS".to_string(), "/tmp/askpass.sh".to_string())));
 
         let with_proxy = repository_git_environment(
             &[("HTTPS_PROXY", "http://proxy:8080"), ("NO_PROXY", ".svc")],
