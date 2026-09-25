@@ -91,7 +91,7 @@ spec:
             - /source/pharness.db
             - --output-dir
             - /archive/${ARCHIVE_NAME}
-$(for value in "${WORK_ITEM_ARGS[@]}"; do printf '            - %s\n' "$value"; done)
+$(for value in ${WORK_ITEM_ARGS[@]+"${WORK_ITEM_ARGS[@]}"}; do printf '            - %s\n' "$value"; done)
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

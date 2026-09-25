@@ -208,6 +208,7 @@ validate_existing_run() {
     --arg revision "$REVISION" \
     --arg image "$image_ref" \
     --arg dockerfile "$dockerfile" \
+    --arg build_target "$build_target" \
     --arg repo "https://github.com/lward27/pharness.git" \
     --arg pipeline "$PIPELINE_NAME" \
     --arg service_account "$BUILD_SERVICE_ACCOUNT" \
@@ -333,7 +334,7 @@ run_component() {
     --arg digest "$digest" \
     '{component:$component,build_target:$target,cluster_context:$context,namespace:$namespace,pipeline:$pipeline,
       pipeline_run:$run,source_revision:$source,image_url:$url,digest:$digest,
-      immutable_ref:($url|split(":git-")[0])+"@"+$digest,build_executor:"in-cluster BuildKit",
+      immutable_ref:(($url|split(":git-")[0])+"@"+$digest),build_executor:"in-cluster BuildKit",
       rollout:"not_requested",registry_manifest_independently_verified:false}')")
   if [[ "$image_component" == "codex-host-bundle" ]]; then
     NATIVE_BUNDLE_DIGEST="$digest"
