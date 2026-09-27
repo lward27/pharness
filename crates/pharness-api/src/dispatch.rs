@@ -233,6 +233,19 @@ pub struct RepositoryReadinessExecutionReceipt {
 pub struct InferenceEvaluationExecutionRequest {
     pub evaluation_id: String,
     pub gateway_url: String,
+    pub scope: pharness_core::InferenceEvaluationScope,
+}
+
+/// Job deadlines are a backstop for a hung evaluator; every model request has
+/// its own transport timeouts. A full qualification runs every suite case for
+/// every attempt (the 24-case Verifier suite needs a little over two hours at
+/// two attempts), so it gets a larger ceiling than a bounded diagnostic.
+fn inference_evaluation_deadline_seconds(scope: &pharness_core::InferenceEvaluationScope) -> u64 {
+    let evaluator = match scope {
+        pharness_core::InferenceEvaluationScope::FullQualification {} => 8 * 3600,
+        pharness_core::InferenceEvaluationScope::Diagnostic { .. } => 2 * 3600,
+    };
+    evaluator + NETWORK_POLICY_STABILIZATION_SECONDS
 }
 
 #[derive(Debug, Clone)]
@@ -2955,7 +2968,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             },
             "spec":{
                 "backoffLimit":0,
-                "activeDeadlineSeconds":7200 + NETWORK_POLICY_STABILIZATION_SECONDS,
+                "activeDeadlineSeconds":inference_evaluation_deadline_seconds(&request.scope),
                 "ttlSecondsAfterFinished":self.config.ttl_seconds_after_finished,
                 "template":{
                     "metadata":{"labels":{
@@ -4237,7 +4250,25 @@ mod tests {
             dispatcher.inference_evaluation_job_manifest(&InferenceEvaluationExecutionRequest {
                 evaluation_id: "infeval_test".into(),
                 gateway_url: "http://pharness-model-gateway:4780/v1/".into(),
+                scope: pharness_core::InferenceEvaluationScope::FullQualification {},
             });
+        assert_eq!(
+            manifest.pointer("/spec/activeDeadlineSeconds"),
+            Some(&json!(8 * 3600 + NETWORK_POLICY_STABILIZATION_SECONDS))
+        );
+        let diagnostic =
+            dispatcher.inference_evaluation_job_manifest(&InferenceEvaluationExecutionRequest {
+                evaluation_id: "infeval_diagnostic".into(),
+                gateway_url: "http://pharness-model-gateway:4780/v1/".into(),
+                scope: pharness_core::InferenceEvaluationScope::Diagnostic {
+                    case_ids: vec!["acceptance-boundary".into()],
+                    reference_evaluation_id: None,
+                },
+            });
+        assert_eq!(
+            diagnostic.pointer("/spec/activeDeadlineSeconds"),
+            Some(&json!(2 * 3600 + NETWORK_POLICY_STABILIZATION_SECONDS))
+        );
         assert_eq!(
             manifest.pointer("/spec/template/spec/automountServiceAccountToken"),
             Some(&json!(false))
