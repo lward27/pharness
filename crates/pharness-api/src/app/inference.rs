@@ -783,7 +783,7 @@ fn reliability_v2_default_policy(profile_id: &str) -> Option<InferencePolicyRef>
         "repo-planner" => "planner-kimi-k3-v2",
         "repo-builder" => "builder-kimi-k2p7-code-v2",
         "repo-repair" => "repair-kimi-k3-v2",
-        "repo-test-diagnoser" => "test-diagnosis-nemotron-v2",
+        "repo-test-diagnoser" => "test-diagnosis-kimi-k3-v2",
         "repo-verifier" => "verifier-glm-5p3-v2",
         _ => return None,
     };
