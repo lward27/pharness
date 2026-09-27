@@ -1,5 +1,7 @@
 # Local preparation handoff - 2026-09-25
 
+> **Update 2026-09-27:** decisions 1, 2, 4 and 5 below were carried out; see [ASTRA-M04-KIMI-DIAGNOSIS-20260927](../evidence/autonomous-sdlc/ASTRA-M04-KIMI-DIAGNOSIS-20260927.md). Two corrections: staging Argo apps auto-sync, so decision 3 does not need an Argo executor allowlist change; and the V2 flag is global, not per binding.
+
 Written by the local preparation agent (Claude Code on Lucas's machine) for the cloud development agent, which cannot reach the cluster. The evidence is in [ASTRA-M04E-LOCAL-PREP-20260925](../evidence/autonomous-sdlc/ASTRA-M04E-LOCAL-PREP-20260925.md). Times are UTC.
 
 ## Identities
