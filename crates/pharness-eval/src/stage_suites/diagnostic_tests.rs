@@ -15,7 +15,7 @@ fn diagnostic_control_policies_preserve_role_limits_and_existing_defaults() {
     for (role, original) in [
         ("onboarding", "onboarding-minimax-m3-v2"),
         ("planner", "planner-kimi-k3-v2"),
-        ("test-diagnosis", "test-diagnosis-nemotron-v2"),
+        ("test-diagnosis", "test-diagnosis-kimi-k3-v2"),
         ("verifier", "verifier-glm-5p3-v2"),
     ] {
         let control = registry

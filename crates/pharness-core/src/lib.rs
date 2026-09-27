@@ -40,9 +40,10 @@ pub use inference::{
     InferenceStage, InferenceTargetRef, InferenceTargetRevision, InferenceTransportPolicy,
     ModelGrantClaims, ModelGrantError, OpenRouterRoutePolicy, ReasoningContextMode,
     ReasoningEffort, ReasoningReplay, ReasoningRequestPolicy, ResolvedInferenceBinding,
-    StageInferencePolicyRevision, StagePromptRevision, INFERENCE_POLICY_SCHEMA,
-    INFERENCE_QUALIFICATION_SUITE_SCHEMA, INFERENCE_REGISTRY_SCHEMA, INFERENCE_TARGET_SCHEMA,
-    MODEL_GRANT_SCHEMA, RESOLVED_INFERENCE_BINDING_SCHEMA, STAGE_PROMPT_SCHEMA,
+    StageInferencePolicyRevision, StagePromptRevision, INFERENCE_GATEWAY_CONTRACT,
+    INFERENCE_POLICY_SCHEMA, INFERENCE_QUALIFICATION_SUITE_SCHEMA, INFERENCE_REGISTRY_SCHEMA,
+    INFERENCE_TARGET_SCHEMA, MODEL_GRANT_SCHEMA, RESOLVED_INFERENCE_BINDING_SCHEMA,
+    STAGE_PROMPT_SCHEMA,
 };
 pub use model::{
     ActionParseError, AgentAction, ApprovalKind, ModelCapabilities, ModelMessage, ModelProvider,

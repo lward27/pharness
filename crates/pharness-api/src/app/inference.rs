@@ -13,8 +13,8 @@ use pharness_core::{
     canonical_json_sha256, inference_qualification_suite_hash, sign_model_grant, CapabilityKind,
     InferencePolicyRef, InferenceStage, InferenceTargetRef, ModelGrantClaims, ModelMessage,
     ModelRequest, ModelRole, ModelToolCall, ReasoningReplay, ResolvedInferenceBinding, RunId,
-    SessionId, StageInferencePolicyRevision, ToolProtocolMode, ToolSpec, MODEL_GRANT_SCHEMA,
-    RESOLVED_INFERENCE_BINDING_SCHEMA,
+    SessionId, StageInferencePolicyRevision, ToolProtocolMode, ToolSpec,
+    INFERENCE_GATEWAY_CONTRACT, MODEL_GRANT_SCHEMA, RESOLVED_INFERENCE_BINDING_SCHEMA,
 };
 use pharness_openai_compatible::{
     build_chat_request, OpenAiStreamAggregate, SseDecoder, StreamChunk,
@@ -783,7 +783,7 @@ fn reliability_v2_default_policy(profile_id: &str) -> Option<InferencePolicyRef>
         "repo-planner" => "planner-kimi-k3-v2",
         "repo-builder" => "builder-kimi-k2p7-code-v2",
         "repo-repair" => "repair-kimi-k3-v2",
-        "repo-test-diagnoser" => "test-diagnosis-nemotron-v2",
+        "repo-test-diagnoser" => "test-diagnosis-kimi-k3-v2",
         "repo-verifier" => "verifier-glm-5p3-v2",
         _ => return None,
     };
@@ -996,7 +996,7 @@ async fn list_policies(
                 .await?,
             policy,
             &state.inference.registry.config_hash,
-            &state.build.api_revision,
+            INFERENCE_GATEWAY_CONTRACT,
         );
         let protocol_ready = latest_protocol_verification
             .as_ref()
@@ -1063,6 +1063,37 @@ async fn list_policies(
     })))
 }
 
+/// The gateway is usable only when it serves the API's exact registry and the
+/// gateway contract that protocol receipts and qualifications bind to.
+fn classify_gateway_readiness(
+    api_registry_hash: &str,
+    direct_fireworks_enabled: bool,
+    ready: &Value,
+) -> Value {
+    let gateway_hash = ready.get("registry_hash").and_then(Value::as_str);
+    let gateway_contract = ready.get("gateway_contract").and_then(Value::as_str);
+    let registry_aligned = gateway_hash == Some(api_registry_hash);
+    let contract_aligned = gateway_contract == Some(INFERENCE_GATEWAY_CONTRACT);
+    let blocker = match (registry_aligned, contract_aligned) {
+        (true, true) => Value::Null,
+        (false, _) => json!("Gateway and API inference registries do not match."),
+        (true, false) => {
+            json!("Gateway contract differs from the contract this API qualifies against.")
+        }
+    };
+    json!({
+        "status":if registry_aligned && contract_aligned { "available" } else { "mismatch" },
+        "api_registry_hash":api_registry_hash,
+        "gateway_registry_hash":gateway_hash,
+        "registry_aligned":registry_aligned,
+        "api_gateway_contract":INFERENCE_GATEWAY_CONTRACT,
+        "gateway_contract":gateway_contract,
+        "gateway_contract_aligned":contract_aligned,
+        "direct_fireworks_enabled":direct_fireworks_enabled,
+        "blocker":blocker,
+    })
+}
+
 pub(super) async fn gateway_readiness(state: &AppState) -> Value {
     if !state.inference.enabled {
         return json!({
@@ -1096,22 +1127,11 @@ pub(super) async fn gateway_readiness(state: &AppState) -> Value {
     }
     .await;
     match result {
-        Ok(ready) => {
-            let gateway_hash = ready
-                .get("registry_hash")
-                .and_then(Value::as_str)
-                .map(str::to_string);
-            let aligned =
-                gateway_hash.as_deref() == Some(state.inference.registry.config_hash.as_str());
-            json!({
-                "status":if aligned { "available" } else { "mismatch" },
-                "api_registry_hash":state.inference.registry.config_hash,
-                "gateway_registry_hash":gateway_hash,
-                "registry_aligned":aligned,
-                "direct_fireworks_enabled":state.inference.direct_fireworks_enabled,
-                "blocker":if aligned { Value::Null } else { json!("Gateway and API inference registries do not match.") },
-            })
-        }
+        Ok(ready) => classify_gateway_readiness(
+            &state.inference.registry.config_hash,
+            state.inference.direct_fireworks_enabled,
+            &ready,
+        ),
         Err(message) => json!({
             "status":"unavailable",
             "api_registry_hash":state.inference.registry.config_hash,
@@ -1149,6 +1169,7 @@ async fn preflight_target(
     .clone();
     let verification_id = new_prefixed_id("inferverify");
     let now = epoch_seconds();
+    let reported_gateway_contract = gateway_readiness(&state).await["gateway_contract"].clone();
     let result = verify_target_protocol(&state, &verification_id, &target, &policy).await;
     let (
         status,
@@ -1178,6 +1199,14 @@ async fn preflight_target(
             Some(sanitize_failure(&message)),
         ),
     };
+    // A pass binds only to the contract the serving gateway reports, so a pass
+    // from a mismatched or silent gateway satisfies no gate. A failure with no
+    // reported contract is attributed to the expected contract so it stays
+    // visible and supersedes an older pass for the same binding.
+    let gateway_contract = match (&reported_gateway_contract, status) {
+        (Value::Null, "failed") => json!(INFERENCE_GATEWAY_CONTRACT),
+        _ => reported_gateway_contract,
+    };
     let verification = state
         .store
         .create_inference_target_verification(CreateInferenceTargetVerification {
@@ -1197,6 +1226,7 @@ async fn preflight_target(
                 "registry_hash":state.inference.registry.config_hash,
                 "policy":protocol_binding::policy_identity(&policy),
                 "runtime_revision":state.build.api_revision,
+                "gateway_contract":gateway_contract,
                 "protocol_calibration":calibration,
             }),
             sanitized_failure: failure,
@@ -1285,7 +1315,7 @@ async fn create_policy_qualification(
             .await?,
         policy,
         &state.inference.registry.config_hash,
-        &state.build.api_revision,
+        INFERENCE_GATEWAY_CONTRACT,
     );
     if !latest_protocol_verification
         .as_ref()
@@ -1309,6 +1339,7 @@ async fn create_policy_qualification(
             agent_profile_hash: resolved_agent_profile_hash,
             resolved_binding: binding,
             runtime_revision: state.build.api_revision.clone(),
+            gateway_contract: INFERENCE_GATEWAY_CONTRACT.into(),
             actor: request.actor,
             reason: request.reason,
             config_hash: request.config_hash,
@@ -1377,6 +1408,7 @@ fn qualification_from_evaluation(
         suite_id: evaluation.suite_id.clone(),
         suite_hash: evaluation.suite_hash.clone(),
         runtime_revision: evaluation.runtime_revision.clone(),
+        gateway_contract: evaluation.gateway_contract.clone(),
         attempts: evaluation.attempts,
         metrics: report,
         verdict: derived_verdict.into(),
@@ -2296,12 +2328,36 @@ fn sanitize_failure(message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        dynamic_tool_constraints, gateway_readiness_url, is_hex_sha256, is_prefixed_sha256, json,
-        parse_stage, protocol_calibration_messages, qualification_suite_contract,
-        qualification_tool_constraints, validate_protocol_calibration_generation,
-        validate_qualification_report, InferenceStage, ModelRole, StoredInferenceEvaluation,
-        RESOLVED_INFERENCE_BINDING_SCHEMA,
+        classify_gateway_readiness, dynamic_tool_constraints, gateway_readiness_url, is_hex_sha256,
+        is_prefixed_sha256, json, parse_stage, protocol_calibration_messages,
+        qualification_suite_contract, qualification_tool_constraints,
+        validate_protocol_calibration_generation, validate_qualification_report, InferenceStage,
+        ModelRole, StoredInferenceEvaluation, RESOLVED_INFERENCE_BINDING_SCHEMA,
     };
+
+    #[test]
+    fn gateway_is_available_only_with_matching_registry_and_contract() {
+        let contract = pharness_core::INFERENCE_GATEWAY_CONTRACT;
+        let ready = |registry: &str, contract: Option<&str>| {
+            classify_gateway_readiness(
+                "sha256:api",
+                true,
+                &json!({"registry_hash":registry,"gateway_contract":contract}),
+            )
+        };
+        let aligned = ready("sha256:api", Some(contract));
+        assert_eq!(aligned["status"], "available");
+        assert!(aligned["blocker"].is_null());
+        let old_gateway = ready("sha256:api", None);
+        assert_eq!(old_gateway["status"], "mismatch");
+        assert_eq!(old_gateway["registry_aligned"], true);
+        assert_eq!(old_gateway["gateway_contract_aligned"], false);
+        let other_contract = ready("sha256:api", Some("pharness.dev/inference-gateway/v0"));
+        assert_eq!(other_contract["status"], "mismatch");
+        let other_registry = ready("sha256:gateway", Some(contract));
+        assert_eq!(other_registry["status"], "mismatch");
+        assert_eq!(other_registry["registry_aligned"], false);
+    }
 
     #[test]
     fn stage_query_is_bounded() {
@@ -2377,6 +2433,7 @@ mod tests {
             .unwrap(),
             binding_hash: "binding".into(),
             runtime_revision: "runtime".into(),
+            gateway_contract: Some(pharness_core::INFERENCE_GATEWAY_CONTRACT.into()),
             actor: "operator".into(),
             reason: "qualify planner policy".into(),
             config_hash: "registry".into(),

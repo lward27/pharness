@@ -29,10 +29,11 @@ impl SqliteStore {
               id, status, suite_id, suite_hash, attempts, agent_profile_id,
               agent_profile_hash, target_id, target_revision, target_hash, policy_id,
               policy_revision, policy_hash, resolved_binding_json, binding_hash,
-              runtime_revision, actor, reason, config_hash, created_at, scope_json
+              runtime_revision, actor, reason, config_hash, created_at, scope_json,
+              gateway_contract
             )
             SELECT ?1, 'queued', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
-                   ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20
+                   ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21
             WHERE NOT EXISTS (
               SELECT 1 FROM inference_evaluations
               WHERE status IN ('queued', 'running')
@@ -59,6 +60,7 @@ impl SqliteStore {
         .bind(&evaluation.config_hash)
         .bind(&now)
         .bind(serde_json::to_string(&evaluation.scope)?)
+        .bind(&evaluation.gateway_contract)
         .execute(&self.pool)
         .await?;
         if result.rows_affected() != 1 {
@@ -176,8 +178,8 @@ impl SqliteStore {
               id, policy_id, policy_revision, policy_hash, target_id, target_revision,
               target_hash, agent_profile_id, agent_profile_hash, suite_id, suite_hash,
               runtime_revision, attempts, metrics_json, verdict, evidence_artifact_id,
-              actor, reason, created_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+              actor, reason, created_at, gateway_contract
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
             "#,
         )
         .bind(&qualification.id)
@@ -199,6 +201,7 @@ impl SqliteStore {
         .bind(&qualification.actor)
         .bind(&qualification.reason)
         .bind(&now)
+        .bind(&qualification.gateway_contract)
         .execute(&mut *tx)
         .await?;
         }
@@ -498,8 +501,8 @@ impl SqliteStore {
               id, policy_id, policy_revision, policy_hash, target_id, target_revision,
               target_hash, agent_profile_id, agent_profile_hash, suite_id, suite_hash,
               runtime_revision, attempts, metrics_json, verdict, evidence_artifact_id,
-              actor, reason, created_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+              actor, reason, created_at, gateway_contract
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
             "#,
         )
         .bind(&qualification.id)
@@ -521,6 +524,7 @@ impl SqliteStore {
         .bind(&qualification.actor)
         .bind(&qualification.reason)
         .bind(&now)
+        .bind(&qualification.gateway_contract)
         .execute(&self.pool)
         .await?;
         self.get_inference_policy_qualification(&qualification.id)
@@ -630,6 +634,7 @@ fn row_to_qualification(
         suite_id: row.try_get("suite_id")?,
         suite_hash: row.try_get("suite_hash")?,
         runtime_revision: row.try_get("runtime_revision")?,
+        gateway_contract: row.try_get("gateway_contract")?,
         attempts: row.try_get::<i64, _>("attempts")? as u32,
         metrics: serde_json::from_str(&row.try_get::<String, _>("metrics_json")?)?,
         verdict: row.try_get("verdict")?,
@@ -663,6 +668,7 @@ fn row_to_evaluation(
         )?,
         binding_hash: row.try_get("binding_hash")?,
         runtime_revision: row.try_get("runtime_revision")?,
+        gateway_contract: row.try_get("gateway_contract")?,
         actor: row.try_get("actor")?,
         reason: row.try_get("reason")?,
         config_hash: row.try_get("config_hash")?,
@@ -778,6 +784,7 @@ mod tests {
             agent_profile_hash: binding.agent_profile_hash.clone(),
             resolved_binding: binding,
             runtime_revision: "runtime-sha".into(),
+            gateway_contract: "pharness.dev/inference-gateway/test".into(),
             actor: "operator".into(),
             reason: "test qualification single flight".into(),
             config_hash: "registry-hash".into(),

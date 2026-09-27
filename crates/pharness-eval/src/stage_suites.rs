@@ -104,7 +104,7 @@ impl SuiteKind {
             Self::VerifierV1 => "verifier-kimi-k2p6-high-v1",
             Self::OnboardingV2 => "onboarding-minimax-m3-v2",
             Self::PlannerV2 => "planner-kimi-k3-v2",
-            Self::TestDiagnosisV2 => "test-diagnosis-nemotron-v2",
+            Self::TestDiagnosisV2 => "test-diagnosis-kimi-k3-v2",
             Self::VerifierV2 => "verifier-glm-5p3-v2",
         }
     }

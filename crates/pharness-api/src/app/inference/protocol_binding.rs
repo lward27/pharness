@@ -38,11 +38,13 @@ pub(super) fn policy_identity(policy: &StageInferencePolicyRevision) -> Value {
 
 /// Store ordering is newest first. A newer failed check for the same immutable
 /// binding supersedes an older pass; another policy's check cannot satisfy it.
+/// The binding is the inference registry plus the model gateway contract, so an
+/// application release that changes neither keeps the receipt valid.
 pub(super) fn latest_verification(
     verifications: Vec<StoredInferenceTargetVerification>,
     policy: &StageInferencePolicyRevision,
     registry_hash: &str,
-    runtime_revision: &str,
+    gateway_contract: &str,
 ) -> Option<StoredInferenceTargetVerification> {
     verifications.into_iter().find(|verification| {
         verification.target_id == policy.target.target_id
@@ -51,9 +53,9 @@ pub(super) fn latest_verification(
             && verification.config_hash == registry_hash
             && verification
                 .observed_capabilities
-                .get("runtime_revision")
+                .get("gateway_contract")
                 .and_then(Value::as_str)
-                == Some(runtime_revision)
+                == Some(gateway_contract)
             && verification.observed_capabilities.get("policy") == Some(&policy_identity(policy))
             && verification
                 .observed_capabilities
