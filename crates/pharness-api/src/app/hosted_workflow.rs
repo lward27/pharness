@@ -186,17 +186,18 @@ pub(super) async fn qualified_stage(
         .list_inference_policy_qualifications(&policy_ref.policy_id, &policy_ref.revision).await?
         .into_iter().find(|qualification| qualification.agent_profile_id == profile_id)
         .filter(|qualification| qualification.verdict == "passed"
-            && qualification.runtime_revision == state.build.api_revision
+            && qualification.gateway_contract.as_deref() == Some(pharness_core::INFERENCE_GATEWAY_CONTRACT)
             && qualification.suite_id == suite_id
             && qualification.suite_hash == suite_hash
             && (!matches!(profile_id, "repo-builder" | "repo-repair") || qualification.attempts == 2)
             && selection["policy_hash"] == qualification.policy_hash
             && selection["target_hash"] == qualification.target_hash
             && qualification_binding.agent_profile_hash == qualification.agent_profile_hash)
-        .ok_or_else(|| ApiError::conflict(format!("{stage_key} requires a passing gateway qualification for this runtime, frozen suite, and policy")))?;
+        .ok_or_else(|| ApiError::conflict(format!("{stage_key} requires a passing gateway qualification for this gateway contract, frozen suite, and policy")))?;
     selection["qualification_profile_hash"] = json!(qualification.agent_profile_hash);
     selection["qualification_suite_hash"] = json!(qualification.suite_hash);
     selection["qualification_id"] = json!(qualification.id);
     selection["qualified_runtime_revision"] = json!(qualification.runtime_revision);
+    selection["qualified_gateway_contract"] = json!(qualification.gateway_contract);
     Ok((profile, selection))
 }

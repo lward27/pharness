@@ -140,6 +140,7 @@ async fn ready(State(state): State<GatewayState>) -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "status":"ready",
         "registry_hash":state.registry.config_hash,
+        "gateway_contract":pharness_core::INFERENCE_GATEWAY_CONTRACT,
         "targets":state.registry.targets.len()
     }))
 }

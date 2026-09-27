@@ -16,6 +16,7 @@ fn qualification(e: &StoredInferenceEvaluation) -> CreateInferencePolicyQualific
         suite_id: e.suite_id.clone(),
         suite_hash: e.suite_hash.clone(),
         runtime_revision: e.runtime_revision.clone(),
+        gateway_contract: e.gateway_contract.clone(),
         attempts: e.attempts,
         metrics: json!({"gate_passed":true}),
         verdict: "passed".into(),

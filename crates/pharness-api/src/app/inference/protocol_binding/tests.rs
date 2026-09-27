@@ -21,7 +21,7 @@ fn passed(
         "id":"verify_one","target_id":policy.target.target_id,"target_revision":policy.target.revision,
         "target_hash":policy.target_hash,"status":"passed","reachability":"reachable",
         "model_visible":true,"streaming_compatible":true,"tool_compatible":true,
-        "observed_capabilities":{"policy":policy_identity(policy),"registry_hash":registry_hash,"runtime_revision":"runtime",
+        "observed_capabilities":{"policy":policy_identity(policy),"registry_hash":registry_hash,"runtime_revision":"runtime","gateway_contract":"contract",
             "protocol_calibration":{"passed":30,"required":30}},
         "sanitized_failure":null,"actor":"operator","reason":"test","config_hash":registry_hash,
         "created_at":"100","expires_at":"1000"
@@ -83,14 +83,14 @@ fn target_pass_and_other_generation_policy_cannot_qualify_planner() {
         vec![exact.clone()],
         planner,
         &registry.config_hash,
-        "runtime"
+        "contract"
     )
     .is_some());
     assert!(latest_verification(
         vec![passed(onboarding, &registry.config_hash)],
         planner,
         &registry.config_hash,
-        "runtime"
+        "contract"
     )
     .is_none());
     let mut legacy = exact.clone();
@@ -99,12 +99,15 @@ fn target_pass_and_other_generation_policy_cannot_qualify_planner() {
         .as_object_mut()
         .unwrap()
         .remove("policy");
-    assert!(latest_verification(vec![legacy], planner, &registry.config_hash, "runtime").is_none());
+    assert!(
+        latest_verification(vec![legacy], planner, &registry.config_hash, "contract").is_none()
+    );
     for field in ["policy_id", "revision", "policy_hash"] {
         let mut changed = exact.clone();
         changed.observed_capabilities["policy"][field] = json!("changed");
         assert!(
-            latest_verification(vec![changed], planner, &registry.config_hash, "runtime").is_none(),
+            latest_verification(vec![changed], planner, &registry.config_hash, "contract")
+                .is_none(),
             "{field}"
         );
     }
@@ -116,13 +119,20 @@ fn target_pass_and_other_generation_policy_cannot_qualify_planner() {
             v.observed_capabilities["registry_hash"] = json!("changed")
         },
         |v: &mut StoredInferenceTargetVerification| {
-            v.observed_capabilities["runtime_revision"] = json!("changed")
+            v.observed_capabilities["gateway_contract"] = json!("changed")
+        },
+        |v: &mut StoredInferenceTargetVerification| {
+            v.observed_capabilities
+                .as_object_mut()
+                .unwrap()
+                .remove("gateway_contract");
         },
     ] {
         let mut changed = exact.clone();
         mutate(&mut changed);
         assert!(
-            latest_verification(vec![changed], planner, &registry.config_hash, "runtime").is_none()
+            latest_verification(vec![changed], planner, &registry.config_hash, "contract")
+                .is_none()
         );
     }
 }
@@ -141,7 +151,7 @@ fn newer_failure_overrides_old_pass_and_stale_or_partial_checks_block() {
             vec![failed, exact.clone()],
             policy,
             &registry.config_hash,
-            "runtime"
+            "contract"
         )
         .unwrap(),
         500
@@ -165,4 +175,19 @@ fn newer_failure_overrides_old_pass_and_stale_or_partial_checks_block() {
         mutate(&mut changed);
         assert!(!fresh_pass(&changed, 500));
     }
+}
+
+#[test]
+fn application_release_does_not_invalidate_a_receipt_for_the_same_gateway_contract() {
+    let registry = registry();
+    let policy = registry.policy("planner-kimi-k3-v2", "v1").unwrap();
+    let mut other_release = passed(policy, &registry.config_hash);
+    other_release.observed_capabilities["runtime_revision"] = json!("an-older-application-release");
+    assert!(latest_verification(
+        vec![other_release],
+        policy,
+        &registry.config_hash,
+        "contract"
+    )
+    .is_some());
 }

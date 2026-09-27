@@ -32,6 +32,27 @@ async fn qualification_fixture(
     pharness_core::AgentProfile,
     pharness_core::ResolvedInferenceBinding,
 ) {
+    qualification_fixture_with_contract(
+        state,
+        stage,
+        profile_id,
+        attempts,
+        Some(pharness_core::INFERENCE_GATEWAY_CONTRACT),
+    )
+    .await
+}
+
+async fn qualification_fixture_with_contract(
+    state: &crate::app::AppState,
+    stage: InferenceStage,
+    profile_id: &str,
+    attempts: u32,
+    gateway_contract: Option<&str>,
+) -> (
+    InferencePolicyRef,
+    pharness_core::AgentProfile,
+    pharness_core::ResolvedInferenceBinding,
+) {
     let reference =
         crate::app::inference::policy_reference(state, stage, profile_id, None).unwrap();
     let (suite, profile, binding) =
@@ -51,6 +72,7 @@ async fn qualification_fixture(
             suite_id: suite.into(),
             suite_hash: pharness_core::inference_qualification_suite_hash(suite).unwrap(),
             runtime_revision: state.build.api_revision.clone(),
+            gateway_contract: gateway_contract.map(str::to_string),
             attempts,
             metrics: json!({"fixture_only":true}),
             verdict: "passed".into(),
@@ -85,6 +107,8 @@ async fn hosted_qualification_matches_frozen_suite_without_conflating_live_tool_
     );
     assert_ne!(selection["agent_profile_hash"], frozen.agent_profile_hash,
         "the frozen unit-command tool schema must remain distinguishable from an unbound live stage");
+    // An unrelated application release keeps the qualification: it is bound to
+    // the gateway contract and the registry-derived policy/target/suite hashes.
     state.build.api_revision = "b".repeat(40);
     assert!(qualified_stage(
         &state,
@@ -94,7 +118,35 @@ async fn hosted_qualification_matches_frozen_suite_without_conflating_live_tool_
         None
     )
     .await
-    .is_err());
+    .is_ok());
+}
+
+#[tokio::test]
+async fn hosted_qualification_rejects_legacy_or_other_gateway_contract_rows() {
+    for contract in [None, Some("pharness.dev/inference-gateway/v0")] {
+        let mut state = test_state().await;
+        enable_gateway(&mut state);
+        qualification_fixture_with_contract(
+            &state,
+            InferenceStage::Implement,
+            "repo-builder",
+            2,
+            contract,
+        )
+        .await;
+        assert!(
+            qualified_stage(
+                &state,
+                "implement",
+                "repo-builder",
+                InferenceStage::Implement,
+                None
+            )
+            .await
+            .is_err(),
+            "{contract:?}"
+        );
+    }
 }
 
 #[tokio::test]

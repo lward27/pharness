@@ -485,6 +485,14 @@ impl StageInferencePolicyRevision {
     }
 }
 
+/// Behavioral contract of the model gateway's request translation, transport
+/// and response handling. Protocol receipts and policy qualifications bind to
+/// this identity plus the inference registry, not to the application release,
+/// so unrelated runtime releases do not invalidate model qualification.
+/// Bump it whenever the gateway changes what it sends upstream, how it retries
+/// or times out, or how it translates a provider response.
+pub const INFERENCE_GATEWAY_CONTRACT: &str = "pharness.dev/inference-gateway/v1";
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct InferenceRegistry {

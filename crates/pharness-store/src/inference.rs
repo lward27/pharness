@@ -94,6 +94,7 @@ pub struct CreateInferencePolicyQualification {
     pub suite_id: String,
     pub suite_hash: String,
     pub runtime_revision: String,
+    pub gateway_contract: Option<String>,
     pub attempts: u32,
     pub metrics: serde_json::Value,
     pub verdict: String,
@@ -116,6 +117,8 @@ pub struct StoredInferencePolicyQualification {
     pub suite_id: String,
     pub suite_hash: String,
     pub runtime_revision: String,
+    #[serde(default)]
+    pub gateway_contract: Option<String>,
     pub attempts: u32,
     pub metrics: serde_json::Value,
     pub verdict: String,
@@ -148,6 +151,7 @@ pub struct CreateInferenceEvaluation {
     pub agent_profile_hash: String,
     pub resolved_binding: ResolvedInferenceBinding,
     pub runtime_revision: String,
+    pub gateway_contract: String,
     pub actor: String,
     pub reason: String,
     pub config_hash: String,
@@ -173,6 +177,8 @@ pub struct StoredInferenceEvaluation {
     pub resolved_binding: ResolvedInferenceBinding,
     pub binding_hash: String,
     pub runtime_revision: String,
+    #[serde(default)]
+    pub gateway_contract: Option<String>,
     pub actor: String,
     pub reason: String,
     pub config_hash: String,

@@ -69,6 +69,11 @@ async fn protocol_preflight_rejects_ambiguity_before_recording_and_records_expli
     assert_eq!(record["status"], "failed");
     assert_eq!(record["sanitized_failure"], "model gateway is disabled");
     assert_eq!(
+        record["observed_capabilities"]["gateway_contract"],
+        pharness_core::INFERENCE_GATEWAY_CONTRACT,
+        "a failure without a reported contract stays attributed to the expected binding"
+    );
+    assert_eq!(
         record["observed_capabilities"]["policy"]["policy_id"],
         "planner-kimi-k3-v2"
     );
@@ -110,7 +115,7 @@ async fn seed_pass(state: &AppState, policy_id: &str, id: &str) {
         "id":id,"target_id":policy.target.target_id,"target_revision":policy.target.revision,
         "target_hash":policy.target_hash,"status":"passed","reachability":"reachable",
         "model_visible":true,"streaming_compatible":true,"tool_compatible":true,
-        "observed_capabilities":{"registry_hash":state.inference.registry.config_hash,"runtime_revision":state.build.api_revision,
+        "observed_capabilities":{"registry_hash":state.inference.registry.config_hash,"runtime_revision":state.build.api_revision,"gateway_contract":pharness_core::INFERENCE_GATEWAY_CONTRACT,
             "policy":{"policy_id":policy.policy_id,"revision":policy.revision,"policy_hash":policy.policy_hash},
             "protocol_calibration":{"passed":30,"required":30}},
         "sanitized_failure":null,"actor":"test","reason":"deterministic fixture only",
@@ -150,6 +155,10 @@ async fn protocol_qualification_admission_and_readiness_use_the_exact_policy_rec
     let (status, evaluation) = request(&state, path, Some(body)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(evaluation["policy_id"], "planner-kimi-k3-v2");
+    assert_eq!(
+        evaluation["gateway_contract"],
+        pharness_core::INFERENCE_GATEWAY_CONTRACT
+    );
     assert_eq!(
         evaluation["status"], "failed",
         "disabled worker proves admission without dispatching external work"
