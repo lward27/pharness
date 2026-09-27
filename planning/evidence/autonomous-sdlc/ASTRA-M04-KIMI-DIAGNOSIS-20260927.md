@@ -31,3 +31,12 @@ This is the single evidence record for the follow-up to the [2026-09-25 handoff]
 ## What this means
 
 The failure is model judgment on a systematic case, not transport or protocol. Unlike Nemotron, Kimi is protocol-reliable here. Hosted admission needs all five stages qualified under contract v1, so hosted creation would stay blocked even with the flags enabled. The suite and thresholds were not changed.
+
+## Prompt fix and requalification (same day)
+
+- #427 changed the `repo-test-diagnoser-v2` prompt (revision `2026-09-27.1`) to state evidence admissibility: receipts must match the selected acceptance names and the current source; `timed_out`, `spawn_failed` and `refused` receipts are `structural_environment`; `unknown` only for a fully passing, admissible result. The suite, fixtures and thresholds are unchanged.
+- Release `9e495188bfa9eb0f4d5b6813b42f7e9225704dbe`: pin #428 → `73e1e41`; archive `pre-release-9e49518-20260927` verified (migration 56, 14 WorkItems, 82 Runs); rollout Synced/Healthy with Pod imageIDs equal to the pins (runtime `sha256:1b7994f7…`, gateway `sha256:5963288d…`, UI `sha256:72361c7a…`).
+- The rollout coincided with **DiskPressure on `ubuntu-lucas-engineering`**, which evicted Pods in several namespaces, including the registry. It recovered on its own (about 25 GB free on a 196 GB disk; images account for only 2.6 GB; the rest is local-path volume data). The preparation egress proxy recovered after the registry returned. Pruning was prepared as an explicit script but not run.
+- Protocol `inferverify_01a0e35aaa0673c3951d184674ce7a2b`: passed 30/30.
+- Qualification `infeval_01a0e35e08a57461a95ce01731af77b3` → `inferqual_01a0e377c359766295b4071e31ed1fea`: **not qualified, 21/24**. `wrong-test-selection` and `timeout` now pass on both attempts. The three failures are the last three cases of attempt 2 (`single-localized-failure`, `multiple-related-failures`, `passing-control`): `provider_or_protocol_failure` with no typed submission. The gateway logged Fireworks `412 PRECONDITION_FAILED` at 15:24:30–31, returned in 10–18 ms with zero tokens. That points to an account-level rejection (spend or credit limit, or key state), not model judgment. On every case that reached the model, the diagnoser's judgment was correct.
+- Stopped: no retry and no other stage. Before any further model-backed operation, the Fireworks account state must be checked.
