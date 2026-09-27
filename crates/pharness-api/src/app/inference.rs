@@ -1326,6 +1326,7 @@ async fn create_policy_qualification(
         ));
     }
     let evaluation_id = new_prefixed_id("infeval");
+    let dispatch_scope = request.scope.clone();
     let resolved_agent_profile_hash = binding.agent_profile_hash.clone();
     state
         .store
@@ -1350,6 +1351,7 @@ async fn create_policy_qualification(
         .dispatch_inference_evaluation(crate::dispatch::InferenceEvaluationExecutionRequest {
             evaluation_id: evaluation_id.clone(),
             gateway_url: state.inference.gateway_url.clone(),
+            scope: dispatch_scope,
         })
         .await
     {
