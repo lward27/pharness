@@ -1,0 +1,112 @@
+{
+  "observed_at": "2026-09-08T18:31:04.940424+00:00",
+  "status": "local_validation_passed_release_pending",
+  "base_revision": "5a409453d28d68d22b12899a312df763c51e48dd",
+  "worktree": "/Users/wardl/Personal/apps/pharness-astra-policy-bound-preflight",
+  "checks": {
+    "api_rust_passed": 297,
+    "api_protocol_integration_tests": 2,
+    "policy_boundary_tests": 4,
+    "ui_unit_passed": 3,
+    "browser_passed": 16,
+    "browser_projects": [
+      "desktop 1440x1000",
+      "mobile 390x844"
+    ],
+    "browser_states": [
+      "unverified",
+      "stale",
+      "failed",
+      "passed"
+    ],
+    "themes": [
+      "dark",
+      "light"
+    ],
+    "keyboard": "Enter activates only the selected policy protocol request",
+    "navigation_posts": 0,
+    "clippy": "API/all targets, warnings denied; passed",
+    "architecture_regressions_passed": 5,
+    "format": "passed",
+    "ui_production_build": "passed"
+  },
+  "source_sha256": {
+    "crates/pharness-api/src/app/inference.rs": "sha256:83f185a6efb91e334c945e19fa7159b1a946d94ba1aba6b70257d8d4d806afa0",
+    "crates/pharness-api/src/app/tests/mod.rs": "sha256:bd1b8bad302e2cfbf5ec6fed4332f0ae1c1dfa59b8322cb5b63486e42274cb5d",
+    "ui/src/repoMode/screens/PlatformScreens.test.tsx": "sha256:6064ac3c5725fbee285bd07b2878b977952543d98d10ae30d5db62795f6db28c",
+    "ui/src/repoMode/screens/PlatformScreens.tsx": "sha256:b7a1f048615c1bf4942a872327c3c3249965c88179d0e729ae4bf663a2adf26b",
+    "crates/pharness-api/src/app/inference/protocol_binding.rs": "sha256:494a2a0ef43ed746f261291f707f788229033606cef752ce081c72b90805a573",
+    "crates/pharness-api/src/app/inference/protocol_binding/tests.rs": "sha256:fc14828b008391a0af2f7458e5a277306295dd7d9720de29d1bd9b34051e0e81",
+    "crates/pharness-api/src/app/tests/inference_protocol.rs": "sha256:b9fac9dddd6bc92ad9d8863ebcd6dd0d49d193c26bf745adeb8c78151763d5b5",
+    "ui/tests/fixtures/inference-protocol.mjs": "sha256:7c8ca9761d7ef6000f5d06de0db017b065fed2448445122e71a3c8a54adc29e4",
+    "ui/tests/inference-protocol.spec.mjs": "sha256:354e6a8caaf9b9825e7a8dfd987e2fad3d6542093616c162f8c14c88699635a1"
+  },
+  "unchanged_contracts_sha256": {
+    "crates/pharness-eval/src/coding_v2.rs": "sha256:3cbfa972eb0a97a8db4d31f1e45fedaf1febc4038bd2ad5313eb7a473092d173",
+    "crates/pharness-eval/src/stage_suites/fixtures/planner-v2.json": "sha256:c1ff96c946f19992b73caa528302fef7cdd7c6358ff3431c226331cdae75cfc5",
+    "crates/pharness-eval/src/stage_suites/fixtures/verifier-v2.json": "sha256:a687fb912e459e9f433d926dbf7154f8b26973faa9e3d2f7c9f79d3e32084755",
+    "deploy/helm/pharness/files/inference-registry.json": "sha256:baca810bd4b1f65c9ab0475636f1470921bf8eb22e15576fc06d9676ad11d627"
+  },
+  "logs": {
+    "api-final": {
+      "path": "/tmp/astra-policy-protocol-api-final.log",
+      "sha256": "sha256:7bd7ac6b2037a298314819d8e5f17817d9ff9b6cc4ec1970c0c0483801f90ce8"
+    },
+    "clippy-final": {
+      "path": "/tmp/astra-policy-protocol-clippy-final.log",
+      "sha256": "sha256:e9302c50824263862efdf3cb7e03e95e24a1c23dadae025e9d4f64e0fd39f9c7"
+    },
+    "architecture-final": {
+      "path": "/tmp/astra-policy-protocol-architecture-final.log",
+      "sha256": "sha256:79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+    },
+    "format-final": {
+      "path": "/tmp/astra-policy-protocol-format-final.log",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "ui-final": {
+      "path": "/tmp/astra-policy-protocol-ui-final.log",
+      "sha256": "sha256:ffa323b9062b33f09918fb116d5eda5a7c06e9f8a097a7d6d2aa5fd30cd7a12f"
+    },
+    "ui-build-final": {
+      "path": "/tmp/astra-policy-protocol-ui-build-final.log",
+      "sha256": "sha256:cdd3f5cef037be62636f2be789d4c9941481a176ffd7abe28cfeb2cb2e0d2ea4"
+    },
+    "browser-final": {
+      "path": "/tmp/astra-policy-protocol-browser-final.log",
+      "sha256": "sha256:84738c83bb367e642c56cfb0dace7ac0000b7da8f53541d0e4d46989b15036d3"
+    }
+  },
+  "screenshots": [
+    {
+      "path": "planning/evidence/autonomous-sdlc/screenshots/ASTRA-M04-policy-dark-desktop.png",
+      "sha256": "sha256:7367b1cb4547e96d7a89ccf93410d5bcb4b79d6d4a8097cd2c0941cd7870f1ef"
+    },
+    {
+      "path": "planning/evidence/autonomous-sdlc/screenshots/ASTRA-M04-policy-dark-mobile.png",
+      "sha256": "sha256:c1c9738cac25357c2214971fa0c4594b8f0935f1f6f2995463c50156f68e2c9c"
+    },
+    {
+      "path": "planning/evidence/autonomous-sdlc/screenshots/ASTRA-M04-policy-light-desktop.png",
+      "sha256": "sha256:1288cf1d86b470da7fe41b3927c4ce6656c99829a33db9d6e6a480b4419b7aa3"
+    },
+    {
+      "path": "planning/evidence/autonomous-sdlc/screenshots/ASTRA-M04-policy-light-mobile.png",
+      "sha256": "sha256:99566f69ab3099d6dd55ef75c51cd6078a74e61730cae615c6265da7df8f561c"
+    }
+  ],
+  "initial_validation_corrections": [
+    "Test used string accessor on ReasoningEffort enum; corrected to typed enum before passing tests.",
+    "Architecture rejected wildcard test imports; replaced with explicit imports.",
+    "First browser fixture intercepted source module URLs containing /api/; limited interception to the actual /api/ path and retained the failed report. Subsequent complete matrices passed."
+  ],
+  "original_browser_report": {
+    "path": "/tmp/astra-policy-protocol-browser-report.json",
+    "sha256": "sha256:6c19abbac18f0a4ff0ab85c798b7d53d6c0c686c796649411c4ab83b45b8c7ed"
+  },
+  "persistence": "additive observed_capabilities JSON fields; no migration",
+  "models_or_limits_changed": false,
+  "live_protocol_or_semantic_runs": 0,
+  "qualification": null,
+  "finance_production_approval": false
+}

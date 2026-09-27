@@ -1,0 +1,195 @@
+{
+  "api_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "argo": {
+    "argo_revision": "ce98a26065cd48323b58b8905fcbbfc6c76452cd",
+    "at": "2026-09-08T19:20:36.766614+00:00",
+    "health": "Healthy",
+    "running_pods": 5,
+    "sync": "Synced"
+  },
+  "configured_execution_images": {
+    "PHARNESS_CODING_RELIABILITY_V2_ENABLED": "false",
+    "PHARNESS_ENVIRONMENT_PROFILES_JSON": [
+      {
+        "active": true,
+        "id": "python-3.11",
+        "image": "registry.lucas.engineering/pharness-python-runner@sha256:0c402a4fff3941a8b6a8cfb95a9f4d909afe63ecdc9733992d414be520364da4",
+        "limits": {
+          "cpu": "2",
+          "ephemeral_storage": "4Gi",
+          "memory": "2Gi"
+        },
+        "platform": "linux/amd64",
+        "preparation_strategy": "python_hashed_requirements",
+        "repository_allowlist": [
+          "https://github.com/lward27/finance_app_database_service.git",
+          "https://github.com/lward27/scraper_manager.git",
+          "https://github.com/lward27/yfinance_wrapper.git"
+        ],
+        "required_executables": [
+          "pharness-worker",
+          "pharness-codex-host",
+          "codex",
+          "git",
+          "python",
+          "pip"
+        ],
+        "revision": "d675159cb205d222616d253d311706be1889bb91",
+        "service_account": "pharness-python-runner"
+      },
+      {
+        "active": true,
+        "id": "node-24",
+        "image": "registry.lucas.engineering/pharness-node-runner@sha256:5f4a5c489b0cbc65854bd87ca0a30e15ca68b3da601855b88496c2100d6c2a46",
+        "limits": {
+          "cpu": "2",
+          "ephemeral_storage": "4Gi",
+          "memory": "2Gi"
+        },
+        "platform": "linux/amd64",
+        "preparation_strategy": "node_npm_ci",
+        "repository_allowlist": [
+          "https://github.com/lward27/finance-frontend.git"
+        ],
+        "required_executables": [
+          "pharness-worker",
+          "pharness-codex-host",
+          "codex",
+          "git",
+          "node",
+          "npm"
+        ],
+        "revision": "d675159cb205d222616d253d311706be1889bb91",
+        "service_account": "pharness-node-runner"
+      }
+    ],
+    "PHARNESS_INFERENCE_EVALUATION_IMAGE": "registry.lucas.engineering/pharness-eval-runner@sha256:c8afce7f20482d81ffd3e196c836a6482df1df349f45e3e77e3f828da805cf1d",
+    "PHARNESS_WORKER_K8S_IMAGE": "registry.lucas.engineering/pharness-runtime@sha256:39699e9d5760f1319a6b0a502dfb58e38a05ab159059b44108f07ebebd6812cd"
+  },
+  "database_generation_unchanged": true,
+  "deployments": {
+    "pharness-api": {
+      "containers": [
+        {
+          "imageID": "registry.lucas.engineering/pharness-runtime@sha256:39699e9d5760f1319a6b0a502dfb58e38a05ab159059b44108f07ebebd6812cd",
+          "name": "api",
+          "ready": true,
+          "restartCount": 0,
+          "state": {
+            "running": {
+              "startedAt": "2026-09-08T19:20:03Z"
+            }
+          }
+        }
+      ],
+      "deployment_generation": 195,
+      "expected_image": "registry.lucas.engineering/pharness-runtime@sha256:39699e9d5760f1319a6b0a502dfb58e38a05ab159059b44108f07ebebd6812cd",
+      "pod_name": "pharness-api-7c64f9b744-5rgqb",
+      "pod_uid": "e9a72721-0e0b-4622-8672-2e8272c2c35a"
+    },
+    "pharness-coding-egress-proxy": {
+      "containers": [
+        {
+          "imageID": "registry.lucas.engineering/pharness-runtime@sha256:39699e9d5760f1319a6b0a502dfb58e38a05ab159059b44108f07ebebd6812cd",
+          "name": "proxy",
+          "ready": true,
+          "restartCount": 0,
+          "state": {
+            "running": {
+              "startedAt": "2026-09-08T19:20:02Z"
+            }
+          }
+        }
+      ],
+      "deployment_generation": 137,
+      "expected_image": "registry.lucas.engineering/pharness-runtime@sha256:39699e9d5760f1319a6b0a502dfb58e38a05ab159059b44108f07ebebd6812cd",
+      "pod_name": "pharness-coding-egress-proxy-57d946d6f-6fd7l",
+      "pod_uid": "216752c0-ce06-4926-907c-9676b862341a"
+    },
+    "pharness-model-gateway": {
+      "containers": [
+        {
+          "imageID": "registry.lucas.engineering/pharness-model-gateway@sha256:91930547160d9aa48c24df8c7310f3ef966686b6e1b607e73b4993ca659b0473",
+          "name": "gateway",
+          "ready": true,
+          "restartCount": 0,
+          "state": {
+            "running": {
+              "startedAt": "2026-09-08T19:19:42Z"
+            }
+          }
+        }
+      ],
+      "deployment_generation": 49,
+      "expected_image": "registry.lucas.engineering/pharness-model-gateway@sha256:91930547160d9aa48c24df8c7310f3ef966686b6e1b607e73b4993ca659b0473",
+      "pod_name": "pharness-model-gateway-545945bdf7-l247x",
+      "pod_uid": "913f4a13-4a8b-4fb7-afeb-31028d5fc813"
+    },
+    "pharness-preparation-egress-proxy": {
+      "containers": [
+        {
+          "imageID": "registry.lucas.engineering/pharness-runtime@sha256:39699e9d5760f1319a6b0a502dfb58e38a05ab159059b44108f07ebebd6812cd",
+          "name": "proxy",
+          "ready": true,
+          "restartCount": 0,
+          "state": {
+            "running": {
+              "startedAt": "2026-09-08T19:20:03Z"
+            }
+          }
+        }
+      ],
+      "deployment_generation": 137,
+      "expected_image": "registry.lucas.engineering/pharness-runtime@sha256:39699e9d5760f1319a6b0a502dfb58e38a05ab159059b44108f07ebebd6812cd",
+      "pod_name": "pharness-preparation-egress-proxy-b8dccd476-rjs7x",
+      "pod_uid": "dbcf0fdb-21c2-4de1-b1d3-8766e3b4405a"
+    },
+    "pharness-ui": {
+      "containers": [
+        {
+          "imageID": "registry.lucas.engineering/pharness-ui@sha256:4c645a9b00983442691a94e7bf5224536ee5ef3ea712b36bf948883af2ad84bd",
+          "name": "ui",
+          "ready": true,
+          "restartCount": 0,
+          "state": {
+            "running": {
+              "startedAt": "2026-09-08T19:19:44Z"
+            }
+          }
+        }
+      ],
+      "deployment_generation": 148,
+      "expected_image": "registry.lucas.engineering/pharness-ui@sha256:4c645a9b00983442691a94e7bf5224536ee5ef3ea712b36bf948883af2ad84bd",
+      "pod_name": "pharness-ui-5fb67f77c-s4qxq",
+      "pod_uid": "610c6bba-0d75-49db-9464-a2234bbfa255"
+    }
+  },
+  "endpoints": [
+    {
+      "pod_uids": [
+        "e9a72721-0e0b-4622-8672-2e8272c2c35a"
+      ],
+      "service": "pharness-api"
+    },
+    {
+      "pod_uids": [
+        "610c6bba-0d75-49db-9464-a2234bbfa255"
+      ],
+      "service": "pharness-ui"
+    },
+    {
+      "pod_uids": [
+        "913f4a13-4a8b-4fb7-afeb-31028d5fc813"
+      ],
+      "service": "pharness-model-gateway"
+    }
+  ],
+  "limitation": "Full service observation and live model diagnostics remain separate gates.",
+  "observed_at": "2026-09-08T19:20:37.459198+00:00",
+  "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "release_pin": "ce98a26065cd48323b58b8905fcbbfc6c76452cd",
+  "run_total": 82,
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "status": "live_identities_verified",
+  "ui_revision": "d675159cb205d222616d253d311706be1889bb91"
+}

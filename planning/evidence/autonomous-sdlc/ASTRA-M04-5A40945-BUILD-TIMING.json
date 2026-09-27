@@ -1,0 +1,25 @@
+{
+  "observed_at": "2026-09-08T18:40:33.500640+00:00",
+  "source_revision": "5a409453d28d68d22b12899a312df763c51e48dd",
+  "elapsed_seconds": 2091.335,
+  "push_steps_seconds": {
+    "runtime": 157.4,
+    "ui": 41.4,
+    "python-runner": 219.4,
+    "node-runner": 233.6,
+    "model-gateway": 61.9,
+    "eval-runner": 296.0,
+    "codex-host": 182.2
+  },
+  "push_step_sum_seconds": 1191.9,
+  "share_of_total_elapsed": 0.5699,
+  "private_build_log_sha256": "sha256:ce4e23524caa216f36773a477fcf53c215ece0cbe60447bcd3d47a8b76dcf7ee",
+  "observed_failures": 0,
+  "interpretation": "BuildKit-reported layer-push durations sum to 57 percent of wall time; this is phase timing, not proof of a bandwidth or gateway defect.",
+  "unproven": [
+    "Registry transport root cause",
+    "Stable-layer repackaging speed improvement"
+  ],
+  "deployment": "held; zero GitOps pin changes for this source",
+  "qualification": null
+}

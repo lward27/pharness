@@ -56,16 +56,23 @@ The current PHarness release procedure builds **seven** images from one exact
 merged source revision: runtime, UI, Python runner, Node runner, model gateway,
 evaluation runner, and the existing Codex-host image. Preserve the native host
 bundle required by the build even though expanding that backend is deferred.
-The [build entry point](scripts/pharness-build.sh) requires an explicit builder;
+The [build entry point](scripts/pharness-build.sh) uses the `lucas_engineering`
+Tekton pipeline and its rootless BuildKit daemon on the dedicated AMD64 builder
+node. It pins each PipelineRun to the exact verified source SHA, uses the
+build-only no-token service account, and leaves deployment/restart empty. The
+Codex-host image and native bundle are separate named Dockerfile targets; the
+bundle is built, verified, archived, and checksummed in the cluster. The
+finished archive and checksum are fetched by immutable digest. The previous
+explicitly selected local Buildx route remains available as
+[pharness-build-local.sh](scripts/pharness-build-local.sh).
 [release pinning](scripts/pharness-release-pin.sh) takes the same source revision
 and all seven digests. It validates a separate clean GitOps release change.
 The scripts do not replace merge authorization or live release verification.
 
-Program builds currently use the restored `lucas-desktop` BuildKit service;
-the [return-to-service evidence](planning/evidence/autonomous-sdlc/ASTRA-M02-DESKTOP-BUILDKIT-RETURN.md)
-records the cluster endpoint and uncached AMD64 checks. Local builds require
-explicit selection and verification of the Rancher Desktop builder. A digest
-identifies an artifact; it is not by itself an SBOM, signature, or vulnerability attestation.
+Build receipts include the Tekton/TaskRun identities and returned digests; run
+the independent registry verification before release pinning. A digest
+identifies an artifact; it is not by itself an SBOM, signature, or vulnerability
+attestation.
 
 ## Reliability and roadmap
 

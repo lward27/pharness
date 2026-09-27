@@ -868,6 +868,9 @@ fn execution_target(
         target["onboarding"]["discovery_id"] = fixture.context["discovery"]["id"].clone();
         target["onboarding"]["discovery_hash"] = fixture.context["discovery"]["hash"].clone();
     }
+    if suite == SuiteKind::PlannerV2 {
+        target["planner_submission_contract"] = json!(pharness_core::PLANNER_SUBMISSION_CONTRACT);
+    }
     if suite == SuiteKind::TesterV1 || fixture.context.get("repository_contract").is_some() {
         let contract = fixture
             .context
@@ -1259,6 +1262,8 @@ fn replay_actions(suite: SuiteKind, fixture: &StageFixture) -> Result<Vec<AgentA
         for action in &mut actions {
             if let AgentAction::SubmitWorkPlan { work_plan, .. } = action {
                 *work_plan = json!({"title":"Implement the requested contract","summary":"Update the route and its existing consumers within the pinned repository.","risk_level":"medium","steps":[{"title":"Update source and regression coverage","description":"Preserve the response contract, account for unavailable data, and document the behavior.","paths":fixture.expected["required_paths"],"acceptance_names":fixture.expected["acceptance"]}],"assumptions":["Preserve existing behavior for unspecified details; resolve any open choice before that change."],"risks":["Retain the observed baseline failures and stale references as unresolved evidence."]});
+                let readiness = &fixture.expected["measurement"]["readiness"];
+                work_plan["readiness"] = json!({"status":readiness,"blockers":if readiness == "needs_decision" {json!(["The existing failing regression requires a behavioral decision outside the requested endpoint change."])} else {json!([])}});
             }
         }
     }

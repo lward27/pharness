@@ -1,0 +1,14 @@
+{
+  "actor": "lucas",
+  "reason": "ASTRA M04D d675159 matched Planner Kimi control on the complete verified primary inputs; native primary 2/2, unchanged limits, same-model repeatability diagnostic only",
+  "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "attempts": 1,
+  "scope": {
+    "kind": "diagnostic",
+    "case_ids": [
+      "acceptance-boundary",
+      "failing-baseline"
+    ],
+    "reference_evaluation_id": "infeval_01a082838ab4760098d9823b1816aa6d"
+  }
+}

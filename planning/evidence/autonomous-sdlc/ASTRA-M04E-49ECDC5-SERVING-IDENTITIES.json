@@ -1,0 +1,73 @@
+{
+ "observed_at_utc": "2026-09-20T18:36:00Z",
+ "argo": {
+  "application": "pharness",
+  "sync": "Synced",
+  "health": "Healthy",
+  "revision": "83efe6a749bc6dbe153c456e8eca934e1e38b86c",
+  "source": {
+   "repoURL": "https://github.com/lward27/pharness.git",
+   "path": "deploy/helm/pharness",
+   "targetRevision": "HEAD"
+  }
+ },
+ "compiled_source_revision": "49ecdc5cc4eaf86197707dede6244bc55c888732",
+ "serving": {
+  "pharness-api": "registry.lucas.engineering/pharness-runtime@sha256:4703d103ed30fd3d4fd9850a32187f59431c6ede4d2819b9f22b36c54042308c",
+  "pharness-ui": "registry.lucas.engineering/pharness-ui@sha256:22e715c7f662d6eb8c6da335c4d750c7a721fa36aa4ebaeae57d9ce1d15905ac",
+  "pharness-model-gateway": "registry.lucas.engineering/pharness-model-gateway@sha256:89bb45c3c80b6103123845e72c46de928798f11b26aef48a47a472bda8cf6a63"
+ },
+ "pinned_images": {
+  "pharness-runtime": {
+   "digest": "sha256:4703d103ed30fd3d4fd9850a32187f59431c6ede4d2819b9f22b36c54042308c",
+   "revision": "49ecdc5cc4eaf86197707dede6244bc55c888732"
+  },
+  "pharness-ui": {
+   "digest": "sha256:22e715c7f662d6eb8c6da335c4d750c7a721fa36aa4ebaeae57d9ce1d15905ac",
+   "revision": "49ecdc5cc4eaf86197707dede6244bc55c888732"
+  },
+  "pharness-model-gateway": {
+   "digest": "sha256:89bb45c3c80b6103123845e72c46de928798f11b26aef48a47a472bda8cf6a63",
+   "revision": "49ecdc5cc4eaf86197707dede6244bc55c888732"
+  },
+  "pharness-eval-runner": {
+   "digest": "sha256:7bf325a88b1c3b42ad2e119e275c640f020a7044c938e541bb8294da9561355e",
+   "revision": "49ecdc5cc4eaf86197707dede6244bc55c888732"
+  },
+  "pharness-codex-host": {
+   "digest": "sha256:570fc20a4cbc4ee072739da050591f66be67d4272a20eca7362fcdca2f684a99",
+   "revision": "49ecdc5cc4eaf86197707dede6244bc55c888732"
+  },
+  "pharness-python-runner": {
+   "digest": "sha256:8a8e4dd250c94e97c4fe1fe64c5921ff87f01ed95e40f087015ab3428104df16",
+   "revision": "49ecdc5cc4eaf86197707dede6244bc55c888732"
+  },
+  "pharness-node-runner": {
+   "digest": "sha256:e1f3056e7b0aee59183fe1f014c94936fbf872d31211b4d28fca063eafedc084",
+   "revision": "49ecdc5cc4eaf86197707dede6244bc55c888732"
+  }
+ },
+ "pods": {
+  "pharness-api-85bf58bb74-2px6t": {
+   "restarts": 0
+  },
+  "pharness-model-gateway-5dfd488b49-gvlt2": {
+   "restarts": 0
+  },
+  "pharness-ui-7f46bd4655-hzkf7": {
+   "restarts": 0
+  }
+ },
+ "api": {
+  "api_revision": "49ecdc5cc4eaf86197707dede6244bc55c888732",
+  "ui_revision": "49ecdc5cc4eaf86197707dede6244bc55c888732",
+  "runtime_image_digest": "sha256:4703d103ed30fd3d4fd9850a32187f59431c6ede4d2819b9f22b36c54042308c",
+  "ui_image_digest": "sha256:22e715c7f662d6eb8c6da335c4d750c7a721fa36aa4ebaeae57d9ce1d15905ac",
+  "platform_versions_match": true,
+  "operational_mode": "normal",
+  "registry_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+  "registry_aligned": true,
+  "legacy_work_item_creation_enabled": false,
+  "hosted_workflow_enabled": false
+ }
+}

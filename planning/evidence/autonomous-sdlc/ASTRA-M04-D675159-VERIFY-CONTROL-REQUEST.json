@@ -1,0 +1,15 @@
+{
+  "actor": "lucas",
+  "reason": "ASTRA M04D sourced675159 declared matched Kimi verifier control on complete native GLM primary inputs; no activation or qualification",
+  "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "attempts": 1,
+  "scope": {
+    "kind": "diagnostic",
+    "case_ids": [
+      "wrong-endpoint-path",
+      "valid-implementation-a",
+      "frontend-semantic-mismatch"
+    ],
+    "reference_evaluation_id": "infeval_01a082949c567da0949805d60ce85565"
+  }
+}

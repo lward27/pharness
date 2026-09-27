@@ -1645,7 +1645,7 @@ fn repo_path_matches(pattern: &str, path: &str) -> bool {
         .unwrap_or(pattern == path)
 }
 
-async fn seal_repo_plan_stage(
+pub(crate) async fn seal_repo_plan_stage(
     store: &SqliteStore,
     run: &StoredRun,
     execution: &pharness_store::StoredStageExecution,
@@ -1665,7 +1665,12 @@ async fn seal_repo_plan_stage(
     let (status, stop_reason, plan, agent_claims) = if outcome.status == "completed" {
         match submitted {
             Some(document) => {
-                match validate_work_plan(&document, &selected_acceptance_names) {
+                match pharness_core::planner_readiness_required(&run.execution_target_json)
+                    .and_then(|required| {
+                        pharness_core::PlannerReadiness::from_document(&document, required)
+                    })
+                    .and_then(|_| validate_work_plan(&document, &selected_acceptance_names))
+                {
                     Ok((title, summary, risk_level)) => {
                         let plan = if let Some(existing) = store
                             .get_work_plan_by_work_item(&execution.work_item_id)
@@ -1733,10 +1738,25 @@ async fn seal_repo_plan_stage(
                                 })
                                 .await?
                         };
+                        let blockers =
+                            pharness_core::PlannerReadiness::from_document(&document, false)
+                                .expect("validated readiness")
+                                .map(|r| r.blockers)
+                                .unwrap_or_default();
                         (
-                            "succeeded",
-                            "Planner submitted a controller-validated proposed WorkPlan"
-                                .to_string(),
+                            if blockers.is_empty() {
+                                "succeeded"
+                            } else {
+                                "blocked"
+                            },
+                            if blockers.is_empty() {
+                                "Planner submitted a structurally validated proposed WorkPlan; readiness remains an agent claim".to_string()
+                            } else {
+                                format!(
+                                    "Planner requires a decision before implementation: {}",
+                                    blockers.join("; ")
+                                )
+                            },
                             Some(plan),
                             vec![
                                 serde_json::json!({"kind":"planner_submission","document":document}),
@@ -1794,6 +1814,20 @@ async fn seal_repo_plan_stage(
         .get_repo_work_item_metadata(&execution.work_item_id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("Repo Mode metadata no longer exists"))?;
+    let planner_blockers = plan
+        .as_ref()
+        .and_then(|p| {
+            pharness_core::PlannerReadiness::from_document(&p.work_plan_json, false)
+                .ok()
+                .flatten()
+        })
+        .map(|r| r.blockers)
+        .unwrap_or_default();
+    let planner_risks = plan
+        .as_ref()
+        .and_then(|p| p.work_plan_json["risks"].as_array())
+        .cloned()
+        .unwrap_or_default();
     let document = pharness_core::StageOutcomeDocument {
         schema_version: pharness_core::STAGE_OUTCOME_SCHEMA.into(),
         work_item_id: execution.work_item_id.clone(),
@@ -1803,6 +1837,7 @@ async fn seal_repo_plan_stage(
         status: match status {
             "succeeded" => pharness_core::StageTerminalStatus::Succeeded,
             "cancelled" => pharness_core::StageTerminalStatus::Cancelled,
+            "blocked" => pharness_core::StageTerminalStatus::Blocked,
             _ => pharness_core::StageTerminalStatus::Failed,
         },
         objective: serde_json::json!({"kind":"produce_bounded_work_plan"}),
@@ -1820,8 +1855,8 @@ async fn seal_repo_plan_stage(
         acceptance: Vec::new(),
         decisions: vec![serde_json::json!({"kind":"controller_validation","status":status})],
         authorizations: Vec::new(),
-        contradictions: Vec::new(),
-        risks: Vec::new(),
+        contradictions: planner_blockers.into_iter().map(|reason| serde_json::json!({"kind":"planner_decision_required","origin":"agent","reason":reason})).collect(),
+        risks: planner_risks,
         unavailable_capabilities: Vec::new(),
         recommendations: if status == "succeeded" {
             vec![serde_json::json!({"next":"review_work_plan"})]

@@ -185,6 +185,8 @@ pub(super) async fn reconcile(
             state_hash: action.state_hash.clone(),
             inference_policies: None,
             execution_policies: None,
+            planner_startup: None,
+            defer_planner_dispatch: false,
         },
     )
     .await?;

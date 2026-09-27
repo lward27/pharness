@@ -1,0 +1,13 @@
+{
+  "observed_at": "2026-09-08T21:00:04.912874+00:00",
+  "source_revision": "291e007cedcb2440a328f5e24710fb3423cb0ded",
+  "status": "reviewed_pin_only_diff",
+  "files": [
+    "deploy/helm/pharness/files/agent-execution-registry.json",
+    "deploy/helm/pharness/values.yaml"
+  ],
+  "values_exact_revision_and_digest_replacements": true,
+  "native_execution_policy_other_fields_unchanged": true,
+  "gateway_registry_unchanged": true,
+  "qualification": null
+}

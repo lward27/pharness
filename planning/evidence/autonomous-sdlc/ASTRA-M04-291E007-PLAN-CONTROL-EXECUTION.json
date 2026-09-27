@@ -1,0 +1,82 @@
+{
+  "api_server": "https://192.168.20.192:6443",
+  "context": "lucas_engineering",
+  "evaluation_id": "infeval_01a082e74bee759090b9277b73e12d1f",
+  "job": {
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-09-08T21:25:50Z",
+        "reason": "CompletionsReached",
+        "status": "True",
+        "type": "SuccessCriteriaMet"
+      },
+      {
+        "lastTransitionTime": "2026-09-08T21:25:50Z",
+        "reason": "CompletionsReached",
+        "status": "True",
+        "type": "Complete"
+      }
+    ],
+    "configured_images": [
+      {
+        "image": "registry.lucas.engineering/pharness-eval-runner@sha256:efe194198b7547c8202e75f9309f1f0b115572c06c0ac78cab83898d50151db8",
+        "name": "evaluate"
+      }
+    ],
+    "status": {
+      "completionTime": "2026-09-08T21:25:50Z",
+      "startTime": "2026-09-08T21:23:11Z",
+      "succeeded": 1
+    },
+    "uid": "ef45749f-2543-4a87-b146-d30e107a4c33"
+  },
+  "job_name": "pharness-inference-eval-70a8d45c10f8",
+  "meaning": "Execution observation only; process completion does not establish a passing evaluation or qualification.",
+  "namespace": "pharness",
+  "observed_at": "2026-09-08T21:26:14.650293+00:00",
+  "pods": [
+    {
+      "containers": [
+        {
+          "image": "sha256:abff3e434c860bf7cf494f48afe4fcc8128e0645def7c2fd4b4ec8764de1a415",
+          "imageID": "registry.lucas.engineering/pharness-eval-runner@sha256:efe194198b7547c8202e75f9309f1f0b115572c06c0ac78cab83898d50151db8",
+          "name": "evaluate",
+          "ready": false,
+          "restartCount": 0,
+          "state": {
+            "terminated": {
+              "exitCode": 0,
+              "finishedAt": "2026-09-08T21:25:47Z",
+              "reason": "Completed",
+              "startedAt": "2026-09-08T21:23:49Z"
+            }
+          }
+        }
+      ],
+      "init_containers": [
+        {
+          "image": "sha256:839f36d8430641fd41839ae5d2a00eab3f2d4253cc0a9e64ec4d2dfe08eedc7e",
+          "imageID": "registry.lucas.engineering/pharness-runtime@sha256:14f7abc1f75173818a97b6a7795d8fadde689ad3ddbb0b659b2d0251f57e7282",
+          "name": "network-policy-stabilization",
+          "ready": true,
+          "restartCount": 0,
+          "state": {
+            "terminated": {
+              "exitCode": 0,
+              "finishedAt": "2026-09-08T21:23:47Z",
+              "reason": "Completed",
+              "startedAt": "2026-09-08T21:23:31Z"
+            }
+          }
+        }
+      ],
+      "name": "pharness-inference-eval-70a8d45c10f8-gxnhg",
+      "node": "ubuntu-lucas-engineering-2",
+      "phase": "Succeeded",
+      "uid": "d1b46b97-f6e7-44cc-8a18-b40255c86200"
+    }
+  ],
+  "runtime_revision": "291e007cedcb2440a328f5e24710fb3423cb0ded",
+  "schema_version": 1,
+  "status": "captured"
+}

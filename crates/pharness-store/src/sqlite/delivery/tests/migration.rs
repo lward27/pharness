@@ -1,6 +1,7 @@
 use super::*;
 use sha2::{Digest, Sha256};
 use std::borrow::Cow;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 const MIGRATION: &str = include_str!("../../../../migrations/0054_delivery_stages.sql");
 
@@ -60,8 +61,10 @@ async fn original(path: &std::path::Path) -> SqliteStore {
 }
 
 fn path() -> std::path::PathBuf {
+    static NEXT_PATH_ID: AtomicU64 = AtomicU64::new(0);
+    let path_id = NEXT_PATH_ID.fetch_add(1, Ordering::Relaxed);
     std::env::temp_dir().join(format!(
-        "pharness-delivery-migration-{}-{}.db",
+        "pharness-delivery-migration-{}-{}-{path_id}.db",
         std::process::id(),
         super::super::super::now_string()
     ))

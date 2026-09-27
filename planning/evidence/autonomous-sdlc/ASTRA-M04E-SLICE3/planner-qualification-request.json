@@ -1,0 +1,9 @@
+{
+  "actor": "lucas",
+  "reason": "ASTRA M04E Slice 3 exact-runtime Planner V2 full qualification",
+  "config_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+  "attempts": 2,
+  "scope": {
+    "kind": "full_qualification"
+  }
+}

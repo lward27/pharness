@@ -1,0 +1,75 @@
+{
+  "active_evaluations_before_dispatch": 0,
+  "active_jobs_before_dispatch": 0,
+  "completed_at": "2026-09-23T19:32:12.380180+00:00",
+  "context": "lucas_engineering",
+  "created_at": "2026-09-23T19:27:10.310908+00:00",
+  "kind": "pharness_exact_policy_protocol_preflight",
+  "meaning": "One native POST only. The 900-second expiry is anchored before protocol probes; the persisted created_at follows probe completion. An uncertain POST is reconciled by ID and never replayed.",
+  "operation_id": "astra-m04e-slice3-protocol-test-diagnosis-20260923",
+  "policy_hash": "sha256:ebdd7edb42b516318389aa56dc3844ab01a4311762e47dbe17b05730c4cb44f1",
+  "policy_id": "test-diagnosis-nemotron-v2",
+  "policy_revision": "v1",
+  "registry_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+  "request": {
+    "actor": "lucas",
+    "config_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+    "policy": {
+      "policy_id": "test-diagnosis-nemotron-v2",
+      "revision": "v1"
+    },
+    "reason": "ASTRA M04E Slice 3 exact-policy Test Diagnosis protocol preflight"
+  },
+  "response": {
+    "actor": "lucas",
+    "config_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+    "created_at": "1790191932369",
+    "expires_at": "1790192530",
+    "id": "inferverify_01a0cfbc780674229db22b320941be10",
+    "model_visible": false,
+    "observed_capabilities": {
+      "native_tools": false,
+      "policy": {
+        "policy_hash": "sha256:ebdd7edb42b516318389aa56dc3844ab01a4311762e47dbe17b05730c4cb44f1",
+        "policy_id": "test-diagnosis-nemotron-v2",
+        "revision": "v1"
+      },
+      "protocol": "openai_chat_completions_v1",
+      "protocol_calibration": null,
+      "registry_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+      "runtime_revision": "49ecdc5cc4eaf86197707dede6244bc55c888732",
+      "streaming": false
+    },
+    "reachability": "unavailable",
+    "reason": "ASTRA M04E Slice 3 exact-policy Test Diagnosis protocol preflight",
+    "sanitized_failure": "gateway protocol verification timed out",
+    "status": "failed",
+    "streaming_compatible": false,
+    "target_hash": "sha256:a014784b3c293e51c4a66c153e2514462f4f42a3d30c238369983ffff3638ecf",
+    "target_id": "fireworks-nemotron-lightning-3p5-30b-a3b",
+    "target_revision": "v1",
+    "tool_compatible": false
+  },
+  "schema_version": 1,
+  "source_revision": "49ecdc5cc4eaf86197707dede6244bc55c888732",
+  "state": "failed",
+  "target": {
+    "hash": "sha256:a014784b3c293e51c4a66c153e2514462f4f42a3d30c238369983ffff3638ecf",
+    "id": "fireworks-nemotron-lightning-3p5-30b-a3b",
+    "revision": "v1"
+  },
+  "verification_summary": {
+    "concerns": [
+      "protocol_not_passed",
+      "calibration_not_30_of_30"
+    ],
+    "expires_after_client_intent_seconds": 899.689,
+    "expires_at": "1790192530",
+    "expiry_window_seconds": 900,
+    "id": "inferverify_01a0cfbc780674229db22b320941be10",
+    "passed": null,
+    "required": null,
+    "runtime_revision": "49ecdc5cc4eaf86197707dede6244bc55c888732",
+    "status": "failed"
+  }
+}

@@ -1,6 +1,8 @@
 # ASTRA M04: Correct diagnostic completeness and Planner acceptance inputs
 
-Status: implemented and locally validated; not released or qualified. Base source `040caeb6ae1a47997583204510bef08bc9f5766b`; live diagnostic source remains `e508f430e9f006c5f3e9f74fdd120d275605d85c`.
+2026-09-08 release follow-up: the [combined d675159 release](ASTRA-M04-POLICY-PROTOCOL-RELEASE.md) is deployed with verified images and the full passing service window. Original local validation and historical measurements below remain unchanged; model qualification is still open.
+
+Implementation validation baseline: `040caeb6ae1a47997583204510bef08bc9f5766b`, with e508 then deployed. The subsequent combined d675159 release is linked above; qualification remains open.
 
 The subsequent [semantic-fixture audit](ASTRA-M04-SEMANTIC-FIXTURE-VALIDITY.md) preserves this correction and advances Planner to v2.5 and Verifier to v2.4. The intermediate source24790cc was preflighted but never built or deployed. The v2.4 Planner hash below identifies this earlier committed correction, not the next release.
 
@@ -22,6 +24,6 @@ A structural test accepting the retained plan with the corrected selection is no
 
 ## Deployment and recovery
 
-Finish or reconcile every sourcee508 diagnostic operation before releasing this correction. Build the required immutable artifact set from one merged revision, pin all components, and verify Argo plus live identities and the complete observation window. No Finance source or production GitOps operation is authorized by this release. Keep hosted creation, Coding Reliability V2 activation, model defaults and execution limits unchanged.
+All sourcee508 diagnostics were terminal before release. The combined d675159 artifact set, pins, Argo/live identities and full observation window now pass. No Finance source or production GitOps operation is authorized by this release. Keep hosted creation, Coding Reliability V2 activation, model defaults and execution limits unchanged.
 
 Schema remains 55. Preserve the source-92-compatible reader floor; use the preceding compatible complete release for rollback if needed. Old reports remain truthful historical records. A new Planner primary/control pair must use the new suite and same deployed runtime; sourcee508's invalid Planner control remains undispatched. M04D, connected-loop M04E and full qualification M04F stay open.

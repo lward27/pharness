@@ -1,0 +1,498 @@
+{
+ "pre_fingerprint": "db-pre3/fingerprint.json",
+ "post_fingerprint": "db-post-window/fingerprint.json",
+ "missing_tables": [],
+ "new_tables": [],
+ "problems": [
+  "organizations: 1 pre row(s) missing/rewritten in post"
+ ],
+ "table_detail": {
+  "_sqlx_migrations": {
+   "pre_rows": 55,
+   "post_rows": 55,
+   "missing": 0,
+   "added": 0
+  },
+  "agent_context_packs": {
+   "pre_rows": 73,
+   "post_rows": 73,
+   "missing": 0,
+   "added": 0
+  },
+  "agent_execution_policy_qualifications": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "agent_execution_selections": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "agent_host_capability_snapshots": {
+   "pre_rows": 487,
+   "post_rows": 487,
+   "missing": 0,
+   "added": 0
+  },
+  "agent_host_enrollments": {
+   "pre_rows": 1,
+   "post_rows": 1,
+   "missing": 0,
+   "added": 0
+  },
+  "agent_hosts": {
+   "pre_rows": 1,
+   "post_rows": 1,
+   "missing": 0,
+   "added": 0
+  },
+  "agent_leases": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "approval_gates": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "approvals": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "archive_records": {
+   "pre_rows": 1,
+   "post_rows": 1,
+   "missing": 0,
+   "added": 0
+  },
+  "artifacts": {
+   "pre_rows": 38,
+   "post_rows": 38,
+   "missing": 0,
+   "added": 0
+  },
+  "audit_events": {
+   "pre_rows": 262,
+   "post_rows": 262,
+   "missing": 0,
+   "added": 0
+  },
+  "budget_extensions": {
+   "pre_rows": 29,
+   "post_rows": 29,
+   "missing": 0,
+   "added": 0
+  },
+  "capability_verifications": {
+   "pre_rows": 197,
+   "post_rows": 203,
+   "missing": 0,
+   "added": 6
+  },
+  "change_sets": {
+   "pre_rows": 9,
+   "post_rows": 9,
+   "missing": 0,
+   "added": 0
+  },
+  "context_items": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "controller_waits": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "database_generations": {
+   "pre_rows": 1,
+   "post_rows": 1,
+   "missing": 0,
+   "added": 0
+  },
+  "deployment_contracts": {
+   "pre_rows": 4,
+   "post_rows": 4,
+   "missing": 0,
+   "added": 0
+  },
+  "deployment_intents": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "effective_stage_outcomes": {
+   "pre_rows": 75,
+   "post_rows": 75,
+   "missing": 0,
+   "added": 0
+  },
+  "environment_preparations": {
+   "pre_rows": 20,
+   "post_rows": 20,
+   "missing": 0,
+   "added": 0
+  },
+  "environments": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "events": {
+   "pre_rows": 7462,
+   "post_rows": 7462,
+   "missing": 0,
+   "added": 0
+  },
+  "evidence_retrievals": {
+   "pre_rows": 70,
+   "post_rows": 70,
+   "missing": 0,
+   "added": 0
+  },
+  "evidence_validation_references": {
+   "pre_rows": 144,
+   "post_rows": 144,
+   "missing": 0,
+   "added": 0
+  },
+  "evidence_validations": {
+   "pre_rows": 83,
+   "post_rows": 83,
+   "missing": 0,
+   "added": 0
+  },
+  "file_changes": {
+   "pre_rows": 156,
+   "post_rows": 156,
+   "missing": 0,
+   "added": 0
+  },
+  "gitops_change_sets": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "hosted_operation_locks": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "hosted_operations": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "hosted_reconciliations": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "incidents": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "inference_evaluation_grant_issuances": {
+   "pre_rows": 8160,
+   "post_rows": 8160,
+   "missing": 0,
+   "added": 0
+  },
+  "inference_evaluations": {
+   "pre_rows": 68,
+   "post_rows": 68,
+   "missing": 0,
+   "added": 0
+  },
+  "inference_policy_qualifications": {
+   "pre_rows": 33,
+   "post_rows": 33,
+   "missing": 0,
+   "added": 0
+  },
+  "inference_target_verifications": {
+   "pre_rows": 61,
+   "post_rows": 61,
+   "missing": 0,
+   "added": 0
+  },
+  "messages": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "model_grant_issuances": {
+   "pre_rows": 130,
+   "post_rows": 130,
+   "missing": 0,
+   "added": 0
+  },
+  "observations": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "operator_annotation_decisions": {
+   "pre_rows": 3,
+   "post_rows": 3,
+   "missing": 0,
+   "added": 0
+  },
+  "operator_annotations": {
+   "pre_rows": 12,
+   "post_rows": 12,
+   "missing": 0,
+   "added": 0
+  },
+  "organizations": {
+   "pre_rows": 1,
+   "post_rows": 1,
+   "missing": 1,
+   "added": 1
+  },
+  "permission_grants": {
+   "pre_rows": 25,
+   "post_rows": 25,
+   "missing": 0,
+   "added": 0
+  },
+  "pipeline_contracts": {
+   "pre_rows": 2,
+   "post_rows": 2,
+   "missing": 0,
+   "added": 0
+  },
+  "pipeline_intents": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "product_model_snapshots": {
+   "pre_rows": 7,
+   "post_rows": 7,
+   "missing": 0,
+   "added": 0
+  },
+  "products": {
+   "pre_rows": 1,
+   "post_rows": 1,
+   "missing": 0,
+   "added": 0
+  },
+  "provider_check_set_observations": {
+   "pre_rows": 16,
+   "post_rows": 16,
+   "missing": 0,
+   "added": 0
+  },
+  "registry_evidence": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "releases": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "remediation_plans": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "repositories": {
+   "pre_rows": 5,
+   "post_rows": 5,
+   "missing": 0,
+   "added": 0
+  },
+  "repository_binding_revision_scopes": {
+   "pre_rows": 18,
+   "post_rows": 18,
+   "missing": 0,
+   "added": 0
+  },
+  "repository_binding_revisions": {
+   "pre_rows": 10,
+   "post_rows": 10,
+   "missing": 0,
+   "added": 0
+  },
+  "repository_bindings": {
+   "pre_rows": 5,
+   "post_rows": 5,
+   "missing": 0,
+   "added": 0
+  },
+  "repository_contract_versions": {
+   "pre_rows": 6,
+   "post_rows": 6,
+   "missing": 0,
+   "added": 0
+  },
+  "repository_discoveries": {
+   "pre_rows": 11,
+   "post_rows": 11,
+   "missing": 0,
+   "added": 0
+  },
+  "repository_onboarding_proposals": {
+   "pre_rows": 15,
+   "post_rows": 15,
+   "missing": 0,
+   "added": 0
+  },
+  "repository_onboardings": {
+   "pre_rows": 11,
+   "post_rows": 11,
+   "missing": 0,
+   "added": 0
+  },
+  "repository_readiness_assessments": {
+   "pre_rows": 23,
+   "post_rows": 26,
+   "missing": 0,
+   "added": 3
+  },
+  "resource_refs": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "retention_holds": {
+   "pre_rows": 4,
+   "post_rows": 4,
+   "missing": 0,
+   "added": 0
+  },
+  "retention_previews": {
+   "pre_rows": 14,
+   "post_rows": 14,
+   "missing": 0,
+   "added": 0
+  },
+  "retention_receipts": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "runs": {
+   "pre_rows": 82,
+   "post_rows": 82,
+   "missing": 0,
+   "added": 0
+  },
+  "sealed_run_summaries": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "services": {
+   "pre_rows": 6,
+   "post_rows": 6,
+   "missing": 0,
+   "added": 0
+  },
+  "sessions": {
+   "pre_rows": 82,
+   "post_rows": 82,
+   "missing": 0,
+   "added": 0
+  },
+  "source_delivery_intents": {
+   "pre_rows": 9,
+   "post_rows": 9,
+   "missing": 0,
+   "added": 0
+  },
+  "stage_chain_authorizations": {
+   "pre_rows": 27,
+   "post_rows": 27,
+   "missing": 0,
+   "added": 0
+  },
+  "stage_executions": {
+   "pre_rows": 102,
+   "post_rows": 102,
+   "missing": 0,
+   "added": 0
+  },
+  "stage_inference_selections": {
+   "pre_rows": 20,
+   "post_rows": 20,
+   "missing": 0,
+   "added": 0
+  },
+  "stage_outcomes": {
+   "pre_rows": 102,
+   "post_rows": 102,
+   "missing": 0,
+   "added": 0
+  },
+  "subject_environment_preparations": {
+   "pre_rows": 23,
+   "post_rows": 26,
+   "missing": 0,
+   "added": 3
+  },
+  "subject_workspaces": {
+   "pre_rows": 23,
+   "post_rows": 26,
+   "missing": 0,
+   "added": 3
+  },
+  "tool_calls": {
+   "pre_rows": 0,
+   "post_rows": 0,
+   "missing": 0,
+   "added": 0
+  },
+  "work_items": {
+   "pre_rows": 14,
+   "post_rows": 14,
+   "missing": 0,
+   "added": 0
+  },
+  "work_plans": {
+   "pre_rows": 13,
+   "post_rows": 13,
+   "missing": 0,
+   "added": 0
+  },
+  "workspaces": {
+   "pre_rows": 15,
+   "post_rows": 15,
+   "missing": 0,
+   "added": 0
+  }
+ },
+ "preserved": false
+}

@@ -1,0 +1,34 @@
+{
+  "observed_at_utc": "2026-09-22T21:30:00Z",
+  "argo": {
+    "application": "pharness",
+    "sync_revision": "b62367f4429e16db3aab995bcbac016735ed4b1d",
+    "health": "Healthy"
+  },
+  "compiled_source_revision": "111fb9bf651843a3d1a424e8111130ece2c48898",
+  "pin_commit": "b62367f4429e16db3aab995bcbac016735ed4b1d",
+  "runner_images": {
+    "pharness-node-runner": {
+      "digest": "sha256:3420493cb3856b99f7a6e2da377e0c928dfb2b53ed584123ca0e2d0f4682b409",
+      "revision": "111fb9bf651843a3d1a424e8111130ece2c48898",
+      "pushed_via": "in-cluster private write gateway :8080"
+    },
+    "pharness-python-runner": {
+      "digest": "sha256:349f575cd8151856025055a179e9ede8f5f73c947ccdaaa683c35d6ff4b0ad16",
+      "revision": "111fb9bf651843a3d1a424e8111130ece2c48898",
+      "pushed_via": "in-cluster private write gateway :8080"
+    }
+  },
+  "control_plane_unchanged": {
+    "pharness-runtime": "sha256:4703d103ed30fd3d4fd9850a32187f59431c6ede4d2819b9f22b36c54042308c",
+    "revision": "49ecdc5",
+    "pharness-ui": "sha256:22e715c7f662d6eb8c6da335c4d750c7a721fa36aa4ebaeae57d9ce1d15905ac",
+    "platform_versions_match": true
+  },
+  "gateway_registry_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+  "pods": {
+    "pharness-api-fd79cb957-hh2xj": {
+      "restarts": 0
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+ "runtime": "49ecdc5cc4eaf86197707dede6244bc55c888732",
+ "method": "kubectl cp of pharness.db + -wal + -shm, per-table canonical-row SHA-256 sets, row-level set comparison",
+ "pre": {
+  "tables": 81,
+  "rows": 18289,
+  "snapshot": "db-pre2 (post-preflights, pre-service-window)"
+ },
+ "post": {
+  "tables": 81,
+  "rows": 18301,
+  "snapshot": "db-post (post-service-window)"
+ },
+ "preserved": true,
+ "missing_tables": [],
+ "new_tables": [],
+ "problems": [],
+ "delta_tables": {
+  "capability_verifications": {
+   "pre_rows": 169,
+   "post_rows": 181,
+   "missing": 0,
+   "added": 12
+  }
+ },
+ "delta_explanation": "The only delta is +12 rows in capability_verifications, written by this session's twelve isolated capability preflights. No other table changed.",
+ "finance_invariants": {
+  "database_generation": "dbgen_finance_20260827",
+  "work_items": 14,
+  "runs": 82,
+  "audit_events": 262,
+  "retention_holds": 4,
+  "stage_executions": 102,
+  "stage_outcomes": 102,
+  "applied_migrations": 55
+ }
+}

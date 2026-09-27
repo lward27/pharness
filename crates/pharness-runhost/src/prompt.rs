@@ -52,12 +52,7 @@ pub fn stage_prompt_for_profile(profile_id: &str) -> Option<StagePromptPack> {
     let revision = RELIABILITY_V2_PROMPT_BUNDLE_VERSION;
     match profile_id {
         "repository-onboarding-proposer" => Some(crate::onboarding_submission::current_prompt()),
-        "repo-planner" => Some(StagePromptPack {
-            prompt_id: "repo-planner-v2",
-            revision,
-            stage: pharness_core::InferenceStage::Plan,
-            content: r#"Inspect the deterministic repository map and the minimum source evidence needed to localize the task. Map every intent clause and every selected acceptance item to concrete existing areas. Plans may name only paths, roots, commands, and acceptance names proven by controller context or repository reads. State assumptions and contradictions. Submit one bounded WorkPlan with implementation, test, and documentation steps; do not change source."#,
-        }),
+        "repo-planner" => Some(crate::planner_submission::current_prompt()),
         "repo-builder" => Some(StagePromptPack {
             prompt_id: "repo-builder-v2",
             revision,

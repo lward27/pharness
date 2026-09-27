@@ -531,6 +531,7 @@ pub(super) async fn repo_fixture_for_source(
         .unwrap();
 
     let work_item_id = format!("witem_{suffix}");
+    let hosted_fixture = workflow_policy.is_some();
     let workflow_policy = workflow_policy.map(|mut policy| {
         policy.delivery_binding.product_id = product_id.clone();
         policy.delivery_binding.repository_id = repository_id.clone();
@@ -611,7 +612,7 @@ pub(super) async fn repo_fixture_for_source(
             resource_namespace: None,
             resource_kind: Some("Repository".into()),
             resource_name: Some(registered.repository.canonical_url.clone()),
-            work_plan_json: json!({"schema_version":"pharness.dev/work-plan/v1alpha1"}),
+            work_plan_json: if hosted_fixture { json!({"schema_version":"pharness.dev/work-plan/v1alpha1","readiness":{"status":"ready","blockers":[]}}) } else { json!({"schema_version":"pharness.dev/work-plan/v1alpha1"}) },
         })
         .await
         .unwrap();
@@ -797,6 +798,10 @@ async fn hosted_readiness_uses_repository_defaults_and_blocks_unqualified_creati
         .unwrap()
         .iter()
         .any(|b| b["code"] == "hosted_workflow_not_ready"));
+    assert!(result["prerequisites"]
+        .as_array()
+        .is_some_and(|values| !values.is_empty()));
+    assert_eq!(result["recommended_resolution"]["kind"], "open_settings");
     assert!(result["workflow_policy"].is_null());
     let before = fixture
         .state
@@ -1213,6 +1218,14 @@ async fn repo_mode_fake_provider_closes_only_after_fresh_checks_and_exact_merge(
     assert_eq!(
         product_overview["repositories"][0]["coding_readiness"],
         "ready"
+    );
+    assert_eq!(
+        product_overview["repositories"][0]["work_item_eligibility"]["mutable"]["eligible"],
+        false
+    );
+    assert_eq!(
+        product_overview["repositories"][0]["work_item_eligibility"]["context"]["eligible"],
+        true
     );
     assert_eq!(
         product_overview["repository_bindings"][0]["binding"]["repository_id"],
@@ -1847,6 +1860,8 @@ async fn zero_turn_stage_startup_recovery_refunds_attempt_and_seals_evidence() {
             state_hash: action.state_hash.clone(),
             inference_policies: None,
             execution_policies: None,
+            planner_startup: None,
+            defer_planner_dispatch: false,
         },
     )
     .await

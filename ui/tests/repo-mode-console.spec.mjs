@@ -449,3 +449,114 @@ test("initial route failure is explicit rather than empty or stale", async ({ pa
   await expect(page.getByRole("alert")).toHaveText("overview unavailable");
   await expect(page.getByText("No Products registered")).toHaveCount(0);
 });
+
+test("WorkItem creation preserves inputs while resolving one server-authored prerequisite at a time", async ({ page }) => {
+  const contextRepository = {
+    ...repository,
+    id:"repo_01jcontext",
+    external_id:"lward27/finance_context",
+    provider_repository_id:"lward27/finance_context",
+    canonical_url:"https://github.com/lward27/finance_context",
+    registered_commit:"9".repeat(40),
+    work_item_eligibility:{context:{eligible:true,status:"ready"}},
+  };
+  const mutableRepository = {
+    ...repository,
+    work_item_eligibility:{mutable:{eligible:true,status:"ready"}},
+  };
+  let capabilityVerified = false;
+  let preflightCalls = 0;
+  const basePreflight = {
+    source_repo:repository.canonical_url,
+    source_commit:sourceSha,
+    environment_profile_id:"python-3.11",
+    product_model_snapshot_id:"psnap_01jmodel",
+    predicted_mutations:["work_item"],
+    authorization_boundaries:[],
+    warnings:[],
+  };
+  await mockRepoModeApi(page,{
+    [`/api/products/${productId}/overview`]:{
+      product,
+      services:[],
+      repositories:[mutableRepository,contextRepository],
+      current_work_items:[],
+      historical_work_items:[],
+      active_agent_runs:[],
+      capability_posture:[],
+    },
+    [`/api/repositories/${repositoryId}/overview`]:repositoryOverview,
+    [`/api/products/${productId}/work-items/preflight`]:async route => {
+      preflightCalls += 1;
+      const request = route.request().postDataJSON();
+      if(request.context_repositories.length) return {
+        ...basePreflight,
+        preflight_hash:`preflight-context-${preflightCalls}`,
+        blockers:[{code:"context_repository_discovery_missing",summary:"Deterministic discovery is missing at the exact context revision."}],
+        prerequisites:[{
+          id:"context-missing",
+          code:"context_repository_discovery_missing",
+          status:"missing",
+          summary:"Deterministic discovery is missing at the exact context revision.",
+          subject:{repository_id:contextRepository.id,repository_name:contextRepository.external_id,revision:contextRepository.registered_commit,role:"context"},
+          details:[],
+          resolution:{kind:"remove_context",label:"Remove optional context",effect_class:"local_form_change",inline:true,confirmation_required:false,repository_id:contextRepository.id,expected_result:"The optional context Repository is removed."},
+          dependencies:[],
+        }],
+      };
+      if(!capabilityVerified) return {
+        ...basePreflight,
+        preflight_hash:`preflight-capability-${preflightCalls}`,
+        blockers:[],
+        prerequisites:[{
+          id:"source-reader-stale",
+          code:"source_reader_verification_required",
+          status:"stale",
+          summary:"Source access requires a fresh verification for this exact Repository.",
+          subject:{repository_id:repository.id,repository_name:repository.external_id,revision:sourceSha,role:"mutable"},
+          details:[],
+          resolution:{kind:"verify_capability",label:"Verify source-reader access",effect_class:"controller_internal",inline:true,confirmation_required:true,capability:"source_reader",repository_id:repository.id,expected_result:"A fresh repository-scoped verification is recorded."},
+          dependencies:[],
+        }],
+      };
+      return {...basePreflight,preflight_hash:`preflight-ready-${preflightCalls}`,blockers:[],prerequisites:[]};
+    },
+    "/api/system/capabilities/source_reader/preflight":route => {
+      const body = route.request().postDataJSON();
+      expect(body).toMatchObject({actor:"lucas",reason:"Request a bounded product change"});
+      capabilityVerified = true;
+      return {status:"available"};
+    },
+    [`/api/products/${productId}/work-items`]:{work_item:{id:"witem_recovered"}},
+  });
+
+  await page.goto(`/#/products/${productId}/work-items/new`);
+  await page.getByLabel("Mutable Repository").selectOption(repositoryId);
+  await page.getByRole("checkbox",{name:/finance_context/}).check();
+  await page.getByRole("button",{name:"Continue"}).click();
+  await page.getByLabel("Title").fill("Change the Finance color palette");
+  await page.getByLabel("Bounded intent").fill("Adjust the bounded frontend palette without changing application behavior.");
+  await page.getByLabel("unit",{exact:false}).check();
+  await page.getByRole("button",{name:"Continue"}).click();
+  await page.getByRole("button",{name:"Check readiness"}).click();
+
+  await expect(page.getByRole("heading",{name:"Resolve prerequisites"})).toBeVisible();
+  await expect(page.getByText("Deterministic discovery is missing at the exact context revision.")).toBeVisible();
+  await page.getByRole("button",{name:"Remove optional context"}).click();
+  await expect(page.getByText("Source access requires a fresh verification for this exact Repository.")).toBeVisible();
+  await page.getByRole("button",{name:"Verify source-reader access"}).click();
+  const dialog = page.getByRole("dialog",{name:"Verify source-reader access"});
+  await expect(dialog.getByText(sourceSha)).toBeVisible();
+  await dialog.getByRole("button",{name:"Confirm corrective step"}).click();
+
+  await expect(page.getByText("Ready to create this WorkItem")).toBeVisible();
+  await page.getByRole("button",{name:"Back"}).click();
+  await page.getByRole("button",{name:"Back"}).click();
+  await expect(page.getByLabel("Title")).toHaveValue("Change the Finance color palette");
+  await page.getByRole("button",{name:"Continue"}).click();
+  await page.getByRole("button",{name:"Check readiness"}).click();
+  await expect(page.getByText("Ready to create this WorkItem")).toBeVisible();
+  await page.getByRole("button",{name:"Confirm and create WorkItem"}).click();
+  await expect(page).toHaveURL(/#\/work-items\/witem_recovered\/overview$/);
+  expect(preflightCalls).toBe(4);
+});

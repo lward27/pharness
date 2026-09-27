@@ -1,7 +1,10 @@
 use super::state::{repo_metadata, repo_work_item_state_hash};
+use crate::app::clock::current_millis;
 use crate::app::hashing::canonical_material_hash;
 use crate::app::identifiers::{is_git_sha, new_prefixed_id};
-use crate::app::repository_readiness::{current_readiness_mismatches, ensure_repo_mode_enabled};
+use crate::app::repository_readiness::{
+    current_readiness_mismatches, ensure_repo_mode_enabled, readiness_mismatch_summary,
+};
 use crate::app::validation::required_text;
 use crate::app::{ApiError, AppState};
 use axum::extract::{Path, State};
@@ -83,6 +86,8 @@ pub(super) struct RepoWorkItemPreflightResponse {
     planner_inference: Value,
     planner_execution: Value,
     readiness_assessment_id: Option<String>,
+    prerequisites: Vec<Value>,
+    recommended_resolution: Option<Value>,
     blockers: Vec<Value>,
     warnings: Vec<Value>,
     predicted_mutations: Vec<String>,
@@ -611,7 +616,7 @@ async fn build_repo_work_item_preflight(
                 &context.source_commit.to_ascii_lowercase(),
             )
             .await?;
-        match (registered, bound, discovered) {
+        match (registered.as_ref(), bound.as_ref(), discovered.as_ref()) {
             (Some(registered), Some(_), Some(discovery)) => context_repositories.push(json!({
                 "repository_id":registered.id,
                 "canonical_url":registered.canonical_url,
@@ -620,7 +625,78 @@ async fn build_repo_work_item_preflight(
                 "discovery_hash":discovery.content_hash,
                 "access":"typed_bounded_read",
             })),
-            _ => blockers.push(json!({"code":"context_repository_not_ready","summary":"context repository lacks an active Product binding or deterministic discovery at the exact revision","repository_id":context.repository_id})),
+            (None, _, _) => blockers.push(json!({
+                "code":"context_repository_unavailable",
+                "summary":"the selected context Repository is no longer registered",
+                "repository_id":context.repository_id,
+                "source_commit":context.source_commit.to_ascii_lowercase(),
+                "role":"context",
+            })),
+            (Some(registered), None, _) => blockers.push(json!({
+                "code":"context_repository_not_bound",
+                "summary":"the context Repository is not actively bound to this Product",
+                "repository_id":registered.id,
+                "repository_name":registered.external_id,
+                "source_commit":context.source_commit.to_ascii_lowercase(),
+                "role":"context",
+            })),
+            (Some(registered), Some(_), None) => {
+                let onboarding = state
+                    .store
+                    .list_repository_onboardings(&registered.id)
+                    .await?
+                    .into_iter()
+                    .rfind(|candidate| {
+                        candidate
+                            .registered_commit
+                            .eq_ignore_ascii_case(&context.source_commit)
+                            || candidate.resolved_commit.as_deref().is_some_and(|commit| {
+                                commit.eq_ignore_ascii_case(&context.source_commit)
+                            })
+                    });
+                let current_discovery = match onboarding
+                    .as_ref()
+                    .and_then(|candidate| candidate.current_discovery_id.as_deref())
+                {
+                    Some(discovery_id) => {
+                        state.store.get_repository_discovery(discovery_id).await?
+                    }
+                    None => None,
+                };
+                let (code, summary, status) = match current_discovery
+                    .as_ref()
+                    .map(|value| value.status.as_str())
+                {
+                    Some("queued" | "running") => (
+                        "context_repository_discovery_running",
+                        "deterministic discovery is still running for this context revision",
+                        "running",
+                    ),
+                    Some("failed") => (
+                        "context_repository_discovery_failed",
+                        "deterministic discovery failed for this context revision",
+                        "blocked",
+                    ),
+                    _ => (
+                        "context_repository_discovery_missing",
+                        "no successful deterministic discovery exists for this context revision",
+                        "missing",
+                    ),
+                };
+                blockers.push(json!({
+                    "code":code,
+                    "summary":summary,
+                    "status":status,
+                    "repository_id":registered.id,
+                    "repository_name":registered.external_id,
+                    "source_commit":context.source_commit.to_ascii_lowercase(),
+                    "role":"context",
+                    "onboarding_id":onboarding.as_ref().map(|value| value.id.as_str()),
+                    "discovery_id":current_discovery.as_ref().map(|value| value.id.as_str()),
+                    "discovery_error_code":current_discovery.as_ref().and_then(|value| value.error_code.as_deref()),
+                    "discovery_error_summary":current_discovery.as_ref().and_then(|value| value.error_summary.as_deref()),
+                }));
+            }
         }
     }
     let writer = state.worker.git_writer_settings();
@@ -720,6 +796,21 @@ async fn build_repo_work_item_preflight(
             }),
         ]
     };
+    let prerequisites = work_item_prerequisites(
+        state,
+        product_id,
+        &repository,
+        &source_commit,
+        environment_profile_id,
+        &blockers,
+    )
+    .await?;
+    let recommended_resolution = prerequisites
+        .iter()
+        .find(|prerequisite| prerequisite.get("status").and_then(Value::as_str) != Some("ready"))
+        .and_then(|prerequisite| prerequisite.get("resolution"))
+        .filter(|resolution| !resolution.is_null())
+        .cloned();
     let material = json!({
         "schema_version":"pharness.dev/repo-work-item-preflight/v1alpha1",
         "product_id":product_id,
@@ -741,6 +832,8 @@ async fn build_repo_work_item_preflight(
         "planner_execution":planner_execution,
         "readiness_assessment_id":readiness.as_ref().map(|assessment| &assessment.id),
         "readiness_input_hash":readiness.as_ref().map(|assessment| &assessment.input_hash),
+        "prerequisites":prerequisites,
+        "recommended_resolution":recommended_resolution,
         "blockers":blockers,
         "warnings":warnings,
         "predicted_mutations":predicted_mutations,
@@ -768,11 +861,428 @@ async fn build_repo_work_item_preflight(
         planner_inference,
         planner_execution,
         readiness_assessment_id: readiness.map(|assessment| assessment.id),
+        prerequisites,
+        recommended_resolution,
         blockers,
         warnings,
         predicted_mutations,
         authorization_boundaries,
         workflow_policy,
         preflight_hash,
+    })
+}
+
+async fn work_item_prerequisites(
+    state: &AppState,
+    product_id: &str,
+    repository: &pharness_store::StoredRepository,
+    source_commit: &str,
+    environment_profile_id: Option<&str>,
+    blockers: &[Value],
+) -> Result<Vec<Value>, ApiError> {
+    let subject = json!({
+        "kind":"repository",
+        "repository_id":repository.id,
+        "repository_name":repository.external_id,
+        "revision":source_commit,
+        "role":"mutable",
+    });
+    let blocker_codes = blockers
+        .iter()
+        .filter_map(|blocker| blocker.get("code").and_then(Value::as_str))
+        .collect::<std::collections::BTreeSet<_>>();
+    let needs_readiness = blocker_codes.contains("repository_readiness_missing")
+        || blocker_codes.contains("repository_readiness_not_current");
+    let mut prerequisites = Vec::new();
+
+    for blocker in blockers {
+        let Some(code) = blocker.get("code").and_then(Value::as_str) else {
+            continue;
+        };
+        if matches!(
+            code,
+            "repository_readiness_missing"
+                | "repository_readiness_not_current"
+                | "context_repository_unavailable"
+                | "context_repository_not_bound"
+                | "context_repository_discovery_missing"
+                | "context_repository_discovery_running"
+                | "context_repository_discovery_failed"
+        ) {
+            continue;
+        }
+        let summary = blocker
+            .get("summary")
+            .and_then(Value::as_str)
+            .unwrap_or("WorkItem creation is blocked by current controller state");
+        let (status, resolution) = match code {
+            "repository_not_bound_to_product" => (
+                "missing",
+                navigation_resolution(
+                    "open_product_topology",
+                    "Review Product topology",
+                    &format!("products/{product_id}/services-repositories"),
+                    "Review and apply an active Product binding before creating the WorkItem.",
+                ),
+            ),
+            "repository_revision_not_registered" => (
+                "stale",
+                navigation_resolution(
+                    "open_repository",
+                    "Open Repository registration",
+                    &format!("repositories/{}/overview", repository.id),
+                    "Register or select the exact immutable revision before continuing.",
+                ),
+            ),
+            "canonical_contract_version_missing" => (
+                "missing",
+                navigation_resolution(
+                    "open_onboarding",
+                    "Open Repository onboarding",
+                    &format!("repositories/{}/readiness", repository.id),
+                    "Complete onboarding and validate the canonical contract at this revision.",
+                ),
+            ),
+            "source_reader_unavailable"
+            | "source_writer_unavailable"
+            | "provider_observer_unavailable"
+            | "environment_profile_unavailable"
+            | "environment_profile_contract_mismatch" => (
+                "blocked",
+                navigation_resolution(
+                    "open_settings",
+                    "Open configuration readiness",
+                    "settings/capabilities",
+                    "Correct the exact allowlist, profile, or capability configuration, then rerun preflight.",
+                ),
+            ),
+            "acceptance_command_not_declared" | "invalid_context_repository" => (
+                "blocked",
+                json!({
+                    "kind":"edit_work_item",
+                    "label":"Edit WorkItem inputs",
+                    "effect_class":"local_form_change",
+                    "inline":true,
+                    "confirmation_required":false,
+                    "expected_result":"The invalid selection is removed before preflight is rerun.",
+                }),
+            ),
+            _ => (
+                "blocked",
+                navigation_resolution(
+                    "open_repository",
+                    "Inspect owning Repository",
+                    &format!("repositories/{}/overview", repository.id),
+                    "Inspect the exact blocker on the owning Repository before rerunning preflight.",
+                ),
+            ),
+        };
+        prerequisites.push(prerequisite_value(
+            code,
+            status,
+            summary,
+            subject.clone(),
+            blocker
+                .get("mismatches")
+                .cloned()
+                .unwrap_or_else(|| json!([])),
+            resolution,
+            (Vec::new(), 10),
+        ));
+    }
+
+    if needs_readiness
+        && state
+            .worker
+            .source_reader_allows_repository(&repository.canonical_url)
+    {
+        let now = current_millis();
+        let source_verification = state
+            .store
+            .latest_capability_verification_for_repository(
+                "source_reader",
+                &repository.canonical_url,
+            )
+            .await?;
+        let source_current = source_verification.as_ref().is_some_and(|verification| {
+            verification.status == "available"
+                && verification.repository.as_deref() == Some(repository.canonical_url.as_str())
+                && verification
+                    .expires_at
+                    .parse::<u128>()
+                    .is_ok_and(|expiry| expiry > now)
+        });
+        if !source_current {
+            prerequisites.push(prerequisite_value(
+                "source_reader_verification_required",
+                if source_verification.is_some() { "stale" } else { "missing" },
+                "Source access must pass a fresh isolated verification for this exact Repository.",
+                subject.clone(),
+                json!([]),
+                json!({
+                    "kind":"verify_capability",
+                    "label":"Verify source-reader access",
+                    "effect_class":"controller_internal",
+                    "inline":true,
+                    "confirmation_required":true,
+                    "capability":"source_reader",
+                    "repository_id":repository.id,
+                    "expected_result":"A fresh repository-scoped source-reader verification is recorded for 15 minutes.",
+                }),
+                (Vec::new(), 20),
+            ));
+        }
+
+        if let Some(profile_id) = environment_profile_id {
+            let capability = format!("environment_profile:{profile_id}");
+            let verification = state
+                .store
+                .latest_capability_verification(&capability)
+                .await?;
+            let profile_current = verification.as_ref().is_some_and(|verification| {
+                verification.status == "available"
+                    && verification
+                        .expires_at
+                        .parse::<u128>()
+                        .is_ok_and(|expiry| expiry > now)
+            });
+            if !profile_current {
+                prerequisites.push(prerequisite_value(
+                    "runner_profile_verification_required",
+                    if verification.is_some() { "stale" } else { "missing" },
+                    "The contract-selected runner profile requires a fresh isolated verification.",
+                    subject.clone(),
+                    json!([]),
+                    json!({
+                        "kind":"verify_capability",
+                        "label":format!("Verify {profile_id} runner"),
+                        "effect_class":"controller_internal",
+                        "inline":true,
+                        "confirmation_required":true,
+                        "capability":capability,
+                        "expected_result":"A fresh runner-profile verification is recorded for 15 minutes.",
+                    }),
+                    (
+                        if source_current {
+                            Vec::new()
+                        } else {
+                            vec!["source_reader_verification_required".into()]
+                        },
+                        30,
+                    ),
+                ));
+            }
+        }
+
+        let readiness_subject = format!("{}:{source_commit}", repository.id);
+        let preparation = state
+            .store
+            .latest_subject_environment_preparation("repository_readiness", &readiness_subject)
+            .await?;
+        let running = preparation
+            .as_ref()
+            .is_some_and(|value| matches!(value.status.as_str(), "queued" | "running"));
+        let dependencies = prerequisites
+            .iter()
+            .filter_map(|value| {
+                value
+                    .get("code")
+                    .and_then(Value::as_str)
+                    .filter(|code| {
+                        matches!(
+                            *code,
+                            "source_reader_verification_required"
+                                | "runner_profile_verification_required"
+                        )
+                    })
+                    .map(str::to_string)
+            })
+            .collect();
+        prerequisites.push(prerequisite_value(
+            if running {
+                "repository_readiness_running"
+            } else {
+                "repository_readiness_refresh_required"
+            },
+            if running { "running" } else if blocker_codes.contains("repository_readiness_missing") { "missing" } else { "stale" },
+            if running {
+                "Repository readiness is being assessed for this exact revision."
+            } else {
+                "Run a new immutable contract and coding readiness assessment after capability verification succeeds."
+            },
+            subject.clone(),
+            blockers
+                .iter()
+                .find(|value| value.get("code").and_then(Value::as_str) == Some("repository_readiness_not_current"))
+                .and_then(|value| value.get("mismatches"))
+                .and_then(Value::as_array)
+                .map(|mismatches| {
+                    Value::Array(
+                        mismatches
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .map(|code| json!({
+                                "code":code,
+                                "summary":readiness_mismatch_summary(code),
+                            }))
+                            .collect(),
+                    )
+                })
+                .unwrap_or_else(|| json!([])),
+            if running {
+                json!({
+                    "kind":"wait_for_readiness",
+                    "label":"Wait for readiness assessment",
+                    "effect_class":"read_only_wait",
+                    "inline":true,
+                    "confirmation_required":false,
+                    "repository_id":repository.id,
+                    "expected_result":"The wizard observes the current preparation and reruns preflight when it finishes.",
+                })
+            } else {
+                json!({
+                    "kind":"run_readiness",
+                    "label":"Run exact readiness assessment",
+                    "effect_class":"controller_internal",
+                    "inline":true,
+                    "confirmation_required":true,
+                    "repository_id":repository.id,
+                    "source_commit":source_commit,
+                    "expected_result":"A deterministic preparation is dispatched for this exact Repository revision.",
+                })
+            },
+            (dependencies, 40),
+        ));
+    }
+
+    for blocker in blockers.iter().filter(|blocker| {
+        blocker
+            .get("role")
+            .and_then(Value::as_str)
+            .is_some_and(|role| role == "context")
+    }) {
+        let code = blocker
+            .get("code")
+            .and_then(Value::as_str)
+            .unwrap_or("context_repository_not_ready");
+        let repository_id = blocker
+            .get("repository_id")
+            .and_then(Value::as_str)
+            .unwrap_or("unavailable");
+        let revision = blocker
+            .get("source_commit")
+            .and_then(Value::as_str)
+            .unwrap_or("unavailable");
+        let status = blocker
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| {
+                if code.ends_with("_missing") {
+                    "missing"
+                } else {
+                    "blocked"
+                }
+            });
+        let destination = if code == "context_repository_not_bound" {
+            format!("products/{product_id}/services-repositories")
+        } else {
+            blocker
+                .get("onboarding_id")
+                .and_then(Value::as_str)
+                .map(|id| format!("repository-onboardings/{id}"))
+                .unwrap_or_else(|| format!("repositories/{repository_id}/overview"))
+        };
+        let resolution = json!({
+            "kind":"remove_context",
+            "label":"Remove optional context",
+            "effect_class":"local_form_change",
+            "inline":true,
+            "confirmation_required":false,
+            "repository_id":repository_id,
+            "expected_result":"The optional context Repository is removed and WorkItem preflight is rerun.",
+            "alternatives":[{
+                "kind":"navigate",
+                "label":if code == "context_repository_not_bound" { "Review Product topology" } else if status == "running" { "Open discovery progress" } else { "Prepare context Repository" },
+                "destination":destination,
+                "expected_result":"The Repository is prepared at the exact context revision before it is selected again."
+            }]
+        });
+        prerequisites.push(prerequisite_value(
+            code,
+            status,
+            blocker
+                .get("summary")
+                .and_then(Value::as_str)
+                .unwrap_or("The optional context Repository is not ready at this revision."),
+            json!({
+                "kind":"repository",
+                "repository_id":repository_id,
+                "repository_name":blocker.get("repository_name").and_then(Value::as_str),
+                "revision":revision,
+                "role":"context",
+            }),
+            json!({
+                "discovery_id":blocker.get("discovery_id"),
+                "error_code":blocker.get("discovery_error_code"),
+                "error_summary":blocker.get("discovery_error_summary"),
+            }),
+            resolution,
+            (Vec::new(), 50),
+        ));
+    }
+
+    prerequisites.sort_by(|left, right| {
+        left.get("priority")
+            .and_then(Value::as_u64)
+            .cmp(&right.get("priority").and_then(Value::as_u64))
+            .then_with(|| {
+                left.get("code")
+                    .and_then(Value::as_str)
+                    .cmp(&right.get("code").and_then(Value::as_str))
+            })
+    });
+    prerequisites.dedup_by(|left, right| {
+        left.get("code") == right.get("code") && left.get("subject") == right.get("subject")
+    });
+    Ok(prerequisites)
+}
+
+fn prerequisite_value(
+    code: &str,
+    status: &str,
+    summary: &str,
+    subject: Value,
+    details: Value,
+    resolution: Value,
+    ordering: (Vec<String>, u64),
+) -> Value {
+    let (dependencies, priority) = ordering;
+    json!({
+        "id":format!("prerequisite:{code}:{}", subject.get("repository_id").and_then(Value::as_str).unwrap_or("unknown")),
+        "code":code,
+        "status":status,
+        "summary":summary,
+        "subject":subject,
+        "details":details,
+        "resolution":resolution,
+        "dependencies":dependencies,
+        "priority":priority,
+    })
+}
+
+fn navigation_resolution(
+    kind: &str,
+    label: &str,
+    destination: &str,
+    expected_result: &str,
+) -> Value {
+    json!({
+        "kind":kind,
+        "label":label,
+        "effect_class":"navigation",
+        "inline":false,
+        "confirmation_required":false,
+        "destination":destination,
+        "expected_result":expected_result,
     })
 }

@@ -1,0 +1,75 @@
+{
+  "next": "Review the local diff and validate the actual Argo overlay before the authorized release merge.",
+  "production_merge_approved": false,
+  "status": "prepared_local_pin",
+  "verified": {
+    "images": {
+      "codex-host": {
+        "config_digest": "sha256:9a77af5f48bcf2a0b7d32a4ec27fc0f39c5f2323f650a4ad99a3f8df8c1d5e55",
+        "digest": "sha256:96fff3124884149e7b694d40c594a3111054c939f99feebfeca82571be1ab257",
+        "platform": "linux/amd64",
+        "repository": "pharness-codex-host",
+        "source_verified": true
+      },
+      "eval-runner": {
+        "config_digest": "sha256:abff3e434c860bf7cf494f48afe4fcc8128e0645def7c2fd4b4ec8764de1a415",
+        "digest": "sha256:efe194198b7547c8202e75f9309f1f0b115572c06c0ac78cab83898d50151db8",
+        "platform": "linux/amd64",
+        "repository": "pharness-eval-runner",
+        "source_verified": true
+      },
+      "model-gateway": {
+        "config_digest": "sha256:2c8cdf94012b5060a1b9d90e8a90eb18805ea2c3610772101c3dc1d4c66c7457",
+        "digest": "sha256:408eb49775fc5b0221fafc3ecd26f975cc0082d8f81503acf6698e382a55f4c7",
+        "platform": "linux/amd64",
+        "repository": "pharness-model-gateway",
+        "source_verified": true
+      },
+      "node-runner": {
+        "config_digest": "sha256:e8c397526d8c5eba07481d9c396e18695ef86e6044f41ae08bcfdb18f5e192c6",
+        "digest": "sha256:acedaa7ca796e41448470fa4bd532779082bd5501cce89ee096444c8520054af",
+        "platform": "linux/amd64",
+        "repository": "pharness-node-runner",
+        "source_verified": true
+      },
+      "python-runner": {
+        "config_digest": "sha256:6ad4e35908265348c082430e9d3ce2ee6f5b2bf55cd48774d241250b18077cf2",
+        "digest": "sha256:066c6e9848ecafebb4c0732a34e3cac5f6441661bbd58a63de5a364eb9e9be5c",
+        "platform": "linux/amd64",
+        "repository": "pharness-python-runner",
+        "source_verified": true
+      },
+      "runtime": {
+        "config_digest": "sha256:839f36d8430641fd41839ae5d2a00eab3f2d4253cc0a9e64ec4d2dfe08eedc7e",
+        "digest": "sha256:14f7abc1f75173818a97b6a7795d8fadde689ad3ddbb0b659b2d0251f57e7282",
+        "platform": "linux/amd64",
+        "repository": "pharness-runtime",
+        "source_verified": true
+      },
+      "ui": {
+        "config_digest": "sha256:db0ae7baba299c07820ef72d7616ca695e8df5a6dede396e405008b06a1b676b",
+        "digest": "sha256:125c3796a18539a3c1fbc5759f039d8c2d273da834663479042394daa792e997",
+        "platform": "linux/amd64",
+        "repository": "pharness-ui",
+        "source_verified": true
+      }
+    },
+    "layer_contents_verified": false,
+    "limitations": [
+      "This check does not prove build test results, native bundle internal contents, GitOps reconciliation, or runtime acceptance."
+    ],
+    "native_bundle": {
+      "digest": "sha256:46f76b17cb8a4d6ff261fca8bc873c858cdec230fdf71d8feb1451d1135531f7",
+      "path": "/Users/wardl/Personal/apps/pharness-release-artifacts/291e007cedcb2440a328f5e24710fb3423cb0ded/native/pharness-codex-host-291e007cedcb2440a328f5e24710fb3423cb0ded-linux-amd64.tar.gz",
+      "size_bytes": 231644834
+    },
+    "observed_at": "2026-09-08T20:59:00.625528+00:00",
+    "provenance_attestation_verified": false,
+    "sbom_verified": false,
+    "schema_version": 1,
+    "signature_verified": false,
+    "source_revision": "291e007cedcb2440a328f5e24710fb3423cb0ded",
+    "status": "verified_artifacts"
+  },
+  "worktree": "/Users/wardl/Personal/apps/pharness-astra-planner-guard-release"
+}

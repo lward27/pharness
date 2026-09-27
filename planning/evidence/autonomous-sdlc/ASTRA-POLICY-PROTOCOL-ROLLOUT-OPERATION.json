@@ -1,0 +1,51 @@
+{
+  "finished_at": "2026-09-08T19:20:37.460021+00:00",
+  "release_pin": "ce98a26065cd48323b58b8905fcbbfc6c76452cd",
+  "samples": [
+    {
+      "argo_revision": "d675159cb205d222616d253d311706be1889bb91",
+      "at": "2026-09-08T19:18:53.962828+00:00",
+      "health": "Healthy",
+      "running_pods": 5,
+      "sync": "Synced"
+    },
+    {
+      "argo_revision": "d675159cb205d222616d253d311706be1889bb91",
+      "at": "2026-09-08T19:19:14.520741+00:00",
+      "health": "Healthy",
+      "running_pods": 5,
+      "sync": "Synced"
+    },
+    {
+      "argo_revision": "ce98a26065cd48323b58b8905fcbbfc6c76452cd",
+      "at": "2026-09-08T19:19:35.147919+00:00",
+      "health": "Progressing",
+      "running_pods": 5,
+      "sync": "Synced"
+    },
+    {
+      "argo_revision": "ce98a26065cd48323b58b8905fcbbfc6c76452cd",
+      "at": "2026-09-08T19:19:55.680845+00:00",
+      "health": "Progressing",
+      "running_pods": 6,
+      "sync": "Synced"
+    },
+    {
+      "argo_revision": "ce98a26065cd48323b58b8905fcbbfc6c76452cd",
+      "at": "2026-09-08T19:20:16.214895+00:00",
+      "health": "Healthy",
+      "running_pods": 8,
+      "sync": "Synced"
+    },
+    {
+      "argo_revision": "ce98a26065cd48323b58b8905fcbbfc6c76452cd",
+      "at": "2026-09-08T19:20:36.766614+00:00",
+      "health": "Healthy",
+      "running_pods": 5,
+      "sync": "Synced"
+    }
+  ],
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "started_at": "2026-09-08T19:18:53.554600+00:00",
+  "status": "live_identities_verified"
+}

@@ -1,0 +1,159 @@
+{
+  "context": "lucas_engineering",
+  "created_at": "2026-09-08T20:12:22.674192+00:00",
+  "dispatch_result": {
+    "actor": "lucas",
+    "agent_profile_hash": "sha256:2fe49eb4c7fc4aa6655324d3f029275dbd4f170abc97bd48f072a4c799689a02",
+    "agent_profile_id": "repo-test-diagnoser",
+    "attempts": 1,
+    "binding_hash": "sha256:d2cd7d86c86ace36e1f723413576a25705a919b05b5b59fede93b9ae48c53e2f",
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "created_at": "1788898342721",
+    "failure": null,
+    "finished_at": null,
+    "id": "infeval_01a082a6774176c1a9d61344c1b84aa0",
+    "job_name": "pharness-inference-eval-35e80b13cbdb",
+    "policy_hash": "sha256:57a3989aeff533989c0d8c767320fad29156039457f60007af0b02cd784db921",
+    "policy_id": "m04-control-test-diagnosis-kimi-k3-v2",
+    "policy_revision": "v1",
+    "qualification_id": null,
+    "reason": "ASTRA M04D sourced675159 declared matched Kimi diagnosis control on complete native Nemotron primary inputs; no activation or qualification",
+    "report": null,
+    "report_hash": null,
+    "resolved_binding": {
+      "agent_profile_hash": "sha256:2fe49eb4c7fc4aa6655324d3f029275dbd4f170abc97bd48f072a4c799689a02",
+      "base_agent_profile_hash": "sha256:8f681a79c6eee08e762d43b01be3e45f5cf1b11a218ae04e16051afc78ec53c5",
+      "binding_hash": "sha256:d2cd7d86c86ace36e1f723413576a25705a919b05b5b59fede93b9ae48c53e2f",
+      "context_policy_hash": "sha256:3784741d2e514b6802141462fc547fb5f1f549828cc0b67f3d863257674e03a0",
+      "policy": {
+        "display_name": "M04 diagnostic control: test-diagnosis / Kimi K3",
+        "eligible_profiles": [
+          "repo-test-diagnoser"
+        ],
+        "eligible_stages": [
+          "test"
+        ],
+        "max_input_tokens": 65536,
+        "max_output_tokens": 4096,
+        "policy_hash": "sha256:57a3989aeff533989c0d8c767320fad29156039457f60007af0b02cd784db921",
+        "policy_id": "m04-control-test-diagnosis-kimi-k3-v2",
+        "reasoning": {
+          "context_mode": "provider_default",
+          "expose_replay": true
+        },
+        "revision": "v1",
+        "schema_version": "pharness.dev/stage-inference-policy/v1alpha1",
+        "selectable": true,
+        "target": {
+          "revision": "m04-control-v1",
+          "target_id": "fireworks-kimi-k3"
+        },
+        "target_hash": "sha256:c12fe0955c69e6d7d94b724751285e042f04b16a202909e61588cbbb9030498a",
+        "temperature_milli": 0,
+        "tool_choice": "auto",
+        "tool_protocol": "native_tools",
+        "transport_max_attempts": 3
+      },
+      "profile_budget_hash": "sha256:56e4d967bf176a5fb8793a18f739975543eb362d17ca1ce55b8b20fc1ed08c70",
+      "prompt_version": "2026-09-05.1",
+      "protocol_calibration_hash": "sha256:bc50305645891099494542c9fe8c46089c8e3db07cee9ae7afee8a06d12c1f49",
+      "schema_version": "pharness.dev/resolved-inference-binding/v1alpha1",
+      "stage_prompt": {
+        "content_hash": "sha256:545c6618ffcf4e5a221631820558da748b3da2c6899c2f17640ab3f3813faa88",
+        "prompt_id": "repo-test-diagnoser-v2",
+        "revision": "2026-09-06.1",
+        "schema_version": "pharness.dev/stage-prompt/v1alpha1",
+        "stage": "test"
+      },
+      "target": {
+        "allowed_stages": [
+          "onboarding",
+          "plan",
+          "test",
+          "verify"
+        ],
+        "authentication_binding": "fireworks-api-key",
+        "backend_kind": "fireworks",
+        "capabilities": {
+          "json_schema": false,
+          "native_tools": true,
+          "reasoning_context_modes": [
+            "current_turn",
+            "all_turns"
+          ],
+          "reasoning_efforts": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "stream_options": true,
+          "streaming": true,
+          "tool_choice_modes": [
+            "auto",
+            "required"
+          ]
+        },
+        "config_hash": "sha256:c12fe0955c69e6d7d94b724751285e042f04b16a202909e61588cbbb9030498a",
+        "context_limit_tokens": 1048576,
+        "display_name": "M04 diagnostic control Kimi K3",
+        "output_limit_tokens": 16384,
+        "protocol": "openai_chat_completions_v1",
+        "revision": "m04-control-v1",
+        "schema_version": "pharness.dev/inference-target/v1alpha1",
+        "selectable": true,
+        "target_id": "fireworks-kimi-k3",
+        "transport": {
+          "allow_insecure_private_http": false,
+          "connect_timeout_seconds": 5,
+          "first_response_timeout_seconds": 300,
+          "max_attempts": 3,
+          "stream_idle_timeout_seconds": 120
+        },
+        "upstream_base_url": "https://api.fireworks.ai/inference/v1/",
+        "upstream_model": "accounts/fireworks/models/kimi-k3"
+      },
+      "tool_schema_hash": "sha256:1cf91037190136c55697aa774bcf6891140ae9484f1fcd53a2f9a888ddb2d499"
+    },
+    "runtime_revision": "d675159cb205d222616d253d311706be1889bb91",
+    "scope": {
+      "case_ids": [
+        "assertion-failure",
+        "passing-control"
+      ],
+      "kind": "diagnostic",
+      "reference_evaluation_id": "infeval_01a082a36f5f78d3a8f4a2b84fb22a54"
+    },
+    "started_at": "1788898343001",
+    "status": "running",
+    "suite_hash": "sha256:2a2e9233ba078acad083878743d9b9ca2c63f8467151e6a8780a6dd21516c9af",
+    "suite_id": "test-diagnosis-v2",
+    "target_hash": "sha256:c12fe0955c69e6d7d94b724751285e042f04b16a202909e61588cbbb9030498a",
+    "target_id": "fireworks-kimi-k3",
+    "target_revision": "m04-control-v1"
+  },
+  "evaluation_id": "infeval_01a082a6774176c1a9d61344c1b84aa0",
+  "kind": "pharness_evaluation",
+  "operation_id": "ASTRA-M04-D675159-TEST-DIAGNOSIS-CONTROL",
+  "policy_id": "m04-control-test-diagnosis-kimi-k3-v2",
+  "policy_revision": "v1",
+  "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "request": {
+    "actor": "lucas",
+    "attempts": 1,
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "reason": "ASTRA M04D sourced675159 declared matched Kimi diagnosis control on complete native Nemotron primary inputs; no activation or qualification",
+    "scope": {
+      "case_ids": [
+        "assertion-failure",
+        "passing-control"
+      ],
+      "kind": "diagnostic",
+      "reference_evaluation_id": "infeval_01a082a36f5f78d3a8f4a2b84fb22a54"
+    }
+  },
+  "request_hash": "sha256:7dea7e05f1e0933b503c07003a3ade43263b75e601515d431053ee2a07beca36",
+  "schema_version": 1,
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "state": "dispatched",
+  "updated_at": "2026-09-08T20:12:23.110134+00:00"
+}

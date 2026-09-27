@@ -17,6 +17,7 @@ pub(super) fn validate_planner(
         "steps",
         "assumptions",
         "risks",
+        "readiness",
     ];
     let shape = document
         .as_object()
@@ -40,6 +41,16 @@ pub(super) fn validate_planner(
     if !shape {
         violations.push("work_plan_schema_mismatch".into());
         return false;
+    }
+    match pharness_core::PlannerReadiness::from_document(document, true) {
+        Ok(Some(readiness)) => {
+            if serde_json::to_value(readiness.status).expect("readiness status")
+                != fixture.expected["measurement"]["readiness"]
+            {
+                violations.push("planner_readiness_misclassified".into());
+            }
+        }
+        _ => violations.push("planner_readiness_schema_mismatch".into()),
     }
     let Some(steps) = document["steps"]
         .as_array()
@@ -308,6 +319,7 @@ pub(super) fn failure_class(document: Option<&Value>, violations: &[String]) -> 
                 | "test_failure_misclassified"
                 | "passing_control_proposes_repair"
                 | "verification_reasoning_inconsistent"
+                | "planner_readiness_misclassified"
         )
     }) {
         return "stage_judgment";

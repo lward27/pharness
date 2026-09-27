@@ -2,7 +2,7 @@
 
 Status: living design
 
-Last decision round: 2026-09-04
+Last decision round: 2026-09-08
 
 Upstream authority:
 [`product-vision-and-boundaries.md`](product-vision-and-boundaries.md)
@@ -19,8 +19,11 @@ Within hosted release, one real build feeds distinct staging and production
 deployment records. Each retains its GitOps change, Release and registry evidence;
 promotion does not create a fictitious second build. A coding-run reference may
 be absent when the durable workflow operation owns delivery. The required source,
-build, approval and runtime chain still applies. The schema-54 reader is prepared
-but not deployed; see the [delivery-record compatibility evidence](../evidence/autonomous-sdlc/ASTRA-M08-DELIVERY-RECORD-COMPATIBILITY.md).
+build, approval and runtime chain still applies. The compatible delivery-record
+reader is deployed and the current database is schema55; see the
+[reader compatibility evidence](../evidence/autonomous-sdlc/ASTRA-M08-DELIVERY-RECORD-COMPATIBILITY.md)
+and [schema55 live release evidence](../evidence/autonomous-sdlc/ASTRA-M04-DIAGNOSTIC-LIVE-RELEASE.md).
+This does not accept automatic staging or production delivery.
 
 Normalized caveats must retain submitted risks/contradictions. Agent claims are not
 verified facts, and unresolved contradictions cannot be sealed as unconditional success.
@@ -29,6 +32,27 @@ the requested change succeeded. These are M03/M05/M08/M09 requirements, not a cl
 all current normalization and release paths already satisfy them.
 
 ## Purpose
+
+The [Planner decision correction](../evidence/autonomous-sdlc/ASTRA-M04-PLANNER-DECISION-BOUNDARY.md)
+separates a structurally valid proposal from authority to implement it. New Planner
+Runs save `pharness.dev/planner-agent-submission/v1` and require
+`readiness: {status: ready | needs_decision, blockers: [...]}`. Ready requires an
+empty blocker list; needs_decision requires at least one concrete blocker. Invalid
+or missing new-contract readiness fails the submission. A valid decision-required
+proposal is retained with a blocked stage outcome and its blockers; residual risks
+also survive normalization. The original submission remains an agent claim.
+
+Hosted automatic approval, the start of implementation, and ChangeSet approval
+require an explicitly ready current plan. Missing historical readiness is never
+inferred ready. Historical source-only submissions remain readable under their
+original contract. Resolve a blocking choice through the existing annotation and
+replan process; a new revision preserves the original evidence. Changing an
+unrelated failing regression's expected result is not authorized merely because
+the candidate's acceptance commands must pass. Readiness remains a model claim;
+independent verification and connected-loop qualification are still required.
+
+The correction's linked evidence states its implementation and deployment status;
+its presence in this contract is not a claim of live qualification.
 
 PHarness already persists detailed events, tool results, artifacts, approvals,
 provenance, tests, delivery evidence, and release verification. The missing

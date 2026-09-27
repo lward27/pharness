@@ -1,0 +1,84 @@
+{
+  "observed_at": "2026-09-18T21:36:59.602279+00:00",
+  "registry_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+  "defaults": [
+    {
+      "policy_id": "fireworks-legacy-v1",
+      "revision": "v1",
+      "eligible_stages": [
+        "onboarding",
+        "plan",
+        "implement",
+        "test",
+        "verify"
+      ],
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k2p6"
+      }
+    },
+    {
+      "policy_id": "tester-kimi-k2p6-low-v1",
+      "revision": "v1",
+      "eligible_stages": [
+        "test"
+      ],
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k2p6"
+      }
+    },
+    {
+      "policy_id": "verifier-kimi-k2p6-high-v1",
+      "revision": "v1",
+      "eligible_stages": [
+        "verify"
+      ],
+      "target": {
+        "revision": "v1",
+        "target_id": "fireworks-kimi-k2p6"
+      }
+    }
+  ],
+  "policy": {
+    "context_assembly_limit": 57344,
+    "display_name": "M04 local diagnostic: planner / GPT-OSS 120B",
+    "eligible_profiles": [
+      "repo-planner"
+    ],
+    "eligible_stages": [
+      "plan"
+    ],
+    "is_default": false,
+    "latest_evaluation": null,
+    "latest_protocol_verification": null,
+    "latest_qualification": null,
+    "maximum_output_tokens": 8192,
+    "policy_hash": "sha256:3abc815a97f7cf0d07af116ea2f531f6fc819e154f48fe204767b368862fbd53",
+    "policy_id": "m04-local-planner-gpt-oss-120b-v2",
+    "protocol_ready": false,
+    "qualification_contract": {
+      "agent_profile_hash": "sha256:c568ba843a78e1024e1756e35d1c498f6adab31d2c82b8c56ac3a48eed4ea98b",
+      "agent_profile_id": "repo-planner",
+      "suite_id": "planner-v2"
+    },
+    "qualification_status": "not_qualified",
+    "qualified": false,
+    "reasoning": {
+      "context_mode": "provider_default",
+      "expose_replay": true
+    },
+    "reliability_v2_default_for_profiles": [],
+    "revision": "v1",
+    "selectable": true,
+    "target": {
+      "revision": "v1",
+      "target_id": "llama-cpp-gpt-oss-120b-local"
+    },
+    "target_hash": "sha256:fe4bb67d9cf0d147529d76a7bd976b384a59b48728818a9392966a78b9fb2b6a",
+    "temperature": 0.10000000149011612,
+    "tool_choice": "required",
+    "tool_protocol": "native_tools",
+    "transport_retry_attempts": 1
+  }
+}

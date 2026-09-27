@@ -1,0 +1,66 @@
+{
+  "observed_at": "2026-09-08T19:47:39.770524+00:00",
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "status": "matched_complete_valid_diagnostics",
+  "same_model": true,
+  "upstream_model": "accounts/fireworks/models/kimi-k3",
+  "suite_hash": "sha256:dedd37009b6e24c7e6623a4e3431da83d6c2a3a582d1bda00440a3eabe237329",
+  "runs": {
+    "primary": {
+      "evaluation_id": "infeval_01a082838ab4760098d9823b1816aa6d",
+      "policy_id": "planner-kimi-k3-v2",
+      "policy_hash": "sha256:4a1c60f383b23aa64660ce931fb418f81c3448b966ed257d00fb69734e7b8846",
+      "target_id": "fireworks-kimi-k3",
+      "target_revision": "v1",
+      "passes": 2,
+      "results": 2,
+      "prompt_tokens": 48302,
+      "completion_tokens": 5671,
+      "duration_ms": 148365
+    },
+    "control": {
+      "evaluation_id": "infeval_01a0828cb6467b42914d8b613aa20419",
+      "policy_id": "m04-control-planner-kimi-k3-v2",
+      "policy_hash": "sha256:8533d827c84f0205dfdeca679727e10df70856e3142920ee2ef1a7b24a65a1d8",
+      "target_id": "fireworks-kimi-k3",
+      "target_revision": "m04-control-v1",
+      "passes": 2,
+      "results": 2,
+      "prompt_tokens": 44201,
+      "completion_tokens": 4640,
+      "duration_ms": 105143
+    }
+  },
+  "identical_retained_cases": [
+    {
+      "case_id": "acceptance-boundary",
+      "source_sha": "51979d84ab7681e0abd563e74e1416628653f2c9",
+      "workspace_hash": "sha256:5e8d78a8069f1388b84e0c7a627ae81438a2dd192f18561620881c705d1f7091",
+      "primary_passed": true,
+      "control_passed": true,
+      "measurement_input_hash": "sha256:0106c797f93def0d29b560787dfa655ec8f16c386ae6fd1ff15438dd8be430a3",
+      "initial_context_hash": "sha256:1e0dd23d1c0977b18eb7ec54df3ac535126d30933d5e8a463411f622d2b592a0"
+    },
+    {
+      "case_id": "failing-baseline",
+      "source_sha": "f23225382faa7aeb3a961fb016042d898898b9fa",
+      "workspace_hash": "sha256:87af798add24bffb0ea76b093948342bf99ab43a31f023a799a56e332a8b1eec",
+      "primary_passed": true,
+      "control_passed": true,
+      "measurement_input_hash": "sha256:77eda53d3655867707f1bdab10e32053ae6d1c8de4c2c450a5e540269673059c",
+      "initial_context_hash": "sha256:8ab9732c1fc38dea918067917c74c98b7f1849a29017fb8b21b779f10e47b9d5"
+    }
+  ],
+  "qualification": null,
+  "limits_or_defaults_changed": false,
+  "limitations": [
+    "Two cases establish bounded same-model repeatability, not full Planner qualification or a cross-model quality ranking.",
+    "Planning does not prove code, tests, delivery or runtime behavior.",
+    "Both baseline plans carry unresolved choices. The control recommends weakening the existing /legacy assertion to current behavior. Native structured 2/2 does not establish semantic safety, authorize that change, or prove the controller blocks it."
+  ],
+  "independent_review": {
+    "safe_for_autonomous_execution": false,
+    "native_scores_changed": false,
+    "implementation_gap": "Planner sealing discards blocker semantics while hosted approval trusts empty sealed contradictions. Requires an explicit decision boundary plus connected-loop proof."
+  }
+}

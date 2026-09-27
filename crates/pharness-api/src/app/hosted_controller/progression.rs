@@ -54,7 +54,7 @@ pub(super) async fn advance(
         require_authority(snapshot, permission)?;
         if matches!(
             action.id.as_str(),
-            "approve_work_plan" | "approve_change_set"
+            "approve_work_plan" | "approve_change_set" | "authorize_stage_chain"
         ) {
             super::approval::validate(state, &claim.work_item_id, &action.id, &action.resource)
                 .await?;
@@ -149,7 +149,11 @@ pub(super) async fn advance(
             now(),
         )
         .await?;
-    let refs = json!({"action_resource":resource,"before_run_ids":snapshot.runs.iter().map(|r| r.id.as_str()).collect::<Vec<_>>()});
+    let mut refs = json!({"action_resource":resource,"before_run_ids":snapshot.runs.iter().map(|r| r.id.as_str()).collect::<Vec<_>>()});
+    if action == "start_planner" {
+        refs["planner_startup"] =
+            json!(super::super::repo_mode::PlannerStartupIdentity::for_operation(&id)?);
+    }
     execute_operation(state, claim, snapshot, operation, refs).await
 }
 

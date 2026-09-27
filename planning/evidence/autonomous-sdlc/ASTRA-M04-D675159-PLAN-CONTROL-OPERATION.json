@@ -1,0 +1,160 @@
+{
+  "context": "lucas_engineering",
+  "created_at": "2026-09-08T19:44:14.862400+00:00",
+  "dispatch_result": {
+    "actor": "lucas",
+    "agent_profile_hash": "sha256:87e9fbe9130b0dfe2180af2a5c64b3952cf4924b3e7a548fb77aebd605b11d82",
+    "agent_profile_id": "repo-planner",
+    "attempts": 1,
+    "binding_hash": "sha256:13ca74cd5c0c61696c351651a526d2073ec1d0b7a2a12dd82f2a8da293df14b4",
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "created_at": "1788896654918",
+    "failure": null,
+    "finished_at": null,
+    "id": "infeval_01a0828cb6467b42914d8b613aa20419",
+    "job_name": "pharness-inference-eval-f4cbfd5f420b",
+    "policy_hash": "sha256:8533d827c84f0205dfdeca679727e10df70856e3142920ee2ef1a7b24a65a1d8",
+    "policy_id": "m04-control-planner-kimi-k3-v2",
+    "policy_revision": "v1",
+    "qualification_id": null,
+    "reason": "ASTRA M04D d675159 matched Planner Kimi control on the complete verified primary inputs; native primary 2/2, unchanged limits, same-model repeatability diagnostic only",
+    "report": null,
+    "report_hash": null,
+    "resolved_binding": {
+      "agent_profile_hash": "sha256:87e9fbe9130b0dfe2180af2a5c64b3952cf4924b3e7a548fb77aebd605b11d82",
+      "base_agent_profile_hash": "sha256:ed492f67f083e1b70a156f9a0ef85788b2637875ac167f0753596533fe148e2f",
+      "binding_hash": "sha256:13ca74cd5c0c61696c351651a526d2073ec1d0b7a2a12dd82f2a8da293df14b4",
+      "context_policy_hash": "sha256:543825bff7978876745c2e56c279905a549db5fe711589f44e9556222386e416",
+      "policy": {
+        "display_name": "M04 diagnostic control: planner / Kimi K3",
+        "eligible_profiles": [
+          "repo-planner"
+        ],
+        "eligible_stages": [
+          "plan"
+        ],
+        "max_input_tokens": 65536,
+        "max_output_tokens": 8192,
+        "policy_hash": "sha256:8533d827c84f0205dfdeca679727e10df70856e3142920ee2ef1a7b24a65a1d8",
+        "policy_id": "m04-control-planner-kimi-k3-v2",
+        "reasoning": {
+          "context_mode": "current_turn",
+          "effort": "high",
+          "expose_replay": true
+        },
+        "revision": "v1",
+        "schema_version": "pharness.dev/stage-inference-policy/v1alpha1",
+        "selectable": true,
+        "target": {
+          "revision": "m04-control-v1",
+          "target_id": "fireworks-kimi-k3"
+        },
+        "target_hash": "sha256:c12fe0955c69e6d7d94b724751285e042f04b16a202909e61588cbbb9030498a",
+        "temperature_milli": 100,
+        "tool_choice": "auto",
+        "tool_protocol": "native_tools",
+        "transport_max_attempts": 3
+      },
+      "profile_budget_hash": "sha256:1c042896d270608353172b19fef3dd9cbf90830574608cfd5919973d36a2c48a",
+      "prompt_version": "2026-09-05.1",
+      "protocol_calibration_hash": "sha256:74d7f8e82a93a2997695367c67481926f07335220ef02b606cd26babe201c711",
+      "schema_version": "pharness.dev/resolved-inference-binding/v1alpha1",
+      "stage_prompt": {
+        "content_hash": "sha256:63e197b033013a6a9b5004de27327536fb094090d04574570c5de91ee3fee1f0",
+        "prompt_id": "repo-planner-v2",
+        "revision": "2026-09-05.1",
+        "schema_version": "pharness.dev/stage-prompt/v1alpha1",
+        "stage": "plan"
+      },
+      "target": {
+        "allowed_stages": [
+          "onboarding",
+          "plan",
+          "test",
+          "verify"
+        ],
+        "authentication_binding": "fireworks-api-key",
+        "backend_kind": "fireworks",
+        "capabilities": {
+          "json_schema": false,
+          "native_tools": true,
+          "reasoning_context_modes": [
+            "current_turn",
+            "all_turns"
+          ],
+          "reasoning_efforts": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "stream_options": true,
+          "streaming": true,
+          "tool_choice_modes": [
+            "auto",
+            "required"
+          ]
+        },
+        "config_hash": "sha256:c12fe0955c69e6d7d94b724751285e042f04b16a202909e61588cbbb9030498a",
+        "context_limit_tokens": 1048576,
+        "display_name": "M04 diagnostic control Kimi K3",
+        "output_limit_tokens": 16384,
+        "protocol": "openai_chat_completions_v1",
+        "revision": "m04-control-v1",
+        "schema_version": "pharness.dev/inference-target/v1alpha1",
+        "selectable": true,
+        "target_id": "fireworks-kimi-k3",
+        "transport": {
+          "allow_insecure_private_http": false,
+          "connect_timeout_seconds": 5,
+          "first_response_timeout_seconds": 300,
+          "max_attempts": 3,
+          "stream_idle_timeout_seconds": 120
+        },
+        "upstream_base_url": "https://api.fireworks.ai/inference/v1/",
+        "upstream_model": "accounts/fireworks/models/kimi-k3"
+      },
+      "tool_schema_hash": "sha256:4047990513876d9842fa3c46ebbf9b2ef9b6c558cbb0d35a08d5e13e5dfb2429"
+    },
+    "runtime_revision": "d675159cb205d222616d253d311706be1889bb91",
+    "scope": {
+      "case_ids": [
+        "acceptance-boundary",
+        "failing-baseline"
+      ],
+      "kind": "diagnostic",
+      "reference_evaluation_id": "infeval_01a082838ab4760098d9823b1816aa6d"
+    },
+    "started_at": "1788896655236",
+    "status": "running",
+    "suite_hash": "sha256:dedd37009b6e24c7e6623a4e3431da83d6c2a3a582d1bda00440a3eabe237329",
+    "suite_id": "planner-v2",
+    "target_hash": "sha256:c12fe0955c69e6d7d94b724751285e042f04b16a202909e61588cbbb9030498a",
+    "target_id": "fireworks-kimi-k3",
+    "target_revision": "m04-control-v1"
+  },
+  "evaluation_id": "infeval_01a0828cb6467b42914d8b613aa20419",
+  "kind": "pharness_evaluation",
+  "operation_id": "ASTRA-M04-D675159-PLAN-CONTROL",
+  "policy_id": "m04-control-planner-kimi-k3-v2",
+  "policy_revision": "v1",
+  "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "request": {
+    "actor": "lucas",
+    "attempts": 1,
+    "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+    "reason": "ASTRA M04D d675159 matched Planner Kimi control on the complete verified primary inputs; native primary 2/2, unchanged limits, same-model repeatability diagnostic only",
+    "scope": {
+      "case_ids": [
+        "acceptance-boundary",
+        "failing-baseline"
+      ],
+      "kind": "diagnostic",
+      "reference_evaluation_id": "infeval_01a082838ab4760098d9823b1816aa6d"
+    }
+  },
+  "request_hash": "sha256:d2ee61b4ac2c761b2935cf9d683bd115f0f4508e28b32b45b079917918a2a727",
+  "schema_version": 1,
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "state": "dispatched",
+  "updated_at": "2026-09-08T19:44:15.237178+00:00"
+}

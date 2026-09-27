@@ -1,0 +1,340 @@
+{
+  "cluster": {
+    "api_server": "https://192.168.20.192:6443",
+    "context": "lucas_engineering",
+    "profile_hash": "sha256:c90563518a5d1ed84f7b20879c4d6ce45f9391a81b6dc9f81b9c04e42e601708"
+  },
+  "limitations": [
+    "A successful Mac probe is not proof of the BuildKit container path or absence of intermittent failures.",
+    "Signed upload URLs and query values are withheld; complete logs were not copied into this report."
+  ],
+  "mutations": [],
+  "observed_at": "2026-09-08T18:47:02.660762+00:00",
+  "pods": [
+    {
+      "bounded_log_sha256": "sha256:9420ba04a004204347676e81868ada1f757f6b65c0e886b81f0a901a95620696",
+      "containers": [
+        {
+          "name": "docker-registry",
+          "ready": true,
+          "restartCount": 0,
+          "state": {
+            "running": {
+              "startedAt": "2026-09-05T09:43:47Z"
+            }
+          }
+        }
+      ],
+      "error_count": 202,
+      "error_lines": [
+        {
+          "timestamp": "2026-09-08T18:44:53.365964435Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:191a889775082868a982b6804e1d464b8e74ba4ffd69c7d46e53db2bf094573e"
+        },
+        {
+          "timestamp": "2026-09-08T18:44:58.365958654Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:8b09e54b6bb56d4529ebd4a43b4e8f39daa3236f9a08f46966d660cf3d934369"
+        },
+        {
+          "timestamp": "2026-09-08T18:45:01.278568528Z",
+          "categories": [
+            "blob unknown"
+          ],
+          "http_statuses": [
+            "404"
+          ],
+          "line_sha256": "sha256:3c90903f17bb351945d979aee296b95d564c2bbe7a94d84aa5abe73c6ded918f"
+        },
+        {
+          "timestamp": "2026-09-08T18:45:03.368228679Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:9639d49e23c3d733392c4bc31eed5594eac70b51c8fc9723697b4ad79a21a98a"
+        },
+        {
+          "timestamp": "2026-09-08T18:45:08.369195626Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:1d7433072aa32ffcd80a246707e9a8f23463ac4488ba7b6234da3b2176291b72"
+        },
+        {
+          "timestamp": "2026-09-08T18:45:13.370636795Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:8b2a36ac0d9bbd08a7e314f678f1f8f8aa738e04fdb3ceb94d52773ee9f2d5fa"
+        },
+        {
+          "timestamp": "2026-09-08T18:45:18.371430141Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:4229706ae4757ee32b4c1bd82fe7cb7a11ec8d8b57ffa4666f59b82132c66390"
+        },
+        {
+          "timestamp": "2026-09-08T18:45:23.376182965Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:5255149a18ab6a56e3e9daff472b5825e837001c63989928a834e6811224fdf9"
+        },
+        {
+          "timestamp": "2026-09-08T18:45:28.377217175Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:ef66f41c794a765a089fa05bcb21364d8f9e470cedb9201caf55e91945073923"
+        },
+        {
+          "timestamp": "2026-09-08T18:45:33.377501825Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:25081666f28f8c2e0bb4376f7b58196ea5a22f801c465c14744cc2082298703d"
+        },
+        {
+          "timestamp": "2026-09-08T18:45:38.378456323Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:0d757c3ebdecae51581a200a6c32ea44d181f9b84e5fb0aaaf77a0819bbd57c3"
+        },
+        {
+          "timestamp": "2026-09-08T18:45:43.379082145Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:c0cda56eaa1e7db2883b74fdf923ddc040eb097e2cdcac23bd61ac2b37e3e88d"
+        },
+        {
+          "timestamp": "2026-09-08T18:45:48.379505759Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:961ad8bf2d097bb94beffb9c2091aa49655002e7a49f502a6f9be76eca3eda04"
+        },
+        {
+          "timestamp": "2026-09-08T18:45:53.383733722Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:1e02957f5cdf0ef83977ae402f75c743de8b41d5082e336291ce1ea4b6daccb1"
+        },
+        {
+          "timestamp": "2026-09-08T18:45:58.422820973Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:351610dd8662e10fbeec8c86cac08c3de382b99b0f8649bb42de5c37ea341e5b"
+        },
+        {
+          "timestamp": "2026-09-08T18:46:03.387590629Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:d2ba8e5501cdcd162eb7adcb1f9ff266b2a575f9efca00b9bd8c517223cd7b30"
+        },
+        {
+          "timestamp": "2026-09-08T18:46:04.336211610Z",
+          "categories": [],
+          "http_statuses": [
+            "404"
+          ],
+          "line_sha256": "sha256:f573959c851f611a2a9abfda325006c65b0652f1cb5f9568ffd08315b47eafe8"
+        },
+        {
+          "timestamp": "2026-09-08T18:46:08.388587468Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:a07c3f4661aadb72b84c8fa9615c4b1d509ddb355b8863c5db380256177343b5"
+        },
+        {
+          "timestamp": "2026-09-08T18:46:13.393025339Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:0dc0f05a93d806120407fa2bb258695a8ce3c89abc437a0e0ef8a6791c151f09"
+        },
+        {
+          "timestamp": "2026-09-08T18:46:18.393925645Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:db7250f3cce980cc98906591f1a4932845728e66069b9707ca430bdfff20c07e"
+        },
+        {
+          "timestamp": "2026-09-08T18:46:23.395834659Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:50b61404102c23e82ec72e071685f40cf3a12f4b74dec5afb7a58a8d6ef62b4b"
+        },
+        {
+          "timestamp": "2026-09-08T18:46:28.396478635Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:f33eecbf50381bafd212db8b8668e61480318260cb1f0e7990f5d0058b8a1670"
+        },
+        {
+          "timestamp": "2026-09-08T18:46:31.295987119Z",
+          "categories": [
+            "blob unknown"
+          ],
+          "http_statuses": [
+            "404"
+          ],
+          "line_sha256": "sha256:1add6e25be8444a24d46b996c7523ff1b6226988eaab95a648b8e0f8022e3861"
+        },
+        {
+          "timestamp": "2026-09-08T18:46:31.297260499Z",
+          "categories": [
+            "blob unknown"
+          ],
+          "http_statuses": [
+            "404"
+          ],
+          "line_sha256": "sha256:4d7b5d7e20acb8d326bb404a5a0f4f74033664802ec342a9d42ba2567f664b75"
+        },
+        {
+          "timestamp": "2026-09-08T18:46:33.398407889Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:0c41efb3d8126bbee7d6a020520fe3bd15568e44b8646d4a6338d26093a268e7"
+        },
+        {
+          "timestamp": "2026-09-08T18:46:38.398989715Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:a3afbb4468146c45f8ec5bcdc1e9150d351a6fab69cd3e927bc3abd11b7aef3f"
+        },
+        {
+          "timestamp": "2026-09-08T18:46:43.399222926Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:ae5f180d5ef4aa5921af8f2c7653b413ae7f8b7134a518cb1111d24c27616fc6"
+        },
+        {
+          "timestamp": "2026-09-08T18:46:48.400255906Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:fd506b6b497a6c0f1f4858ad24554cbfb3058c0e8baaaaa94107cdcca2dba36d"
+        },
+        {
+          "timestamp": "2026-09-08T18:46:53.401656154Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:47ef57de901fa55c2480d8c5a42878435e9b299bc1f56a462e8e76012d65f17b"
+        },
+        {
+          "timestamp": "2026-09-08T18:46:58.402028158Z",
+          "categories": [],
+          "http_statuses": [],
+          "line_sha256": "sha256:7570accc7d459d13669775a02e0eea23d00db0b6a2e0dc64fa7b496fc7622219"
+        }
+      ],
+      "name": "docker-registry-5dd7cb8849-gc89j",
+      "node": "ubuntu-lucas-engineering",
+      "phase": "Running",
+      "pod_ip": "10.42.0.165",
+      "uid": "2a17ac85-8614-485e-bc52-9f6744dcb476"
+    },
+    {
+      "bounded_log_sha256": "sha256:e5205aefa7a031408768b4ecb8310611c8e4b7ed6d4be846234737063c66f251",
+      "containers": [
+        {
+          "name": "nginx",
+          "ready": true,
+          "restartCount": 0,
+          "state": {
+            "running": {
+              "startedAt": "2026-09-04T15:40:16Z"
+            }
+          }
+        }
+      ],
+      "error_count": 0,
+      "error_lines": [],
+      "name": "registry-write-gateway-c4c9c8b6c-87p9z",
+      "node": "ubuntu-lucas-engineering",
+      "phase": "Running",
+      "pod_ip": "10.42.0.249",
+      "uid": "b3c4ba43-1165-4390-80a3-1c7c7cb4d7f0"
+    },
+    {
+      "bounded_log_sha256": "sha256:fd9fc6b1c21b63c42b9a75b109d3e4f6c56fe632a76d54e6da3eb87452cdce56",
+      "containers": [
+        {
+          "name": "nginx",
+          "ready": true,
+          "restartCount": 0,
+          "state": {
+            "running": {
+              "startedAt": "2026-08-23T19:36:58Z"
+            }
+          }
+        }
+      ],
+      "error_count": 0,
+      "error_lines": [],
+      "name": "registry-write-gateway-c4c9c8b6c-qgqrg",
+      "node": "ubuntu-lucas-engineering-2",
+      "phase": "Running",
+      "pod_ip": "10.42.1.133",
+      "uid": "1dc55e2b-83db-40d8-a74a-52cb3c507865"
+    }
+  ],
+  "scope": "registry transport observation during original build; read-only",
+  "services": [
+    {
+      "external_traffic_policy": null,
+      "name": "docker-registry",
+      "ports": [
+        {
+          "name": "http-5000",
+          "port": 5000,
+          "protocol": "TCP",
+          "targetPort": 5000
+        }
+      ],
+      "selector": {
+        "app": "docker-registry",
+        "release": "docker-registry"
+      },
+      "type": "ClusterIP"
+    },
+    {
+      "external_traffic_policy": "Local",
+      "name": "registry-write-gateway",
+      "ports": [
+        {
+          "name": "ingress",
+          "nodePort": 30793,
+          "port": 8080,
+          "protocol": "TCP",
+          "targetPort": "ingress"
+        },
+        {
+          "name": "internal-tls",
+          "nodePort": 32443,
+          "port": 8443,
+          "protocol": "TCP",
+          "targetPort": "internal-tls"
+        }
+      ],
+      "selector": {
+        "app.kubernetes.io/name": "registry-write-gateway"
+      },
+      "type": "NodePort"
+    }
+  ],
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "top_pods": "NAME                                     CPU(cores)   MEMORY(bytes)   \ndocker-registry-5dd7cb8849-gc89j         3m           60Mi            \nregistry-write-gateway-c4c9c8b6c-87p9z   1m           8Mi             \nregistry-write-gateway-c4c9c8b6c-qgqrg   152m         11Mi",
+  "verified_tls_mac_probes": [
+    {
+      "error": "",
+      "exit_code": 0,
+      "http_connect_tls_total": "200 0.005043 0.032230 0.125499"
+    },
+    {
+      "error": "",
+      "exit_code": 0,
+      "http_connect_tls_total": "200 0.005332 0.091318 0.189879"
+    },
+    {
+      "error": "",
+      "exit_code": 0,
+      "http_connect_tls_total": "200 0.007308 0.090699 0.193265"
+    }
+  ],
+  "log_redaction": "Structured categories only; all request URIs, query values and free-form error messages withheld."
+}

@@ -1,0 +1,49 @@
+{
+  "observed_at": "2026-09-18T21:36:59.611562+00:00",
+  "registry_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+  "gateway": {
+    "api_registry_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+    "blocker": null,
+    "direct_fireworks_enabled": true,
+    "gateway_registry_hash": "sha256:a2850180384d782b9aa8fa0bc4aa811983c834281a0d263231ea4d3d18c49e3a",
+    "registry_aligned": true,
+    "status": "available"
+  },
+  "target": {
+    "allowed_stages": [
+      "plan"
+    ],
+    "authentication_configured": true,
+    "backend_kind": "llama_cpp",
+    "capabilities": {
+      "json_schema": false,
+      "native_tools": true,
+      "reasoning_context_modes": [],
+      "reasoning_efforts": [],
+      "stream_options": true,
+      "streaming": true,
+      "tool_choice_modes": [
+        "auto",
+        "required"
+      ]
+    },
+    "config_hash": "sha256:fe4bb67d9cf0d147529d76a7bd976b384a59b48728818a9392966a78b9fb2b6a",
+    "context_limit_tokens": 65536,
+    "display_name": "Local GPT-OSS 120B on Minisforum",
+    "latest_verification": null,
+    "output_limit_tokens": 8192,
+    "protocol": "openai_chat_completions_v1",
+    "revision": "v1",
+    "selectable": true,
+    "target_id": "llama-cpp-gpt-oss-120b-local",
+    "transport": {
+      "connect_timeout_seconds": 5,
+      "first_response_timeout_seconds": 300,
+      "max_attempts": 1,
+      "private_network": true,
+      "scheme": "http",
+      "stream_idle_timeout_seconds": 120
+    },
+    "upstream_model": "gpt-oss-120b-local"
+  }
+}

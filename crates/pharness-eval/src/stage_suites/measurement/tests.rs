@@ -111,11 +111,16 @@ fn retained_planner_failure_exposes_the_selection_mismatch_without_rescoring_his
         .into_iter()
         .find(|f| f.id == "failing-baseline")
         .unwrap();
-    assert!(integrity::validate_planner(
+    let mut current_violations = Vec::new();
+    assert!(!integrity::validate_planner(
         &fixture,
         document,
-        &mut Vec::new()
+        &mut current_violations
     ));
+    assert_eq!(
+        current_violations,
+        vec!["planner_readiness_schema_mismatch"]
+    );
     // Isolate the old selected-name restriction. The native report above stays
     // failed; this tests structured validation, not its subjective plan quality.
     let mut old_selection = fixture.clone();
@@ -126,7 +131,13 @@ fn retained_planner_failure_exposes_the_selection_mismatch_without_rescoring_his
         document,
         &mut violations
     ));
-    assert_eq!(violations, vec!["undeclared_command_or_path"]);
+    assert_eq!(
+        violations,
+        vec![
+            "planner_readiness_schema_mismatch",
+            "undeclared_command_or_path"
+        ]
+    );
 }
 
 #[test]

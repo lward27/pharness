@@ -18,6 +18,9 @@ async fn main() -> anyhow::Result<()> {
 
     let config = ApiRuntimeConfig::load_from_env()?;
     let bind = config.api.bind;
+    let operator_tokens =
+        parse_operator_tokens(std::env::var("PHARNESS_OPERATOR_TOKENS").ok().as_deref())?;
+    validate_operator_auth_configuration(bind, &operator_tokens)?;
     let db_path = config.storage.path.clone();
     let cluster_tools = config.cluster_tools();
     let policy = config.policy.clone();
@@ -123,8 +126,6 @@ async fn main() -> anyhow::Result<()> {
     if worker_token.is_some() {
         tracing::info!("worker ingest routes enabled");
     }
-    let operator_tokens =
-        parse_operator_tokens(std::env::var("PHARNESS_OPERATOR_TOKENS").ok().as_deref())?;
     if !operator_tokens.is_empty() {
         tracing::info!(
             operators = operator_tokens.len(),
@@ -152,6 +153,18 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(%bind, "pharness-api listening");
 
     axum::serve(listener, app).await?;
+    Ok(())
+}
+
+fn validate_operator_auth_configuration(
+    bind: std::net::SocketAddr,
+    operator_tokens: &[(String, String)],
+) -> anyhow::Result<()> {
+    if !bind.ip().is_loopback() && operator_tokens.is_empty() {
+        anyhow::bail!(
+            "PHARNESS_OPERATOR_TOKENS must contain at least one token when PHARNESS_BIND is not loopback"
+        );
+    }
     Ok(())
 }
 
@@ -278,4 +291,24 @@ fn init_tracing() -> anyhow::Result<()> {
         .compact()
         .try_init()
         .map_err(|error| anyhow::anyhow!("failed to initialize tracing: {error}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_operator_auth_configuration;
+    use std::net::SocketAddr;
+
+    #[test]
+    fn operator_tokens_are_required_for_non_loopback_binds() {
+        let public_bind: SocketAddr = "0.0.0.0:4777".parse().unwrap();
+        assert!(validate_operator_auth_configuration(public_bind, &[]).is_err());
+
+        let loopback_bind: SocketAddr = "127.0.0.1:4777".parse().unwrap();
+        assert!(validate_operator_auth_configuration(loopback_bind, &[]).is_ok());
+        assert!(validate_operator_auth_configuration(
+            public_bind,
+            &[("operator".into(), "token".into())],
+        )
+        .is_ok());
+    }
 }

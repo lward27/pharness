@@ -13,6 +13,46 @@ pub(super) fn ensure_repo_mode_enabled(state: &AppState) -> Result<(), ApiError>
     }
 }
 
+pub(in crate::app) fn readiness_mismatch_summary(code: &str) -> &'static str {
+    match code {
+        "assessment_missing" => {
+            "no immutable readiness assessment exists for the exact source commit"
+        }
+        "canonical_contract_version_missing" => {
+            "the exact source commit no longer has a canonical RepositoryContract version"
+        }
+        "canonical_contract_invalid" => {
+            "the stored canonical RepositoryContract cannot be interpreted by this release"
+        }
+        "assessment_not_ready" => {
+            "the immutable assessment did not prove both contract and coding readiness"
+        }
+        "contract_or_policy_tuple_changed" => {
+            "the contract, dependency lock, or validation-policy tuple changed"
+        }
+        "environment_profile_unavailable" => {
+            "the contract-selected EnvironmentProfile is unavailable for this repository"
+        }
+        "environment_profile_contract_mismatch" => {
+            "the RepositoryContract is incompatible with its selected EnvironmentProfile"
+        }
+        "environment_profile_tuple_changed" => {
+            "the EnvironmentProfile revision or immutable runner digest changed"
+        }
+        "assessment_expired" => "the immutable readiness assessment expired",
+        "source_reader_evidence_stale" => {
+            "the bound isolated source-reader verification is missing, expired, or superseded"
+        }
+        "runner_profile_evidence_stale" => {
+            "the bound isolated runner-profile verification is missing, expired, or superseded"
+        }
+        "readiness_input_hash_mismatch" => {
+            "the recomputed readiness input hash does not match the immutable assessment"
+        }
+        _ => "the immutable readiness assessment no longer matches current controller inputs",
+    }
+}
+
 pub(in crate::app) async fn current_readiness_mismatches(
     state: &AppState,
     repository: &pharness_store::StoredRepository,

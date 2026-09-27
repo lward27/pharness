@@ -1,0 +1,55 @@
+{
+  "declared_at": "2026-09-08T18:43:53.197586+00:00",
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "registry_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "execution": "serial",
+  "release_gate": "All seven images and native bundle from this source; exact live identities; full passing 600-second service window before protocol or semantic dispatch.",
+  "steps": [
+    {
+      "stage": "plan",
+      "primary_policy": "planner-kimi-k3-v2",
+      "control_policy": "m04-control-planner-kimi-k3-v2",
+      "policy_revision": "v1",
+      "case_ids": [
+        "acceptance-boundary",
+        "failing-baseline"
+      ],
+      "attempts": 1,
+      "primary_request": "ASTRA-M04-D675159-PLAN-PRIMARY-REQUEST.json",
+      "control_requirement": "Create only after inspecting the terminal primary for complete valid retained inputs; reference its actual evaluation ID. Recheck exact control policy protocol before dispatch."
+    },
+    {
+      "stage": "verify",
+      "primary_policy": "verifier-glm-5p3-v2",
+      "control_policy": "m04-control-verifier-kimi-k3-v2",
+      "policy_revision": "v1",
+      "case_ids": [
+        "wrong-endpoint-path",
+        "valid-implementation-a",
+        "frontend-semantic-mismatch"
+      ],
+      "attempts": 1,
+      "primary_request": "ASTRA-M04-D675159-VERIFY-PRIMARY-REQUEST.json",
+      "control_requirement": "Create only after inspecting the terminal primary for complete valid retained inputs; reference its actual evaluation ID. Recheck exact control policy protocol before dispatch."
+    },
+    {
+      "stage": "test-diagnosis",
+      "primary_policy": "test-diagnosis-nemotron-v2",
+      "control_policy": "m04-control-test-diagnosis-kimi-k3-v2",
+      "policy_revision": "v1",
+      "case_ids": [
+        "assertion-failure",
+        "passing-control"
+      ],
+      "attempts": 1,
+      "primary_request": "ASTRA-M04-D675159-TEST-DIAGNOSIS-PRIMARY-REQUEST.json",
+      "control_requirement": "Create only after inspecting the terminal primary for complete valid retained inputs; reference its actual evaluation ID. Recheck exact control policy protocol before dispatch."
+    }
+  ],
+  "protocol_requirement": "Fresh 30/30 native receipt for the exact policy, target, registry and current API runtime. Historical unbound receipts cannot satisfy this gate.",
+  "onboarding": "Prior same-runtime e508 pair is retained as diagnostic evidence only; not rerun in this affected-input sequence and cannot qualify this later runtime.",
+  "diagnosis": "Prior first-response timeout remains unresolved; a fresh exact-policy check after this release may revalidate it. No semantic dispatch after a failed prerequisite.",
+  "failure_handling": "Inspect the first boundary failure. Do not redispatch uncertain operations, rescore old evidence, raise limits, change models, or treat controls as fallback/activation.",
+  "qualification": null,
+  "finance_production_approval": false
+}

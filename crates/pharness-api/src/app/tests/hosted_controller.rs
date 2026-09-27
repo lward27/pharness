@@ -265,6 +265,8 @@ async fn planner_fixture(
     let run = store.create_run(CreateRun {
         id:RunId::new(id), session_id:session, user_task:"Bounded planner fixture".into(), cwd:"/workspace".into(), max_turns:10, initial_status:if sealed { "completed" } else { "running" }.into(),
         execution_target_json:json!({"hosted_workflow_policy_hash":metadata.workflow_policy_hash,
+            "planner_submission_contract":pharness_core::PLANNER_SUBMISSION_CONTRACT,
+            "agent_profile":{"id":"repo-planner","version":"v2"},
             "run_scope":{"work_item_id":fixture.work_item_id}, "repo_mode":{"stage_execution_id":stage,"stage":"plan"}}),
     }).await.unwrap();
     store
@@ -301,7 +303,7 @@ async fn planner_fixture(
         .await
         .unwrap()
         .unwrap();
-    let document = json!({"title":"Bounded fixture", "summary":"Preserve existing behavior", "steps":[{"title":"Test", "description":"Run existing checks", "acceptance_names":["unit"]}], "risk_level":"low"});
+    let document = json!({"title":"Bounded fixture", "summary":"Preserve existing behavior", "steps":[{"title":"Test", "description":"Run existing checks", "acceptance_names":["unit"]}], "risk_level":"low", "readiness":{"status":"ready","blockers":[]}});
     let plan = store
         .revise_work_plan(
             &plan.id,
@@ -1229,4 +1231,126 @@ async fn hosted_source_publication_persists_execution_before_uncertain_dispatch(
             .unwrap(),
         intent
     );
+}
+
+#[tokio::test]
+async fn planner_sealing_preserves_decisions_and_prevents_automatic_approval() {
+    use pharness_core::{AgentEvent, EventId, EventKind};
+    use serde_json::json;
+    for (case, readiness, expected) in [
+        (
+            "ready",
+            Some(json!({"status":"ready","blockers":[]})),
+            "succeeded",
+        ),
+        (
+            "needs_decision",
+            Some(
+                json!({"status":"needs_decision","blockers":["The failing legacy regression is outside this request; which behavior is intended?"]}),
+            ),
+            "blocked",
+        ),
+        ("missing", None, "failed"),
+        (
+            "contradictory",
+            Some(json!({"status":"ready","blockers":["Unresolved behavior"]})),
+            "failed",
+        ),
+    ] {
+        let fixture =
+            repo_fixture_with_workflow(&format!("plan_readiness_{case}"), false, true).await;
+        let run = planner_fixture(&fixture, &[], false).await;
+        let store = &fixture.state.store;
+        let mut document = json!({"title":"Keep bounded scope", "summary":"Preserve regressions", "risk_level":"medium",
+            "steps":[{"title":"Implement","description":"Implement the bounded request only", "acceptance_names":["unit"]}],
+            "risks":["Latency remains to be measured"], "assumptions":["Existing regression coverage remains authoritative"]});
+        if let Some(readiness) = readiness {
+            document["readiness"] = readiness;
+        }
+        store.append_event(&AgentEvent {
+            event_id:EventId::new(format!("event_{case}")),session_id:run.session_id.clone(),run_id:run.id.clone(),seq:1,kind:EventKind::ToolFinished,
+            payload:json!({"status":"ok","content":{"structured_submission":true,"kind":"work_plan","document":document}}),
+        }).await.unwrap();
+        let execution_id = format!("stage_recover_{}", fixture.work_item_id);
+        let execution = store
+            .get_stage_execution(&execution_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let mut outcome = pharness_runhost::AttemptOutcome::failed("fixture");
+        outcome.status = "completed".into();
+        outcome.error = None;
+        crate::worker::seal_repo_plan_stage(store, &run, &execution, &outcome)
+            .await
+            .unwrap();
+        let sealed = store
+            .get_stage_outcome_for_execution(&execution_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(sealed.status, expected);
+        assert_eq!(sealed.outcome["status"], expected);
+        let plan = store
+            .get_work_plan_by_work_item(&fixture.work_item_id)
+            .await
+            .unwrap()
+            .unwrap();
+        if matches!(expected, "succeeded" | "blocked") {
+            assert_eq!(plan.work_plan_json, document);
+            assert_eq!(sealed.outcome["risks"], document["risks"]);
+        }
+        if case == "needs_decision" {
+            assert_eq!(
+                sealed.outcome["contradictions"][0]["reason"],
+                document["readiness"]["blockers"][0]
+            );
+            assert_eq!(sealed.outcome["contradictions"][0]["origin"], "agent");
+        }
+        let approval = crate::app::hosted_controller::approval::validate_stored(
+            store,
+            &fixture.work_item_id,
+            "approve_work_plan",
+            &plan.id,
+        )
+        .await;
+        assert_eq!(approval.is_ok(), case == "ready");
+        let implementation = crate::app::hosted_controller::approval::validate_stored(
+            store,
+            &fixture.work_item_id,
+            "authorize_stage_chain",
+            &plan.id,
+        )
+        .await;
+        assert_eq!(implementation.is_ok(), case == "ready");
+        if case != "ready" {
+            for owner in ["api", "replacement-api"] {
+                store
+                    .wake_workflow(
+                        &fixture.work_item_id,
+                        crate::app::clock::current_millis() as i64,
+                    )
+                    .await
+                    .unwrap();
+                crate::app::hosted_controller::reconcile_once(&fixture.state, owner)
+                    .await
+                    .unwrap();
+            }
+            assert_ne!(
+                store.get_work_plan(&plan.id).await.unwrap().unwrap().status,
+                "approved"
+            );
+            assert_eq!(
+                store
+                    .list_runs(pharness_store::RunListFilter {
+                        work_item_id: Some(fixture.work_item_id.clone()),
+                        limit: 200,
+                        ..Default::default()
+                    })
+                    .await
+                    .unwrap()
+                    .len(),
+                1
+            );
+        }
+    }
 }

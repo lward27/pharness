@@ -1,0 +1,14 @@
+{
+  "actor": "lucas",
+  "reason": "ASTRA M04D sourced675159 declared matched Kimi diagnosis control on complete native Nemotron primary inputs; no activation or qualification",
+  "config_hash": "sha256:e05f943fcb3a870c4a3a145ab3b06849a36e8a3c13d262cdd28e49394719bd79",
+  "attempts": 1,
+  "scope": {
+    "kind": "diagnostic",
+    "case_ids": [
+      "assertion-failure",
+      "passing-control"
+    ],
+    "reference_evaluation_id": "infeval_01a082a36f5f78d3a8f4a2b84fb22a54"
+  }
+}

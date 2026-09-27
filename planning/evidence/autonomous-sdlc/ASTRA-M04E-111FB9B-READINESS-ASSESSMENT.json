@@ -1,0 +1,91 @@
+{
+ "assessment": {
+  "assessed_at": "1790110738001",
+  "blockers": [],
+  "checks": [
+   {
+    "key": "exact_checkout",
+    "source_commit": "28e553510b1e0b82e3105c754a7019145829ab55",
+    "status": "passed"
+   },
+   {
+    "contract_version_id": "rcontract_01a04d6d70747c72b259fc43c0ebb81c",
+    "key": "canonical_contract",
+    "status": "passed"
+   },
+   {
+    "key": "environment_preparation",
+    "profile_id": "node-24",
+    "runner_image": "registry.lucas.engineering/pharness-node-runner@sha256:3420493cb3856b99f7a6e2da377e0c928dfb2b53ed584123ca0e2d0f4682b409",
+    "status": "passed"
+   },
+   {
+    "key": "declared_acceptance",
+    "status": "executed"
+   }
+  ],
+  "coding_status": "ready",
+  "content_hash": "sha256:86b1cf593bae0d6394b20e5ab69432698263635932a739164ee2c9e695de9b23",
+  "contract_hash": "sha256:b66426a4896bc5154d0f6f0f58035d0c1dcda5d5ffc378f9f76b38d089bfda04",
+  "contract_status": "ready",
+  "contract_version_id": "rcontract_01a04d6d70747c72b259fc43c0ebb81c",
+  "dependency_lock_hash": "69fa1d48c99dd7f3e335fac9aba6f3adde8858d2f2879b312ba8506a4dc208bb",
+  "environment_profile_id": "node-24",
+  "environment_profile_revision": "111fb9bf651843a3d1a424e8111130ece2c48898",
+  "evidence_refs": [
+   {
+    "hash": "sha256:b66426a4896bc5154d0f6f0f58035d0c1dcda5d5ffc378f9f76b38d089bfda04",
+    "id": "rcontract_01a04d6d70747c72b259fc43c0ebb81c",
+    "kind": "repository_contract_version"
+   },
+   {
+    "id": "sprep_01a0cae956437453bc9813cc96044247",
+    "input_hash": "sha256:b4d739438dd0879e011b3c02ace4084adc3f2289235071f92062e31ef3b422e8",
+    "kind": "subject_environment_preparation"
+   },
+   {
+    "capability": "source_reader",
+    "expires_at": "1790111548582",
+    "id": "capverify_source_reader_1790110648582656520",
+    "kind": "capability_verification"
+   },
+   {
+    "capability": "environment_profile:node-24",
+    "expires_at": "1790111584683",
+    "id": "capverify_environment_profile_node_24_1790110684683634991",
+    "kind": "capability_verification"
+   }
+  ],
+  "expires_at": null,
+  "id": "rready_01a0caea26517d428685fef692a5c9bb",
+  "input_hash": "sha256:b4d739438dd0879e011b3c02ace4084adc3f2289235071f92062e31ef3b422e8",
+  "repository_id": "repo_01a04369f1057e13a13c24233d4e278a",
+  "runner_image_digest": "sha256:3420493cb3856b99f7a6e2da377e0c928dfb2b53ed584123ca0e2d0f4682b409",
+  "source_commit": "28e553510b1e0b82e3105c754a7019145829ab55",
+  "validation_policy_version": "repo-mode-v1",
+  "warnings": []
+ },
+ "blockers": [],
+ "capabilities": {
+  "provider_observer": {
+   "authorization": "not_required_for_read_only_observation",
+   "availability": "configured_unverified",
+   "trust_policy": "allowed"
+  },
+  "source_reader": {
+   "authorization": "not_required_for_read_only_assessment",
+   "availability": "configured_unverified",
+   "trust_policy": "allowed"
+  },
+  "source_writer": {
+   "authorization": "not_granted",
+   "availability": "configured_unverified",
+   "trust_policy": "allowed"
+  }
+ },
+ "current": true,
+ "mismatches": [],
+ "repository_id": "repo_01a04369f1057e13a13c24233d4e278a",
+ "source_commit": "28e553510b1e0b82e3105c754a7019145829ab55",
+ "status": "ready"
+}

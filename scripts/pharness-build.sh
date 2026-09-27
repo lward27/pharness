@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Compatibility entry point. The caller explicitly chooses a builder through
-# --builder or PHARNESS_BUILDX_BUILDER; unavailable builders never fall back.
+# Default release entry point. Image compilation runs through the reviewed
+# lucas_engineering Tekton/BuildKit route; use pharness-build-local.sh only when
+# a local Buildx build is explicitly desired.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "${SCRIPT_DIR}/pharness-build-local.sh" "$@"
+exec "${SCRIPT_DIR}/pharness-build-incluster.sh" "$@"

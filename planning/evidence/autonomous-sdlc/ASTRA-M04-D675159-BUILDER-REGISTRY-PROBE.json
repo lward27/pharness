@@ -1,0 +1,45 @@
+{
+  "build_timeout_message_occurrences": 5,
+  "expected_nat_rule": "-A OUTPUT -d 192.168.20.210/32 -p tcp -m tcp --dport 443 -j DNAT --to-destination 192.168.20.210:32443",
+  "limitations": [
+    "Read-only probes after the observed timeout; do not establish its cause or erase the build log.",
+    "Successful transport is not build, publication, deployment or model qualification."
+  ],
+  "mutations": [],
+  "observed_at": "2026-09-08T18:49:28.450100+00:00",
+  "probes": [
+    {
+      "attempt": 1,
+      "elapsed_seconds": 0.251,
+      "exit_code": 0,
+      "hostname_checked": "registry.lucas.engineering",
+      "http_status": null,
+      "output_sha256": "sha256:037f1d7de2bde501eae6d97a4a0841c84be3f0ef07e1784b94d7b04a12bf4e9e",
+      "tls_verified": true
+    },
+    {
+      "attempt": 2,
+      "elapsed_seconds": 0.214,
+      "exit_code": 0,
+      "hostname_checked": "registry.lucas.engineering",
+      "http_status": null,
+      "output_sha256": "sha256:037f1d7de2bde501eae6d97a4a0841c84be3f0ef07e1784b94d7b04a12bf4e9e",
+      "tls_verified": true
+    },
+    {
+      "attempt": 3,
+      "elapsed_seconds": 0.273,
+      "exit_code": 0,
+      "hostname_checked": "registry.lucas.engineering",
+      "http_status": null,
+      "output_sha256": "sha256:037f1d7de2bde501eae6d97a4a0841c84be3f0ef07e1784b94d7b04a12bf4e9e",
+      "tls_verified": true
+    }
+  ],
+  "route": "actual BuildKit container network namespace, registry hostname TCP443 translated to configured private NodePort32443",
+  "source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "unique_build_timeout_line_hashes": [
+    "sha256:2d4c4d08b1c7812fc3377af5b94c2926313fc6c458d6d5088c99abe9e3569976",
+    "sha256:dd645fb3cb6843868eb399376446c1560737a84a5bb98a9a791c0c78e448c9ed"
+  ]
+}

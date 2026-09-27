@@ -1,0 +1,195 @@
+{
+  "container_status": [
+    {
+      "allocatedResources": {
+        "cpu": "250m",
+        "ephemeral-storage": "1Gi",
+        "memory": "512Mi"
+      },
+      "containerID": "containerd://af3cb81f308575eec51719a4956eaf85c6389821f817a5cd9abb6586a307e29f",
+      "image": "sha256:7965b9a14f87d331e76b9b4b55ea24810628df6d44adb087a3d5fbb0aaed2025",
+      "imageID": "registry.lucas.engineering/pharness-eval-runner@sha256:c8afce7f20482d81ffd3e196c836a6482df1df349f45e3e77e3f828da805cf1d",
+      "lastState": {},
+      "name": "evaluate",
+      "ready": true,
+      "resources": {
+        "limits": {
+          "cpu": "2",
+          "ephemeral-storage": "4Gi",
+          "memory": "2Gi"
+        },
+        "requests": {
+          "cpu": "250m",
+          "ephemeral-storage": "1Gi",
+          "memory": "512Mi"
+        }
+      },
+      "restartCount": 0,
+      "started": true,
+      "state": {
+        "running": {
+          "startedAt": "2026-09-08T19:37:55Z"
+        }
+      },
+      "user": {
+        "linux": {
+          "gid": 65532,
+          "supplementalGroups": [
+            65532
+          ],
+          "uid": 65532
+        }
+      },
+      "volumeMounts": [
+        {
+          "mountPath": "/work",
+          "name": "work"
+        },
+        {
+          "mountPath": "/tmp",
+          "name": "tmp"
+        }
+      ]
+    }
+  ],
+  "evaluation_id": "infeval_01a082838ab4760098d9823b1816aa6d",
+  "events": [
+    {
+      "categories": [],
+      "count": null,
+      "first": null,
+      "last": null,
+      "message_sha256": "sha256:a1ca0af53ccd208e9d3a5f800266aa323da0b78f100d0ed8d42d1cec50fd2c08",
+      "reason": "Scheduled"
+    },
+    {
+      "categories": [
+        "Pulling image"
+      ],
+      "count": 1,
+      "first": "2026-09-08T19:34:15Z",
+      "last": "2026-09-08T19:34:15Z",
+      "message_sha256": "sha256:2c4989d2e4fe646a32c5708a2e502f18d3ce8200f76ffe29f656529c913ce97e",
+      "reason": "Pulling"
+    },
+    {
+      "categories": [
+        "Successfully pulled image"
+      ],
+      "count": 1,
+      "first": "2026-09-08T19:34:43Z",
+      "last": "2026-09-08T19:34:43Z",
+      "message_sha256": "sha256:bcf2396fb87a8c1035c96d3da566a3a91739500ca108f5d87e98426ffc4cb7d8",
+      "reason": "Pulled"
+    },
+    {
+      "categories": [
+        "Created container"
+      ],
+      "count": 1,
+      "first": "2026-09-08T19:34:43Z",
+      "last": "2026-09-08T19:34:43Z",
+      "message_sha256": "sha256:8d0c58bd31973c248fcd951e906ded820ab52f2ec2c7f61e638eba652b5faea1",
+      "reason": "Created"
+    },
+    {
+      "categories": [
+        "Started container"
+      ],
+      "count": 1,
+      "first": "2026-09-08T19:35:00Z",
+      "last": "2026-09-08T19:35:00Z",
+      "message_sha256": "sha256:332a7d0cff55ff358e51b7c88842d59351c8e7916cebfa5ce755127ed25a55a6",
+      "reason": "Started"
+    },
+    {
+      "categories": [
+        "Pulling image"
+      ],
+      "count": 1,
+      "first": "2026-09-08T19:35:18Z",
+      "last": "2026-09-08T19:35:18Z",
+      "message_sha256": "sha256:61aa4285a492fc19d72fc9518300b6e6604dabeee6f0281ab9d786b8da1f8d9d",
+      "reason": "Pulling"
+    },
+    {
+      "categories": [
+        "Successfully pulled image"
+      ],
+      "count": 1,
+      "first": "2026-09-08T19:37:54Z",
+      "last": "2026-09-08T19:37:54Z",
+      "message_sha256": "sha256:47a35d0a38ba3b4d737c600bf74f911249300f262d6fbb54f44eaabf3f206d99",
+      "reason": "Pulled"
+    },
+    {
+      "categories": [
+        "Created container"
+      ],
+      "count": 1,
+      "first": "2026-09-08T19:37:54Z",
+      "last": "2026-09-08T19:37:54Z",
+      "message_sha256": "sha256:8b815715baaa1b8d460207af238be91dd69fec561f92501d8a90bce6c4996fb0",
+      "reason": "Created"
+    },
+    {
+      "categories": [
+        "Started container"
+      ],
+      "count": 1,
+      "first": "2026-09-08T19:37:55Z",
+      "last": "2026-09-08T19:37:55Z",
+      "message_sha256": "sha256:4684d8dc7b50e3e5d8c5d024e78beb80ee63327e4add077a9e085b3db83f5361",
+      "reason": "Started"
+    }
+  ],
+  "mutations": [],
+  "node": "ubuntu-lucas-engineering-2",
+  "node_status": {
+    "allocatable": {
+      "cpu": "8",
+      "ephemeral-storage": "59935978449",
+      "hugepages-1Gi": "0",
+      "hugepages-2Mi": "0",
+      "memory": "16375620Ki",
+      "pods": "110"
+    },
+    "capacity": {
+      "cpu": "8",
+      "ephemeral-storage": "61611820Ki",
+      "hugepages-1Gi": "0",
+      "hugepages-2Mi": "0",
+      "memory": "16375620Ki",
+      "pods": "110"
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-09-04T12:32:00Z",
+        "reason": "KubeletHasSufficientMemory",
+        "status": "False",
+        "type": "MemoryPressure"
+      },
+      {
+        "lastTransitionTime": "2026-09-04T12:32:00Z",
+        "reason": "KubeletHasNoDiskPressure",
+        "status": "False",
+        "type": "DiskPressure"
+      },
+      {
+        "lastTransitionTime": "2026-09-04T12:32:00Z",
+        "reason": "KubeletHasSufficientPID",
+        "status": "False",
+        "type": "PIDPressure"
+      },
+      {
+        "lastTransitionTime": "2026-09-04T12:32:00Z",
+        "reason": "KubeletReady",
+        "status": "True",
+        "type": "Ready"
+      }
+    ]
+  },
+  "observed_at": "2026-09-08T19:38:25.098229+00:00",
+  "phase": "Running",
+  "pod_uid": "fc1f5b3f-5248-4813-89ad-13038adc5992"
+}

@@ -1,0 +1,51 @@
+{
+  "recorded_at": "2026-09-08T20:37:06.918517+00:00",
+  "base_revision": "291e007cedcb2440a328f5e24710fb3423cb0ded",
+  "status": "local_validation_passed",
+  "checks": {
+    "original_regression": "failed on missing authorization validation before worker lookup",
+    "api_and_admin": 301,
+    "final_layout_regression": 1,
+    "clippy": "all API targets with warnings denied passed",
+    "architecture": 5,
+    "format": "passed",
+    "diff_whitespace": "passed"
+  },
+  "test_method": "301 API/admin checks passed before moving the identical helper to the stage executor to remove an import cycle; final focused regression and Clippy passed on the final source layout.",
+  "validated_source_files": {
+    "crates/pharness-api/src/app/repo_mode/mod.rs": "sha256:d468eba99250b6cfabe63d20ae10d5204f04cb353553e88c556710b05b9ac065",
+    "crates/pharness-api/src/app/repo_mode/stages.rs": "sha256:f1ffbc430bfa915a9b01f0b9e2903640e72bfbbc8573f82d7a0674c782e5fb58",
+    "crates/pharness-api/src/app/tests/mod.rs": "sha256:6de97472747d792491f475830b4aa3d04cf34bad6b1ff4a94d12f56c5b1e8cd9",
+    "crates/pharness-api/src/app/tests/stage_chain_authority.rs": "sha256:2f9b5a77dbf855d0799323549b2ef2aef83951a1b3d4ca18c7c5dba0cb7d07ac"
+  },
+  "logs": {
+    "red": {
+      "path": "/tmp/ASTRA-repair-authorization-before-r2.log",
+      "sha256": "sha256:9a589505693923bd8aa81be0439173516fe0f562939030b9bb9b540e72820cf7"
+    },
+    "full_api": {
+      "path": "/tmp/ASTRA-repair-authorization-after.log",
+      "sha256": "sha256:639c1cb9c47c4ae4392e86b41df8f61e3807d003ef308f3dca3dd67cf823b719"
+    },
+    "final_regression": {
+      "path": "/tmp/ASTRA-repair-authorization-final-test.log",
+      "sha256": "sha256:e128eebc348ae34a7b30a4eddb47e6353d0e055aa761e73ecdd0060720d61d82"
+    },
+    "clippy": {
+      "path": "/tmp/ASTRA-repair-authorization-clippy.log",
+      "sha256": "sha256:8f1127ab89038faa862106e3ea661fc608963b1eeacb4c9cadac3191668a7153"
+    },
+    "architecture": {
+      "path": "/tmp/ASTRA-repair-authorization-architecture-r2.log",
+      "sha256": "sha256:79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+    }
+  },
+  "setup_failures": [
+    "Initial test re-export needed crate-app visibility; original compile failure retained.",
+    "Initial helper placement created an import cycle; private stage-executor placement removes it."
+  ],
+  "deployed": false,
+  "model_calls": 0,
+  "cluster_effects": [],
+  "qualification": null
+}

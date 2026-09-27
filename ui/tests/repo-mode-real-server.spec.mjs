@@ -93,6 +93,9 @@ async function stabilizeCompletedJourneySnapshot(page) {
   await page.locator(".repo-sidebar footer > small").evaluateAll(nodes => {
     nodes.forEach(node => { node.textContent = "fixture-as-of"; });
   });
+  await page.locator(".repo-completion p").evaluateAll(nodes => {
+    nodes.forEach(node => { node.textContent = "manual merge matched the approved head and fresh authoritative required checks"; });
+  });
 }
 
 function sha256(value) {
@@ -500,7 +503,8 @@ test("real UI and controller complete Repo Mode from Product creation through so
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("button", { name: "Check readiness" }).click();
   await expect(page.getByRole("heading", { name: "Readiness and final summary" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Later authorization boundaries" })).toBeVisible();
+  await expect(page.getByText("Ready to create this WorkItem")).toBeVisible();
+  await page.getByText("Later authorization boundaries", { exact: true }).click();
   await expect(page.getByText("PHarness observes but never performs the source merge")).toBeVisible();
   await page.getByRole("button", { name: "Confirm and create WorkItem" }).click();
   await expect(page).toHaveURL(/#\/work-items\/witem_[^/]+\/overview$/);

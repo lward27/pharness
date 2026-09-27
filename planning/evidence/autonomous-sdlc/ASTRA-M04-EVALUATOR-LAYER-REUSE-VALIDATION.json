@@ -1,0 +1,495 @@
+{
+  "observed_at": "2026-09-08T19:22:17.585603+00:00",
+  "base_source_revision": "d675159cb205d222616d253d311706be1889bb91",
+  "patch_sha256": "sha256:e6de847bac4a40a1579dd562bde3b77e982152181fe8e5bb5e611c3d57e6816a",
+  "status": "local_build_and_revision_cache_checks_passed",
+  "builder": "pharness-mac",
+  "docker_context": "rancher-desktop",
+  "target_platform": "linux/amd64",
+  "build_host_platform": "linux/arm64",
+  "builds": [
+    {
+      "name": "tools-first",
+      "target": "runtime-tools",
+      "revision_argument": "d675159cb205d222616d253d311706be1889bb91",
+      "command": [
+        "docker",
+        "--context",
+        "rancher-desktop",
+        "buildx",
+        "build",
+        "--builder",
+        "pharness-mac",
+        "--platform",
+        "linux/amd64",
+        "--file",
+        "deploy/docker/Dockerfile.eval-runner",
+        "--target",
+        "runtime-tools",
+        "--build-arg",
+        "PHARNESS_BUILD_REVISION=d675159cb205d222616d253d311706be1889bb91",
+        "--progress",
+        "plain",
+        "--output",
+        "type=cacheonly",
+        "--metadata-file",
+        "/Users/wardl/Personal/apps/pharness-build-experiments/ASTRA-evaluator-layer-reuse-d675159/tools-first.metadata.json",
+        "."
+      ],
+      "started_at": "2026-09-08T19:18:42.134398+00:00",
+      "status": "passed",
+      "exit_code": 0,
+      "elapsed_seconds": 66.307,
+      "finished_at": "2026-09-08T19:19:48.442138+00:00",
+      "tool_stage_steps": [
+        {
+          "step": 1,
+          "instruction": "FROM docker.io/library/node:24-bookworm-slim@sha256:6642ef280aebc09c4541bee0b15c9f89f0f3f3c247ddee79ae1d37eddfdcbbaa",
+          "cached": true
+        },
+        {
+          "step": 2,
+          "instruction": "RUN apt-get update     && apt-get install -y --no-install-recommends bubblewrap ca-certificates gcc git libc6-dev python3 python3-venv     && rm -rf /var/lib/apt/lists/*     && groupadd --gid 65532 pharness     && useradd --uid 65532 --gid 65532 --home-dir /work --create-home pharness     && rm -f /usr/bin/apt* /usr/bin/dpkg* /usr/sbin/dpkg*",
+          "cached": false
+        },
+        {
+          "step": 3,
+          "instruction": "COPY --from=rust-runtime /usr/local/cargo /usr/local/cargo",
+          "cached": false
+        },
+        {
+          "step": 4,
+          "instruction": "COPY --from=rust-runtime /usr/local/rustup /usr/local/rustup",
+          "cached": false
+        },
+        {
+          "step": 5,
+          "instruction": "COPY --from=codex /out/codex /usr/local/bin/codex",
+          "cached": false
+        },
+        {
+          "step": 6,
+          "instruction": "COPY --from=codex /out/codex-linux-sandbox /usr/local/bin/codex-linux-sandbox",
+          "cached": false
+        },
+        {
+          "step": 7,
+          "instruction": "COPY --from=codex /out/codex-code-mode-host /usr/local/bin/codex-code-mode-host",
+          "cached": false
+        },
+        {
+          "step": 8,
+          "instruction": "COPY --from=codex /out/codex-resources /usr/local/bin/codex-resources",
+          "cached": false
+        },
+        {
+          "step": 9,
+          "instruction": "COPY deploy/codex-host/git-askpass /usr/lib/pharness-codex-host/git-askpass",
+          "cached": false
+        },
+        {
+          "step": 10,
+          "instruction": "RUN chmod 0755 /usr/lib/pharness-codex-host/git-askpass",
+          "cached": false
+        },
+        {
+          "step": 11,
+          "instruction": "WORKDIR /work",
+          "cached": false
+        },
+        {
+          "step": 12,
+          "instruction": "RUN test \"$(id -u)\" = \"65532\"     && cargo --version     && rustc --version     && python3 --version     && node --version     && npm --version     && git --version",
+          "cached": false
+        },
+        {
+          "step": 13,
+          "instruction": "RUN test -x /usr/local/bin/codex-linux-sandbox     && cmp -s /usr/local/bin/codex /usr/local/bin/codex-linux-sandbox     && test -x /usr/local/bin/codex-code-mode-host     && printf '%s  %s\\n'       'b3d633427c8c75057fba11dad6051714d44886440305e86ba9d2c0366f4dd63b'       '/usr/local/bin/codex-code-mode-host'       | sha256sum --check --status",
+          "cached": false
+        }
+      ],
+      "metadata": {
+        "buildx.build.provenance": {
+          "builder": {
+            "id": ""
+          },
+          "buildType": "https://mobyproject.org/buildkit@v1",
+          "materials": [
+            {
+              "uri": "pkg:docker/debian@bookworm-slim?digest=sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241&platform=linux%2Famd64",
+              "digest": {
+                "sha256": "abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241"
+              }
+            },
+            {
+              "uri": "pkg:docker/node@24-bookworm-slim?digest=sha256:6642ef280aebc09c4541bee0b15c9f89f0f3f3c247ddee79ae1d37eddfdcbbaa&platform=linux%2Famd64",
+              "digest": {
+                "sha256": "6642ef280aebc09c4541bee0b15c9f89f0f3f3c247ddee79ae1d37eddfdcbbaa"
+              }
+            },
+            {
+              "uri": "pkg:docker/rust@1-slim-bookworm?digest=sha256:1469a27c125cb5a3aebfa4f4e4665d935b02fb72cc093b2c974b3d740e43f157&platform=linux%2Famd64",
+              "digest": {
+                "sha256": "1469a27c125cb5a3aebfa4f4e4665d935b02fb72cc093b2c974b3d740e43f157"
+              }
+            }
+          ],
+          "invocation": {
+            "configSource": {
+              "entryPoint": "Dockerfile.eval-runner"
+            },
+            "parameters": {
+              "frontend": "dockerfile.v0",
+              "args": {
+                "build-arg:PHARNESS_BUILD_REVISION": "d675159cb205d222616d253d311706be1889bb91",
+                "target": "runtime-tools"
+              },
+              "locals": [
+                {
+                  "name": "context"
+                },
+                {
+                  "name": "dockerfile"
+                }
+              ]
+            },
+            "environment": {
+              "platform": "linux/arm64"
+            }
+          }
+        },
+        "buildx.build.ref": "pharness-mac/pharness-mac0/ur1j148bfc6bp5voij7xmvsc8"
+      },
+      "stdout_sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "sha256:b91ad9bb8248c3828a2c239f45e12778e9329ee4dccf2cd0dabe8a705f27a7d7"
+    },
+    {
+      "name": "tools-second-revision",
+      "target": "runtime-tools",
+      "revision_argument": "5a409453d28d68d22b12899a312df763c51e48dd",
+      "command": [
+        "docker",
+        "--context",
+        "rancher-desktop",
+        "buildx",
+        "build",
+        "--builder",
+        "pharness-mac",
+        "--platform",
+        "linux/amd64",
+        "--file",
+        "deploy/docker/Dockerfile.eval-runner",
+        "--target",
+        "runtime-tools",
+        "--build-arg",
+        "PHARNESS_BUILD_REVISION=5a409453d28d68d22b12899a312df763c51e48dd",
+        "--progress",
+        "plain",
+        "--output",
+        "type=cacheonly",
+        "--metadata-file",
+        "/Users/wardl/Personal/apps/pharness-build-experiments/ASTRA-evaluator-layer-reuse-d675159/tools-second-revision.metadata.json",
+        "."
+      ],
+      "started_at": "2026-09-08T19:19:48.442968+00:00",
+      "status": "passed",
+      "exit_code": 0,
+      "elapsed_seconds": 0.431,
+      "finished_at": "2026-09-08T19:19:48.874173+00:00",
+      "tool_stage_steps": [
+        {
+          "step": 1,
+          "instruction": "FROM docker.io/library/node:24-bookworm-slim@sha256:6642ef280aebc09c4541bee0b15c9f89f0f3f3c247ddee79ae1d37eddfdcbbaa",
+          "cached": false
+        },
+        {
+          "step": 2,
+          "instruction": "RUN apt-get update     && apt-get install -y --no-install-recommends bubblewrap ca-certificates gcc git libc6-dev python3 python3-venv     && rm -rf /var/lib/apt/lists/*     && groupadd --gid 65532 pharness     && useradd --uid 65532 --gid 65532 --home-dir /work --create-home pharness     && rm -f /usr/bin/apt* /usr/bin/dpkg* /usr/sbin/dpkg*",
+          "cached": true
+        },
+        {
+          "step": 3,
+          "instruction": "COPY --from=rust-runtime /usr/local/cargo /usr/local/cargo",
+          "cached": true
+        },
+        {
+          "step": 4,
+          "instruction": "COPY --from=rust-runtime /usr/local/rustup /usr/local/rustup",
+          "cached": true
+        },
+        {
+          "step": 5,
+          "instruction": "COPY --from=codex /out/codex /usr/local/bin/codex",
+          "cached": true
+        },
+        {
+          "step": 6,
+          "instruction": "COPY --from=codex /out/codex-linux-sandbox /usr/local/bin/codex-linux-sandbox",
+          "cached": true
+        },
+        {
+          "step": 7,
+          "instruction": "COPY --from=codex /out/codex-code-mode-host /usr/local/bin/codex-code-mode-host",
+          "cached": true
+        },
+        {
+          "step": 8,
+          "instruction": "COPY --from=codex /out/codex-resources /usr/local/bin/codex-resources",
+          "cached": true
+        },
+        {
+          "step": 9,
+          "instruction": "COPY deploy/codex-host/git-askpass /usr/lib/pharness-codex-host/git-askpass",
+          "cached": true
+        },
+        {
+          "step": 10,
+          "instruction": "RUN chmod 0755 /usr/lib/pharness-codex-host/git-askpass",
+          "cached": true
+        },
+        {
+          "step": 11,
+          "instruction": "WORKDIR /work",
+          "cached": true
+        },
+        {
+          "step": 12,
+          "instruction": "RUN test \"$(id -u)\" = \"65532\"     && cargo --version     && rustc --version     && python3 --version     && node --version     && npm --version     && git --version",
+          "cached": true
+        },
+        {
+          "step": 13,
+          "instruction": "RUN test -x /usr/local/bin/codex-linux-sandbox     && cmp -s /usr/local/bin/codex /usr/local/bin/codex-linux-sandbox     && test -x /usr/local/bin/codex-code-mode-host     && printf '%s  %s\\n'       'b3d633427c8c75057fba11dad6051714d44886440305e86ba9d2c0366f4dd63b'       '/usr/local/bin/codex-code-mode-host'       | sha256sum --check --status",
+          "cached": true
+        }
+      ],
+      "metadata": {
+        "buildx.build.provenance": {
+          "builder": {
+            "id": ""
+          },
+          "buildType": "https://mobyproject.org/buildkit@v1",
+          "materials": [
+            {
+              "uri": "pkg:docker/debian@bookworm-slim?digest=sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241&platform=linux%2Famd64",
+              "digest": {
+                "sha256": "abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241"
+              }
+            },
+            {
+              "uri": "pkg:docker/node@24-bookworm-slim?digest=sha256:6642ef280aebc09c4541bee0b15c9f89f0f3f3c247ddee79ae1d37eddfdcbbaa&platform=linux%2Famd64",
+              "digest": {
+                "sha256": "6642ef280aebc09c4541bee0b15c9f89f0f3f3c247ddee79ae1d37eddfdcbbaa"
+              }
+            },
+            {
+              "uri": "pkg:docker/rust@1-slim-bookworm?digest=sha256:1469a27c125cb5a3aebfa4f4e4665d935b02fb72cc093b2c974b3d740e43f157&platform=linux%2Famd64",
+              "digest": {
+                "sha256": "1469a27c125cb5a3aebfa4f4e4665d935b02fb72cc093b2c974b3d740e43f157"
+              }
+            }
+          ],
+          "invocation": {
+            "configSource": {
+              "entryPoint": "Dockerfile.eval-runner"
+            },
+            "parameters": {
+              "frontend": "dockerfile.v0",
+              "args": {
+                "build-arg:PHARNESS_BUILD_REVISION": "5a409453d28d68d22b12899a312df763c51e48dd",
+                "target": "runtime-tools"
+              },
+              "locals": [
+                {
+                  "name": "context"
+                },
+                {
+                  "name": "dockerfile"
+                }
+              ]
+            },
+            "environment": {
+              "platform": "linux/arm64"
+            }
+          }
+        },
+        "buildx.build.ref": "pharness-mac/pharness-mac0/hgvdb5ue9vjwdgssfdnenoq4j"
+      },
+      "stdout_sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "sha256:5b03a617097b8caceb5e7e73e0661d0e8856c3ad8f65be5f37d4426b532d6483"
+    },
+    {
+      "name": "complete-image",
+      "target": "runtime",
+      "revision_argument": "d675159cb205d222616d253d311706be1889bb91",
+      "command": [
+        "docker",
+        "--context",
+        "rancher-desktop",
+        "buildx",
+        "build",
+        "--builder",
+        "pharness-mac",
+        "--platform",
+        "linux/amd64",
+        "--file",
+        "deploy/docker/Dockerfile.eval-runner",
+        "--target",
+        "runtime",
+        "--build-arg",
+        "PHARNESS_BUILD_REVISION=d675159cb205d222616d253d311706be1889bb91",
+        "--progress",
+        "plain",
+        "--output",
+        "type=cacheonly",
+        "--metadata-file",
+        "/Users/wardl/Personal/apps/pharness-build-experiments/ASTRA-evaluator-layer-reuse-d675159/complete-image.metadata.json",
+        "."
+      ],
+      "started_at": "2026-09-08T19:19:48.874597+00:00",
+      "status": "passed",
+      "exit_code": 0,
+      "elapsed_seconds": 0.482,
+      "finished_at": "2026-09-08T19:19:49.356415+00:00",
+      "tool_stage_steps": [
+        {
+          "step": 1,
+          "instruction": "FROM docker.io/library/node:24-bookworm-slim@sha256:6642ef280aebc09c4541bee0b15c9f89f0f3f3c247ddee79ae1d37eddfdcbbaa",
+          "cached": false
+        },
+        {
+          "step": 2,
+          "instruction": "RUN apt-get update     && apt-get install -y --no-install-recommends bubblewrap ca-certificates gcc git libc6-dev python3 python3-venv     && rm -rf /var/lib/apt/lists/*     && groupadd --gid 65532 pharness     && useradd --uid 65532 --gid 65532 --home-dir /work --create-home pharness     && rm -f /usr/bin/apt* /usr/bin/dpkg* /usr/sbin/dpkg*",
+          "cached": true
+        },
+        {
+          "step": 3,
+          "instruction": "COPY --from=rust-runtime /usr/local/cargo /usr/local/cargo",
+          "cached": true
+        },
+        {
+          "step": 4,
+          "instruction": "COPY --from=rust-runtime /usr/local/rustup /usr/local/rustup",
+          "cached": true
+        },
+        {
+          "step": 5,
+          "instruction": "COPY --from=codex /out/codex /usr/local/bin/codex",
+          "cached": true
+        },
+        {
+          "step": 6,
+          "instruction": "COPY --from=codex /out/codex-linux-sandbox /usr/local/bin/codex-linux-sandbox",
+          "cached": true
+        },
+        {
+          "step": 7,
+          "instruction": "COPY --from=codex /out/codex-code-mode-host /usr/local/bin/codex-code-mode-host",
+          "cached": true
+        },
+        {
+          "step": 8,
+          "instruction": "COPY --from=codex /out/codex-resources /usr/local/bin/codex-resources",
+          "cached": true
+        },
+        {
+          "step": 9,
+          "instruction": "COPY deploy/codex-host/git-askpass /usr/lib/pharness-codex-host/git-askpass",
+          "cached": true
+        },
+        {
+          "step": 10,
+          "instruction": "RUN chmod 0755 /usr/lib/pharness-codex-host/git-askpass",
+          "cached": true
+        },
+        {
+          "step": 11,
+          "instruction": "WORKDIR /work",
+          "cached": true
+        },
+        {
+          "step": 12,
+          "instruction": "RUN test \"$(id -u)\" = \"65532\"     && cargo --version     && rustc --version     && python3 --version     && node --version     && npm --version     && git --version",
+          "cached": true
+        },
+        {
+          "step": 13,
+          "instruction": "RUN test -x /usr/local/bin/codex-linux-sandbox     && cmp -s /usr/local/bin/codex /usr/local/bin/codex-linux-sandbox     && test -x /usr/local/bin/codex-code-mode-host     && printf '%s  %s\\n'       'b3d633427c8c75057fba11dad6051714d44886440305e86ba9d2c0366f4dd63b'       '/usr/local/bin/codex-code-mode-host'       | sha256sum --check --status",
+          "cached": true
+        }
+      ],
+      "metadata": {
+        "buildx.build.provenance": {
+          "builder": {
+            "id": ""
+          },
+          "buildType": "https://mobyproject.org/buildkit@v1",
+          "materials": [
+            {
+              "uri": "pkg:docker/debian@bookworm-slim?digest=sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241&platform=linux%2Famd64",
+              "digest": {
+                "sha256": "abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241"
+              }
+            },
+            {
+              "uri": "pkg:docker/node@24-bookworm-slim?digest=sha256:6642ef280aebc09c4541bee0b15c9f89f0f3f3c247ddee79ae1d37eddfdcbbaa&platform=linux%2Famd64",
+              "digest": {
+                "sha256": "6642ef280aebc09c4541bee0b15c9f89f0f3f3c247ddee79ae1d37eddfdcbbaa"
+              }
+            },
+            {
+              "uri": "pkg:docker/rust@1-bookworm?digest=sha256:0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97&platform=linux%2Farm64",
+              "digest": {
+                "sha256": "0e2bcaef56d041a486784e54104a81aebe0da44bd03019bd70bc0401e42e4a97"
+              }
+            },
+            {
+              "uri": "pkg:docker/rust@1-slim-bookworm?digest=sha256:1469a27c125cb5a3aebfa4f4e4665d935b02fb72cc093b2c974b3d740e43f157&platform=linux%2Famd64",
+              "digest": {
+                "sha256": "1469a27c125cb5a3aebfa4f4e4665d935b02fb72cc093b2c974b3d740e43f157"
+              }
+            }
+          ],
+          "invocation": {
+            "configSource": {
+              "entryPoint": "Dockerfile.eval-runner"
+            },
+            "parameters": {
+              "frontend": "dockerfile.v0",
+              "args": {
+                "build-arg:PHARNESS_BUILD_REVISION": "d675159cb205d222616d253d311706be1889bb91",
+                "target": "runtime"
+              },
+              "locals": [
+                {
+                  "name": "context"
+                },
+                {
+                  "name": "dockerfile"
+                }
+              ]
+            },
+            "environment": {
+              "platform": "linux/arm64"
+            }
+          }
+        },
+        "buildx.build.ref": "pharness-mac/pharness-mac0/m5dykie3l67gasrcvwdlf3ani"
+      },
+      "stdout_sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "sha256:70579535951086e8f56c07f380686e49ae850a1cd641aaaf9fbda2c5f7595214"
+    }
+  ],
+  "preserved_run_copy_user_workdir_entrypoint_instructions": true,
+  "external_base_digests_unchanged": true,
+  "registry_pushes": 0,
+  "deployments": 0,
+  "model_calls": 0,
+  "limitations": [
+    "Local cache-only builds; not a published image, release or model qualification.",
+    "Second tools build changes only release-revision argument, not application source bytes.",
+    "Complete-image solve reuses the unchanged d675159 application compiler cache.",
+    "Build metadata is local provenance information, not a signed OCI attestation.",
+    "This does not repair the intermittent registry transport failure or measure end-to-end release time."
+  ]
+}
