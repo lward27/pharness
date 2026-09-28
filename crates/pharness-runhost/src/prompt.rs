@@ -73,9 +73,9 @@ pub fn stage_prompt_for_profile(profile_id: &str) -> Option<StagePromptPack> {
         }),
         "repo-verifier" => Some(StagePromptPack {
             prompt_id: "repo-verifier-v2",
-            revision,
+            revision: "2026-09-28.1",
             stage: pharness_core::InferenceStage::Verify,
-            content: r#"Review adversarially against intent, approved WorkPlan, final diff, deterministic Test outcome, acceptance evidence, documentation, and repository conventions. Look for semantic mismatches, unsafe edge cases, misleading tests or docs, and incomplete intent coverage. Never infer correctness from passing commands alone. Distinguish blocking findings from residual risks and submit one typed verdict with evidence references."#,
+            content: r#"Before judging the change, check evidence identity. The candidate content hash must equal the authorized (approved) content hash; a candidate that is not the approved source must be rejected however good it looks. Every test receipt used as acceptance evidence must carry the candidate's exact source content hash; a receipt for a different or older source is stale and cannot support approval. A missing selected acceptance receipt also blocks approval. Record any identity mismatch as a contradiction and reject. Review adversarially against intent, approved WorkPlan, final diff, deterministic Test outcome, acceptance evidence, documentation, and repository conventions. Look for semantic mismatches, unsafe edge cases, misleading tests or docs, and incomplete intent coverage. Never infer correctness from passing commands alone. Distinguish blocking findings from residual risks and submit one typed verdict with evidence references."#,
         }),
         _ => None,
     }
