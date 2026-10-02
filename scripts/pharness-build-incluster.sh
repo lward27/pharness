@@ -251,7 +251,8 @@ run_component() {
   fi
 
   # Re-check the public branch immediately before each new remote build request.
-  verify_source_revision
+  # The collect pass only reconciles runs this invocation already submitted.
+  [[ "$PHASE" == collect ]] || verify_source_revision
   if ! run_json="$(kubectl get "pipelinerun/${run_name}" -o json --ignore-not-found=true 2>/dev/null)"; then
     echo "could not safely reconcile PipelineRun ${PIPELINE_NAMESPACE}/${run_name}" >&2
     return 1
@@ -271,6 +272,10 @@ run_component() {
       validate_existing_run "$run_json" "$component" "$build_target" "$image_component" "$image_ref" "$dockerfile"
     fi
     run_json="$(kubectl get "pipelinerun/${run_name}" -o json)"
+  fi
+  if [[ "$PHASE" == submit ]]; then
+    echo "submitted ${run_name}" >&2
+    return
   fi
 
   condition="$(jq -r '[.status.conditions[]? | select(.type == "Succeeded")][0].status // empty' <<<"$run_json")"
@@ -391,14 +396,26 @@ package_native_bundle() {
 verify_source_revision
 check_cluster_builder
 
-for component in "${components[@]}"; do
-  if [[ "$component" == "codex-host" ]]; then
-    run_component "$component" "runtime" "codex-host"
-    run_component "$component" "bundle" "codex-host-bundle"
-  else
-    run_component "$component" "" "$component"
-  fi
-done
+for_each_component() {
+  local component
+  for component in "${components[@]}"; do
+    if [[ "$component" == "codex-host" ]]; then
+      run_component "$component" "runtime" "codex-host"
+      run_component "$component" "bundle" "codex-host-bundle"
+    else
+      run_component "$component" "" "$component"
+    fi
+  done
+}
+
+# Submit every PipelineRun first so BuildKit builds them concurrently, then
+# collect each result. Re-running reconciles existing runs by deterministic name.
+if [[ "$PREFLIGHT_ONLY" == true ]]; then
+  PHASE=preflight for_each_component
+else
+  PHASE=submit for_each_component
+  PHASE=collect for_each_component
+fi
 
 if [[ "$PREFLIGHT_ONLY" != true && "$needs_bundle" == true ]]; then
   package_native_bundle ""
