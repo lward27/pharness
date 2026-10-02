@@ -95,6 +95,12 @@ PR_URL="$(gh pr create --base main --head "$BRANCH" --title "release: pin ${REVI
 echo "$PR_URL"
 
 if [[ "$MERGE" == true ]]; then
+  # GitHub registers the PR's checks a few seconds after creation.
+  for _ in $(seq 1 30); do
+    gh pr checks "$PR_URL" >/dev/null 2>&1 && break
+    [[ "$(gh pr checks "$PR_URL" 2>&1)" == *"no checks reported"* ]] || break
+    sleep 5
+  done
   gh pr checks "$PR_URL" --watch --interval 10 >/dev/null
   gh pr merge "$PR_URL" --merge
   echo "merged; Argo applies the pin from main"
