@@ -36,6 +36,8 @@ service_account = "pharness-worker"
 kubectl_bin = "kubectl"
 argocd_namespace = "argocd"
 prometheus_url = ""
+# Native Finance windows require Mimir; legacy inventory still uses Prometheus.
+finance_mimir_url = ""
 loki_url = ""
 # Native Finance release reader; leave blank when Tempo is unavailable.
 tempo_url = ""

@@ -1,0 +1,9 @@
+    Checking pharness-openai-compatible v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-openai-compatible)
+    Checking pharness-core v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-core)
+    Checking pharness-fireworks v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-fireworks)
+    Checking pharness-model-gateway v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-model-gateway)
+    Checking pharness-config v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-config)
+    Checking pharness-runhost v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-runhost)
+    Checking pharness-worker v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-worker)
+    Checking pharness-api v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.34s

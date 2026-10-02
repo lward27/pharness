@@ -1,0 +1,41 @@
+   Compiling pharness-worker v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-baseline-admission/crates/pharness-worker)
+   Compiling pharness-api v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-baseline-admission/crates/pharness-api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.12s
+     Running unittests src/bin/pharness-admin.rs (target/debug/deps/pharness_admin-be61ae81602deb87)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/pharness_api-d93c3e7f119ebbf6)
+
+running 14 tests
+test app::tests::hosted_staging::staging_partial_plan_is_read_only_until_serialized_admission_repairs_linkage ... ok
+test app::tests::hosted_staging::baseline::missing_telemetry_is_persisted_as_inconclusive_without_a_second_collection ... ok
+test app::tests::hosted_staging::baseline::an_agent_claim_with_matching_hashes_cannot_substitute_for_native_origin ... ok
+test app::tests::hosted_staging::baseline::fresh_baseline_cannot_admit_a_restarted_pod_or_reuse_failed_identity_collection ... ok
+test app::tests::hosted_staging::baseline::baseline_is_required_and_context_get_never_collects_or_writes ... ok
+test app::tests::hosted_staging::baseline::paused_reconciliation_retains_the_original_window_without_replaying_reads ... ok
+test app::tests::hosted_staging::staging_pause_blocks_writes_but_allows_one_reader_to_recover_unknown_commit ... ok
+test app::tests::hosted_staging::expired_staging_preparation_cannot_renew_authority_and_cancelled_work_cannot_admit ... ok
+test app::tests::hosted_staging::baseline::interrupted_or_missed_baseline_is_recorded_once_without_a_replacement_window ... ok
+test app::tests::hosted_staging::staging_reclaims_expired_owner_without_replacing_authority_or_repeating_admission ... ok
+test app::tests::hosted_staging::staging_rejects_changed_build_and_contradictory_or_misbound_observations ... ok
+test app::tests::hosted_staging::unconfirmed_staging_evidence_is_repeat_safe_and_never_counts_as_a_commit ... ok
+test app::tests::hosted_staging::staging_progresses_from_verified_build_and_preserves_distinct_completion_boundaries ... ok
+test app::tests::hosted_staging::baseline::stale_and_contradictory_baselines_never_admit_even_with_a_passed_summary ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 276 filtered out; finished in 22.12s
+
+     Running unittests src/main.rs (target/debug/deps/pharness_worker-abc537e43c889899)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 0.00s
+
+     Running tests/hosted_build.rs (target/debug/deps/hosted_build-1e9fa189286aeaa7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+

@@ -1,0 +1,22 @@
+{
+  "observed_at": "2026-09-05T21:31:47.798903+00:00",
+  "transport": "explicit loopback port-forward to apps-staging/yfinance-wrapper:8090 in lucas_engineering",
+  "image_digest": "sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1",
+  "http_status": 200,
+  "response_bytes": 2181,
+  "response_sha256": "82e6aa48b1c16ae3947a52ab22a032b6091236c3c98df7eaa17ac2afd455f108",
+  "paths": [
+    "/",
+    "/healthz",
+    "/history",
+    "/info"
+  ],
+  "scope": "read-only published route inventory of the existing staging baseline, not runtime acceptance",
+  "image_metadata": {
+    "os": "linux",
+    "architecture": "amd64",
+    "oci_revision": null,
+    "oci_source": null,
+    "registry_config_sha256": "400ad1587df0b90a68c34038fc3334a0f498c870de424fd157402bf860ed0387"
+  }
+}

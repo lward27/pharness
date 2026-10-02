@@ -1,4 +1,4 @@
-use super::{artifact_id, evidence, hash, now, preparation, ApiError, AppState};
+use super::{artifact_id, baseline, evidence, hash, now, preparation, ApiError, AppState};
 use axum::extract::{Path, Query, State};
 use axum::Json;
 use serde::Deserialize;
@@ -52,7 +52,8 @@ pub(in crate::app) async fn internal_staging_context(
         && !admitted
         && preparation::validate_current(&state, &saved, true)
             .await
-            .is_ok();
+            .is_ok()
+        && baseline::fresh(&state, &saved).await?;
     // GET is strictly observational, including a partially saved plan. Admission
     // repairs its linked record under the same serialized write boundary.
     Ok(Json(
@@ -96,7 +97,8 @@ pub(in crate::app) async fn internal_staging_attempt(
         return Err(ApiError::conflict("the original staging write was already admitted; observe GitHub without another mutation"));
     }
     plans::ensure_record(&state, &saved, plan).await?;
-    let body = json!({"execution_id":request.execution_id,"operation_id":saved.operation.id,"authority_hash":request.authority_hash,"plan_hash":request.plan_hash,"admitted_at_ms":now(),"meaning":"one expected-head GitOps commit admitted; no deployment or runtime success claimed"});
+    let baseline = baseline::revalidate(&state, &saved).await?;
+    let body = json!({"execution_id":request.execution_id,"operation_id":saved.operation.id,"authority_hash":request.authority_hash,"plan_hash":request.plan_hash,"admitted_at_ms":now(),"baseline":baseline,"meaning":"one expected-head GitOps commit admitted before the unchanged baseline expiry; no deployment or runtime success claimed"});
     let record = evidence::artifact(
         &state,
         &saved.pipeline,
@@ -106,6 +108,6 @@ pub(in crate::app) async fn internal_staging_attempt(
     )
     .await?;
     Ok(Json(
-        json!({"admitted":true,"admission_id":record.id,"authority_hash":request.authority_hash,"plan_hash":request.plan_hash}),
+        json!({"admitted":true,"admission_id":record.id,"authority_hash":request.authority_hash,"plan_hash":request.plan_hash,"baseline":baseline}),
     ))
 }

@@ -1,0 +1,11 @@
+# ASTRA M08: Bound runtime evidence assessment
+
+Status: implemented and verified in source `23ea38ffaaf8f9068b9c34334d23e920b80a93ab`; not deployed or accepted as autonomous delivery.
+
+The native assessment joins one deployment identity pair, functional probes, application metrics and logs, and the health request's trace. It requires the same application, environment, GitOps revision, image digest, observation window and receipt hashes throughout. A reported green collection cannot hide failed rows, incomplete telemetry or contradictory evidence. Baseline and staging require five minutes; production requires ten. Evidence hashes bind records together; the controller must still establish their origin through its own persisted records.
+
+The [live record](ASTRA-M08-RUNTIME-ASSESSMENT-LIVE.json) covers 2026-09-06 00:04:00–00:09:00 UTC. It passed against staging yfinance image `sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca` at GitOps revision `04a98931af43b6ea1d189369442f6a1b76dda589`. Health returned 200 and both invalid-input probes returned 422. The same before/after identity records bound the metrics, logs and trace. Source files, test executable and the clean checkout were checked before and after the run.
+
+[Validation](ASTRA-M08-RUNTIME-ASSESSMENT-VALIDATION.json) records 204 passing core tests, the separately run live test, Clippy and the architecture checks. Six explicit live tests stay excluded from the default suite. The initial Clippy warning and final successful output are both retained. No SLO, image attribute in a trace, regression causality or WorkItem success is invented by this assessment. The frontend explicitly records that it is not instrumented instead of claiming traces.
+
+This is a program-operated read through bounded local forwards. The controller did not deploy or evaluate an autonomous WorkItem. The currently deployed PHarness reader remains source `19b0c55c48e3614d0b4507d56df3029a52475618`. M08 still needs persisted baseline admission, fresh identity revalidation before a staging write, durable runtime progression and deployment of this implementation. M09 production approval and M11 application acceptance remain separate gates.

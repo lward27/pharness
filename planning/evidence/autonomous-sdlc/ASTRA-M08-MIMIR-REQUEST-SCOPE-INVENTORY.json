@@ -1,0 +1,69 @@
+{
+  "query": "http_server_duration_count{job=\"apps-staging/yfinance-wrapper\"}",
+  "response_sha256": "a94f6483afea098361fca5d88ed9429967ff7251be66afec2939c5c2077f37e5",
+  "status": "success",
+  "series_count": 7,
+  "label_keys": [
+    "__name__",
+    "http_flavor",
+    "http_host",
+    "http_method",
+    "http_scheme",
+    "http_server_name",
+    "http_status_code",
+    "http_target",
+    "job",
+    "net_host_port"
+  ],
+  "scopes": [
+    {
+      "http_host": "10.42.0.84:8000",
+      "http_method": "GET",
+      "http_status_code": "200",
+      "job": "apps-staging/yfinance-wrapper",
+      "net_host_port": "8000"
+    },
+    {
+      "http_host": "10.42.0.84:8000",
+      "http_method": "GET",
+      "http_status_code": "200",
+      "job": "apps-staging/yfinance-wrapper",
+      "net_host_port": "8000"
+    },
+    {
+      "http_host": "10.42.0.84:8000",
+      "http_method": "GET",
+      "http_status_code": "200",
+      "job": "apps-staging/yfinance-wrapper",
+      "net_host_port": "8000"
+    },
+    {
+      "http_host": "127.0.0.1:8000",
+      "http_method": "GET",
+      "http_status_code": "200",
+      "job": "apps-staging/yfinance-wrapper",
+      "net_host_port": "8000"
+    },
+    {
+      "http_host": "127.0.0.1:8000",
+      "http_method": "GET",
+      "http_status_code": "200",
+      "job": "apps-staging/yfinance-wrapper",
+      "net_host_port": "8000"
+    },
+    {
+      "http_host": "127.0.0.1:8000",
+      "http_method": "GET",
+      "http_status_code": "404",
+      "job": "apps-staging/yfinance-wrapper",
+      "net_host_port": "8000"
+    },
+    {
+      "http_host": "127.0.0.1:8000",
+      "http_method": "GET",
+      "job": "apps-staging/yfinance-wrapper",
+      "net_host_port": "8000"
+    }
+  ],
+  "scope": "Read-only label inventory; no raw target URLs, values or acceptance conclusion."
+}

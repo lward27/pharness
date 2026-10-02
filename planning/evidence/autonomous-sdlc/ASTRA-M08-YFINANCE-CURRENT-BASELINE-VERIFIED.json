@@ -1,0 +1,25 @@
+{
+  "recorded_at": "2026-09-05T23:39:11.335877+00:00",
+  "source_revision": "1b49cfd23f1e690a5b2b0e64f5978056b20c817b",
+  "expected": {
+    "application": "yfinance",
+    "environment": "staging",
+    "gitops_commit_sha": "04a98931af43b6ea1d189369442f6a1b76dda589",
+    "image_digest": "sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca"
+  },
+  "window": {
+    "end_unix_seconds": 1788651540,
+    "start_unix_seconds": 1788651240
+  },
+  "checks": {
+    "tests_passed": true,
+    "same_five_minute_window": true,
+    "signals_observed": true,
+    "trace_observed": true,
+    "functional_probes_passed": true,
+    "expected_identity_matches": true
+  },
+  "baseline_observation": "passed",
+  "source_build_proof": "ASTRA-M07-YFINANCE-BUILD-VERIFIED.json",
+  "scope": "Program-operated staging baseline verification. Native readers are not deployed or attached to a hosted WorkItem. No autonomous M08 delivery, production promotion, or M11 acceptance is claimed."
+}

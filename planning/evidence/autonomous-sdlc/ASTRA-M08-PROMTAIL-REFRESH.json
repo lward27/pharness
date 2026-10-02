@@ -1,0 +1,9 @@
+{
+  "recorded_at": "2026-09-05T22:53:09.726772+00:00",
+  "cluster": "lucas_engineering",
+  "namespace": "argocd",
+  "application": "promtail",
+  "action": "argocd.argoproj.io/refresh=normal",
+  "result": "kubectl annotation succeeded",
+  "reason": "Merged source 9232b110177556b80e8a03197e17fc062965f4c3 remained unobserved after normal polling; no force sync, prune or direct workload patch."
+}

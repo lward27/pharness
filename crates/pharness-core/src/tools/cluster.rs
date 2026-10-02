@@ -10,7 +10,12 @@ use std::time::Duration;
 use tokio::process::Command;
 use tokio::time::timeout;
 
+mod finance;
 mod tempo;
+pub use finance::{
+    FinanceApplication, FinanceDeploymentExpectation, FinanceEnvironment, FinanceRuntimeEvidence,
+    FinanceRuntimeWindow, FinanceVerificationPhase,
+};
 pub use tempo::FinanceTraceWindow;
 
 const DEFAULT_TIMEOUT_MS: u64 = 15_000;
@@ -37,6 +42,7 @@ pub struct ReadOnlyClusterTools {
     kubectl_bin: String,
     argocd_namespace: String,
     prometheus_url: Option<String>,
+    finance_mimir_url: Option<String>,
     loki_url: Option<String>,
     tempo_url: Option<String>,
     registry_aliases: RegistryAliases,
@@ -52,6 +58,7 @@ impl Default for ReadOnlyClusterTools {
             kubectl_bin: "kubectl".to_string(),
             argocd_namespace: "argocd".to_string(),
             prometheus_url: None,
+            finance_mimir_url: None,
             loki_url: None,
             tempo_url: None,
             registry_aliases: RegistryAliases::default(),
@@ -71,6 +78,7 @@ impl ReadOnlyClusterTools {
             argocd_namespace: std::env::var("PHARNESS_ARGOCD_NAMESPACE")
                 .unwrap_or_else(|_| "argocd".to_string()),
             prometheus_url: std::env::var("PHARNESS_PROMETHEUS_URL").ok(),
+            finance_mimir_url: std::env::var("PHARNESS_FINANCE_MIMIR_URL").ok(),
             loki_url: std::env::var("PHARNESS_LOKI_URL").ok(),
             tempo_url: std::env::var("PHARNESS_TEMPO_URL").ok(),
             registry_aliases: std::env::var("PHARNESS_REGISTRY_ALIASES")
@@ -97,6 +105,18 @@ impl ReadOnlyClusterTools {
     pub fn with_prometheus_url_option(mut self, url: Option<String>) -> Self {
         self.prometheus_url = url;
         self
+    }
+
+    /// Finance window queries use Mimir; legacy Prometheus inventory remains separate.
+    pub fn with_finance_mimir_url_option(mut self, url: Option<String>) -> Self {
+        self.finance_mimir_url = url;
+        self
+    }
+
+    pub fn finance_mimir_configured(&self) -> bool {
+        self.finance_mimir_url
+            .as_ref()
+            .is_some_and(|url| !url.trim().is_empty())
     }
 
     pub fn with_loki_url_option(mut self, url: Option<String>) -> Self {

@@ -1,0 +1,66 @@
+{
+  "recorded_at": "2026-09-05T23:16:58.172975+00:00",
+  "source_revision": "7827b0698fac1e1df6538e9f0cc7c89c025acbb8",
+  "source_files_sha256": {
+    "crates/pharness-core/src/tools/cluster/finance/identity.rs": "f84602b162a0a1b4dfb4bac78a355b36048f7895689911448025e86f8352b98d",
+    "crates/pharness-core/src/tools/cluster/finance/kubernetes.rs": "3a935ed896afafb9354cc65f4fe63f18333c80f7215709c7311819b16a50a30c",
+    "crates/pharness-core/src/tools/cluster/finance/probes/tests.rs": "b31192c9a3deb58226d0329bd8ab7edf0aff31deb5ec0c4b8dc68a79e977ffb1",
+    "crates/pharness-core/src/tools/cluster/finance/probes.rs": "a8c25367f7834dd0d32fe589c49174d5df9931de4ccae391370e7a5c74c7b322",
+    "crates/pharness-core/src/tools/cluster/finance/signals/analysis.rs": "bc578f2333e9340328401278dbe9f62587cb2a8d3ed1344207244149f1e01b31",
+    "crates/pharness-core/src/tools/cluster/finance/signals/live.rs": "63232bbde1f161b1a3a7e55f3e23c2f015fd276aaff3fc1663fdce8450e0acae",
+    "crates/pharness-core/src/tools/cluster/finance/signals/query.rs": "dbcda07203a133e37ae72a9c6920828788e656ea2a6695b011948c5cf81e4ae1",
+    "crates/pharness-core/src/tools/cluster/finance/signals/request.rs": "d4c5516a38695862cf533299577de1cbabf55f89a434381b86a2a2ea2c778e13",
+    "crates/pharness-core/src/tools/cluster/finance/signals/tests.rs": "8ed95f5eb55e2d6ffa66912d1290ce03b37396def8afdacbf921e460f8867135",
+    "crates/pharness-core/src/tools/cluster/finance/signals/window.rs": "1797bc910aa6a98e2a703270a6c7800ba2a73dc965a5da9009066e18c11ff38d",
+    "crates/pharness-core/src/tools/cluster/finance/signals.rs": "1e3b3e581582ce1871287b68026e97b36111b0e7ed98f8a08758531b469fe661",
+    "crates/pharness-core/src/tools/cluster/finance/tests.rs": "d9be7849a362a100a1ab021b0b0affdd69a9b9eb575ccc3700dcc394078c009d",
+    "crates/pharness-core/src/tools/cluster/finance/traces/analysis.rs": "b18c76fd186d822fab6f592a2fb61bdf7759e157de2855f059562dd4695387c0",
+    "crates/pharness-core/src/tools/cluster/finance/traces/request.rs": "64d75a18441c02d6d67ae484cf5716210f0933ebad625233ef9c089397fde9f0",
+    "crates/pharness-core/src/tools/cluster/finance/traces/tests.rs": "a37f69dcf6aab8fed665f91a94a437b3a6b377b04f7f1e163a087959c4f4d61e",
+    "crates/pharness-core/src/tools/cluster/finance/traces.rs": "39562cfee9dbba4b4bdce821c71a305d2f5e32f8c652499561e8cc7af013628a",
+    "crates/pharness-core/src/tools/cluster/finance.rs": "7b9219ad7d415b6a840037482f15bd19c7ade306c02b20059d3ef53b70b457f2"
+  },
+  "core_tests": {
+    "passed": 199,
+    "failed": 0,
+    "ignored_live": 5
+  },
+  "new_trace_tests": 7,
+  "clippy_all_targets": "passed with -D warnings",
+  "architecture": "module boundaries and five dependency-parser cases passed",
+  "format_and_diff": "passed before source commit",
+  "live_window": {
+    "end_unix_seconds": 1788649800,
+    "start_unix_seconds": 1788649500
+  },
+  "live_trace_state": "observed",
+  "functional_probe_state": "failed",
+  "deployed_reader": false,
+  "runtime_verification": "not_evaluated",
+  "evidence": [
+    {
+      "artifact": "ASTRA-M08-HEALTH-TRACE-CORRELATION-CORE-TESTS.log",
+      "sha256": "de7716ff8f6d941ed26fe106ea4d1dacc53405070e36a2840d4649686806e4dd"
+    },
+    {
+      "artifact": "ASTRA-M08-HEALTH-TRACE-CORRELATION-CLIPPY.log",
+      "sha256": "5b5081a9cad80eff5bb55f16641ec4425b6e570fc5305d340d773cdfcbfb017d"
+    },
+    {
+      "artifact": "ASTRA-M08-HEALTH-TRACE-CORRELATION-ARCHITECTURE.log",
+      "sha256": "bc98287b86890fb3009f4173e7dcdee4f1c1c5d7a6c7505b2234c54406204169"
+    },
+    {
+      "artifact": "ASTRA-M08-HEALTH-TRACE-CORRELATION-LIVE.log",
+      "sha256": "180c80e7cd4e71f712d7c84ca00c6acf4dfc8c5bc052fc1c7096cc41bae4195d"
+    },
+    {
+      "artifact": "ASTRA-M08-HEALTH-TRACE-CORRELATION-INITIAL-VISIBILITY-FAILURE.log",
+      "sha256": "591c158e5a0a9c0879fbc6eb347cada4ae707e07a7176a627879b3dd696ed118"
+    },
+    {
+      "artifact": "ASTRA-M08-HEALTH-TRACE-CORRELATION-VISIBILITY-LINT-FAILURE.log",
+      "sha256": "e1cdaabcc95969c2e7a42004fd506fb98f0e4ff3f56808653e78c09379be6475"
+    }
+  ]
+}

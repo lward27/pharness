@@ -1,0 +1,62 @@
+{
+  "completed_at_unix_ms": 1788643822638,
+  "deployment_identity": "must_be_verified_separately",
+  "expected": {
+    "application": "yfinance",
+    "environment": "staging",
+    "gitops_commit_sha": "491f081e3ea6e639528a98cce43466cc7858fdcc",
+    "image_digest": "sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1"
+  },
+  "latency_slo": "not_defined",
+  "limits": {
+    "http_method": "GET",
+    "redirects": false,
+    "request_timeout_ms": 15000,
+    "requests": 3,
+    "response_bytes": 65536,
+    "retries": 0
+  },
+  "probe_state": "failed",
+  "probes": [
+    {
+      "backend_trace_id": "12425262477cf0d0363bdbf930901df7",
+      "elapsed_ms": 236,
+      "http_status": 200,
+      "method": "GET",
+      "observed_at_unix_ms": 1788643822618,
+      "path": "/healthz",
+      "reason": null,
+      "response_bytes": 15,
+      "response_sha256": "sha256:a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288",
+      "state": "passed"
+    },
+    {
+      "backend_trace_id": "8e513f7fcbbee5c696f0d848da6a2cc4",
+      "elapsed_ms": 255,
+      "http_status": 500,
+      "method": "GET",
+      "observed_at_unix_ms": 1788643822637,
+      "path": "/history?ticker_name=%2A%2A%2A",
+      "reason": "unexpected_application_response",
+      "response_bytes": 21,
+      "response_sha256": "sha256:e41656eb2ba6c6293bf6dd928e5a88cdbc50535cab661c1969e0f598e497ed62",
+      "state": "failed"
+    },
+    {
+      "backend_trace_id": "2ac1ee3572f7c58240ad285a3c0995b7",
+      "elapsed_ms": 236,
+      "http_status": 404,
+      "method": "GET",
+      "observed_at_unix_ms": 1788643822618,
+      "path": "/markets/not-a-market",
+      "reason": "unexpected_application_response",
+      "response_bytes": 22,
+      "response_sha256": "sha256:37ec4665a8102d115ffd1ac20dae94c98b4dac64b0c1a68228aa2a531caeb35d",
+      "state": "failed"
+    }
+  ],
+  "runtime_verification": "not_evaluated",
+  "schema_version": "pharness.dev/finance-functional-probes/v1alpha1",
+  "scope": "deterministic health, validation and frontend configuration responses; no live market-data correctness or browser-initialization claim",
+  "started_at_unix_ms": 1788643822381
+}

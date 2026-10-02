@@ -1,0 +1,23 @@
+    Checking pharness-core v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-core)
+    Checking utf8parse v0.2.2
+    Checking anstyle v1.0.14
+    Checking colorchoice v1.0.5
+    Checking is_terminal_polyfill v1.70.2
+    Checking anstyle-query v1.1.5
+    Checking clap_lex v1.1.0
+    Checking strsim v0.11.1
+    Checking anstyle-parse v1.0.0
+    Checking anstream v1.0.0
+    Checking clap_builder v4.6.0
+    Checking clap v4.6.1
+    Checking pharness-openai-compatible v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-openai-compatible)
+    Checking pharness-store v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-store)
+    Checking pharness-fireworks v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-fireworks)
+    Checking pharness-model-gateway v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-model-gateway)
+    Checking pharness-runhost v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-runhost)
+    Checking pharness-config v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-config)
+    Checking pharness-codex-host v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-codex-host)
+    Checking pharness-worker v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-worker)
+    Checking pharness-eval v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-eval)
+    Checking pharness-api v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-runtime-verification/crates/pharness-api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 16.86s
