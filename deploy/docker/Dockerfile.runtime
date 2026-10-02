@@ -19,7 +19,14 @@ COPY crates ./crates
 COPY deploy/helm/pharness/files/inference-registry.json ./deploy/helm/pharness/files/inference-registry.json
 ARG PHARNESS_BUILD_REVISION=unknown
 ENV PHARNESS_BUILD_REVISION="${PHARNESS_BUILD_REVISION}"
-RUN cargo build --release --target x86_64-unknown-linux-gnu -p pharness-api -p pharness-worker -p pharness-eval -p pharness-codex-host --bins
+# Shared BuildKit caches keep dependency and incremental compilation across
+# images and releases; the target directory is a cache mount, so copy the
+# built binaries into the layer explicitly.
+RUN --mount=type=cache,id=pharness-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=pharness-cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=pharness-target-x86_64,target=/build/target \
+    cargo build --release --target x86_64-unknown-linux-gnu -p pharness-api -p pharness-worker -p pharness-eval -p pharness-codex-host --bins \
+    && mkdir -p /build/out && cp target/x86_64-unknown-linux-gnu/release/pharness-admin target/x86_64-unknown-linux-gnu/release/pharness-api target/x86_64-unknown-linux-gnu/release/pharness-codex-host target/x86_64-unknown-linux-gnu/release/pharness-eval target/x86_64-unknown-linux-gnu/release/pharness-worker /build/out/
 
 FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
 ARG KUBECTL_VERSION=v1.34.4
@@ -35,11 +42,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 65532 --user-group --home-dir /home/pharness --create-home pharness
 
-COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-api /usr/local/bin/pharness-api
-COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-admin /usr/local/bin/pharness-admin
-COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-worker /usr/local/bin/pharness-worker
-COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-eval /usr/local/bin/pharness-eval
-COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-codex-host /usr/local/bin/pharness-codex-host
+COPY --from=builder /build/out/pharness-api /usr/local/bin/pharness-api
+COPY --from=builder /build/out/pharness-admin /usr/local/bin/pharness-admin
+COPY --from=builder /build/out/pharness-worker /usr/local/bin/pharness-worker
+COPY --from=builder /build/out/pharness-eval /usr/local/bin/pharness-eval
+COPY --from=builder /build/out/pharness-codex-host /usr/local/bin/pharness-codex-host
 
 USER 65532:65532
 ENTRYPOINT ["pharness-api"]

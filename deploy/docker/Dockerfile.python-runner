@@ -15,7 +15,14 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 ARG PHARNESS_BUILD_REVISION=unknown
 ENV PHARNESS_BUILD_REVISION="${PHARNESS_BUILD_REVISION}"
-RUN cargo build --release --target x86_64-unknown-linux-gnu -p pharness-worker -p pharness-codex-host
+# Shared BuildKit caches keep dependency and incremental compilation across
+# images and releases; the target directory is a cache mount, so copy the
+# built binaries into the layer explicitly.
+RUN --mount=type=cache,id=pharness-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=pharness-cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=pharness-target-x86_64,target=/build/target \
+    cargo build --release --target x86_64-unknown-linux-gnu -p pharness-worker -p pharness-codex-host \
+    && mkdir -p /build/out && cp target/x86_64-unknown-linux-gnu/release/pharness-codex-host target/x86_64-unknown-linux-gnu/release/pharness-worker /build/out/
 
 FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS codex
 ARG TARGETARCH
@@ -37,8 +44,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends bubblewrap ca-certificates git \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 65532 --user-group --home-dir /workspace --no-create-home pharness
-COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-worker /usr/local/bin/pharness-worker
-COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-codex-host /usr/local/bin/pharness-codex-host
+COPY --from=builder /build/out/pharness-worker /usr/local/bin/pharness-worker
+COPY --from=builder /build/out/pharness-codex-host /usr/local/bin/pharness-codex-host
 COPY --from=codex /out/codex /usr/local/bin/codex
 COPY --from=codex /out/codex-linux-sandbox /usr/local/bin/codex-linux-sandbox
 COPY --from=codex /out/codex-code-mode-host /usr/local/bin/codex-code-mode-host

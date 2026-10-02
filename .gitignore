@@ -60,3 +60,4 @@ kubeconfig.*
 # Generated presentation and artifact outputs
 /outputs/
 __pycache__/
+/dist/

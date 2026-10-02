@@ -69,6 +69,18 @@ explicitly selected local Buildx route remains available as
 and all seven digests. It validates a separate clean GitOps release change.
 The scripts do not replace merge authorization or live release verification.
 
+For routine iteration, `scripts/pharness-release.sh [--merge]` does the whole
+release from current `origin/main` in one command. It submits all PipelineRuns
+at once so BuildKit builds them concurrently, verifies the artifacts with
+`lucas-ops` when installed, archives the live database only when the release
+adds migrations, pins the digests, and opens (or with `--merge`, merges) the
+pin PR. The Rust images share BuildKit cargo caches (registry, git and target
+directory), so dependencies compile once across images and releases. That cache
+is a deliberate iteration-speed trade: the build is no longer hermetic per
+image. Configuration-only changes to Helm values need no image build; Argo
+applies them from `main`. The inference registry is the exception, because the
+evaluation runner embeds it at compile time.
+
 Build receipts include the Tekton/TaskRun identities and returned digests; run
 the independent registry verification before release pinning. A digest
 identifies an artifact; it is not by itself an SBOM, signature, or vulnerability

@@ -20,7 +20,14 @@ COPY crates ./crates
 COPY deploy/helm/pharness/files/inference-registry.json ./deploy/helm/pharness/files/inference-registry.json
 ARG PHARNESS_BUILD_REVISION=unknown
 ENV PHARNESS_BUILD_REVISION="${PHARNESS_BUILD_REVISION}"
-RUN cargo build --release --target x86_64-unknown-linux-gnu -p pharness-eval -p pharness-codex-host
+# Shared BuildKit caches keep dependency and incremental compilation across
+# images and releases; the target directory is a cache mount, so copy the
+# built binaries into the layer explicitly.
+RUN --mount=type=cache,id=pharness-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=pharness-cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=pharness-target-x86_64,target=/build/target \
+    cargo build --release --target x86_64-unknown-linux-gnu -p pharness-eval -p pharness-codex-host \
+    && mkdir -p /build/out && cp target/x86_64-unknown-linux-gnu/release/pharness-codex-host target/x86_64-unknown-linux-gnu/release/pharness-eval /build/out/
 
 FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS codex
 ARG TARGETARCH
@@ -79,6 +86,6 @@ ARG PHARNESS_BUILD_REVISION=unknown
 LABEL org.opencontainers.image.source="https://github.com/lward27/pharness" \
       org.opencontainers.image.revision="${PHARNESS_BUILD_REVISION}"
 ENV PHARNESS_BUILD_REVISION="${PHARNESS_BUILD_REVISION}"
-COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-eval /usr/local/bin/pharness-eval
-COPY --from=builder /build/target/x86_64-unknown-linux-gnu/release/pharness-codex-host /usr/local/bin/pharness-codex-host
+COPY --from=builder /build/out/pharness-eval /usr/local/bin/pharness-eval
+COPY --from=builder /build/out/pharness-codex-host /usr/local/bin/pharness-codex-host
 ENTRYPOINT ["pharness-eval"]
