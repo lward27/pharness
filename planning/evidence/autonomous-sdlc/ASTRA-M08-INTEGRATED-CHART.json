@@ -1,0 +1,267 @@
+{
+  "source_revision": "6f40cdcd78060dd59fa3292435d5cfd76c08bbe5",
+  "render_sha256": "8e565a9f9ae1cf0259783de5cfdf5b6bd2f9beef166074ec2c2698f7577b93aa",
+  "finite_read_roles": [
+    {
+      "apiVersion": "rbac.authorization.k8s.io/v1",
+      "kind": "Role",
+      "metadata": {
+        "name": "pharness-finance-runtime-observer",
+        "namespace": "apps-staging",
+        "labels": {
+          "app.kubernetes.io/part-of": "pharness"
+        }
+      },
+      "rules": [
+        {
+          "apiGroups": [
+            "apps"
+          ],
+          "resources": [
+            "deployments"
+          ],
+          "resourceNames": [
+            "yfinance-wrapper",
+            "finance-frontend"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "services"
+          ],
+          "resourceNames": [
+            "yfinance-wrapper",
+            "finance-frontend"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods"
+          ],
+          "verbs": [
+            "list"
+          ]
+        },
+        {
+          "apiGroups": [
+            "apps"
+          ],
+          "resources": [
+            "replicasets"
+          ],
+          "verbs": [
+            "list"
+          ]
+        },
+        {
+          "apiGroups": [
+            "discovery.k8s.io"
+          ],
+          "resources": [
+            "endpointslices"
+          ],
+          "verbs": [
+            "list"
+          ]
+        }
+      ]
+    },
+    {
+      "apiVersion": "rbac.authorization.k8s.io/v1",
+      "kind": "Role",
+      "metadata": {
+        "name": "pharness-finance-runtime-observer",
+        "namespace": "apps-prod",
+        "labels": {
+          "app.kubernetes.io/part-of": "pharness"
+        }
+      },
+      "rules": [
+        {
+          "apiGroups": [
+            "apps"
+          ],
+          "resources": [
+            "deployments"
+          ],
+          "resourceNames": [
+            "yfinance-wrapper",
+            "finance-frontend"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "services"
+          ],
+          "resourceNames": [
+            "yfinance-wrapper",
+            "finance-frontend"
+          ],
+          "verbs": [
+            "get"
+          ]
+        },
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "pods"
+          ],
+          "verbs": [
+            "list"
+          ]
+        },
+        {
+          "apiGroups": [
+            "apps"
+          ],
+          "resources": [
+            "replicasets"
+          ],
+          "verbs": [
+            "list"
+          ]
+        },
+        {
+          "apiGroups": [
+            "discovery.k8s.io"
+          ],
+          "resources": [
+            "endpointslices"
+          ],
+          "verbs": [
+            "list"
+          ]
+        }
+      ]
+    },
+    {
+      "apiVersion": "rbac.authorization.k8s.io/v1",
+      "kind": "Role",
+      "metadata": {
+        "name": "pharness-finance-runtime-observer",
+        "namespace": "argocd",
+        "labels": {
+          "app.kubernetes.io/part-of": "pharness"
+        }
+      },
+      "rules": [
+        {
+          "apiGroups": [
+            "argoproj.io"
+          ],
+          "resources": [
+            "applications"
+          ],
+          "resourceNames": [
+            "yfinance-staging",
+            "finance-frontend-staging",
+            "yfinance-wrapper",
+            "finance-frontend"
+          ],
+          "verbs": [
+            "get"
+          ]
+        }
+      ]
+    }
+  ],
+  "finite_bindings": [
+    {
+      "apiVersion": "rbac.authorization.k8s.io/v1",
+      "kind": "RoleBinding",
+      "metadata": {
+        "name": "pharness-finance-runtime-observer",
+        "namespace": "apps-staging",
+        "labels": {
+          "app.kubernetes.io/part-of": "pharness"
+        }
+      },
+      "subjects": [
+        {
+          "kind": "ServiceAccount",
+          "name": "pharness-api",
+          "namespace": "pharness"
+        }
+      ],
+      "roleRef": {
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "pharness-finance-runtime-observer"
+      }
+    },
+    {
+      "apiVersion": "rbac.authorization.k8s.io/v1",
+      "kind": "RoleBinding",
+      "metadata": {
+        "name": "pharness-finance-runtime-observer",
+        "namespace": "apps-prod",
+        "labels": {
+          "app.kubernetes.io/part-of": "pharness"
+        }
+      },
+      "subjects": [
+        {
+          "kind": "ServiceAccount",
+          "name": "pharness-api",
+          "namespace": "pharness"
+        }
+      ],
+      "roleRef": {
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "pharness-finance-runtime-observer"
+      }
+    },
+    {
+      "apiVersion": "rbac.authorization.k8s.io/v1",
+      "kind": "RoleBinding",
+      "metadata": {
+        "name": "pharness-finance-runtime-observer",
+        "namespace": "argocd",
+        "labels": {
+          "app.kubernetes.io/part-of": "pharness"
+        }
+      },
+      "subjects": [
+        {
+          "kind": "ServiceAccount",
+          "name": "pharness-api",
+          "namespace": "pharness"
+        }
+      ],
+      "roleRef": {
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "pharness-finance-runtime-observer"
+      }
+    }
+  ],
+  "api_image": "registry.lucas.engineering/pharness-runtime@sha256:1e63d8f1c7fa34bcd390fa80747fc8705b0631e750029d62bb2a8890dffd7709",
+  "activation_flags": {
+    "PHARNESS_CODING_RELIABILITY_V2_ENABLED": "false"
+  },
+  "finance_mimir_url": "http://mimir-gateway.monitoring.svc.cluster.local:80/prometheus",
+  "legacy_prometheus_url": "http://prometheus-server.monitoring.svc.cluster.local:80",
+  "tempo_url": "http://tempo.monitoring.svc.cluster.local:3200",
+  "deployed": false
+}

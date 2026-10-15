@@ -10,6 +10,13 @@ fn current_authority() -> HostedStagingAuthority {
 fn context(a: &HostedStagingAuthority, p: &StagingGitOpsPlan, admitted: bool) -> Value {
     json!({"authority":a,"authority_hash":a.material_hash().unwrap(),"plan":p,"plan_hash":p.material_hash().unwrap(),"may_advance":!admitted,"admission_recorded":admitted})
 }
+fn admission(a: &HostedStagingAuthority, p: &StagingGitOpsPlan) -> Value {
+    json!({"admitted":true,"authority_hash":a.material_hash().unwrap(),"plan_hash":p.material_hash().unwrap(),"baseline":{
+        "baseline_artifact_id":format!("staging_baseline_result_{}",a.execution_id),
+        "identity_artifact_id":format!("staging_baseline_admission_identity_{}",a.execution_id),
+        "baseline_sha256":format!("sha256:{}","1".repeat(64)),"identity_sha256":format!("sha256:{}","2".repeat(64)),
+        "admission_expires_at_ms":crate::staging_gitops::now()+30_000}})
+}
 fn transport(m: &Mock, a: &HostedStagingAuthority, observer: bool) -> Transport {
     Transport {
         client: m.git.client.clone(),
@@ -65,7 +72,7 @@ async fn lost_commit_acknowledgement_recovers_by_reading_the_admitted_history() 
     let p = plan(&a);
     let body = context(&a, &p, false);
     let initial: StagingContext = serde_json::from_value(body.clone()).unwrap();
-    let admitted = json!({"admitted":true,"authority_hash":a.material_hash().unwrap(),"plan_hash":p.material_hash().unwrap()});
+    let admitted = admission(&a, &p);
     let m = mock(vec![
         (200, body),
         (200, branch(&p.base_commit_sha)),
@@ -97,6 +104,38 @@ async fn lost_commit_acknowledgement_recovers_by_reading_the_admitted_history() 
         .iter()
         .skip(4)
         .all(|(path, _)| path.starts_with("GET ")));
+}
+
+#[tokio::test]
+async fn expired_or_missing_baseline_admission_cannot_send_the_github_post() {
+    for expired in [false, true] {
+        let a = current_authority();
+        let p = plan(&a);
+        let body = context(&a, &p, false);
+        let initial: StagingContext = serde_json::from_value(body.clone()).unwrap();
+        let mut admitted = admission(&a, &p);
+        if expired {
+            admitted["baseline"]["admission_expires_at_ms"] =
+                json!(crate::staging_gitops::now() - 1);
+        } else {
+            admitted.as_object_mut().unwrap().remove("baseline");
+        }
+        let m = mock(vec![
+            (200, body),
+            (200, branch(&p.base_commit_sha)),
+            (200, admitted),
+        ])
+        .await;
+        assert!(transport(&m, &a, false)
+            .run(&m.git, &initial)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("baseline_admission"));
+        let requests = m.requests.lock().unwrap();
+        assert_eq!(requests.len(), 3);
+        assert!(!requests.iter().any(|(path, _)| path.contains("/graphql")));
+    }
 }
 
 #[tokio::test]

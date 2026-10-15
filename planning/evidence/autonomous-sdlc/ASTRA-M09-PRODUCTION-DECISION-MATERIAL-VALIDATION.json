@@ -1,0 +1,40 @@
+{
+  "observed_at": "2026-09-06T10:51:44.411815+00:00",
+  "source_revision": "b71e267d452343203fcc45b1cc1efc9e9397779a",
+  "main_start_revision": "04dbaeab51d9de939f0743d587c3aa3d10c21a8f",
+  "integrated_m08_dependency": "06ead42711492377dba03da67cd9d7ec2dfa29a8",
+  "source_sha256": {
+    "crates/pharness-core/src/hosted_sdlc.rs": "7f0bdb937bf502201a2ecf6351c285a5dafa2c7209cad81802451bf5e5fc005c",
+    "crates/pharness-core/src/hosted_sdlc/production.rs": "26399bf14bfe51327d6923f31075d57d8d2c7b557ef11d93493f3418d0de1993",
+    "crates/pharness-core/src/hosted_sdlc/production/approval.rs": "4ada7e16586006eeb24d67fcffe54b2df4a4b148a7f8bf4843c245fd1b4b7b00",
+    "crates/pharness-core/src/hosted_sdlc/production/tests.rs": "95edeb99ac99d4a14c90cba956961ec12255770787e05f701d4507607253afd0"
+  },
+  "core_package_tests_passed": 212,
+  "explicit_live_tests_ignored": 6,
+  "new_production_boundary_tests": 6,
+  "cargo_exit_code": 0,
+  "clippy_core_all_targets": "passed",
+  "format": "passed",
+  "architecture": "passed",
+  "native_evidence_origin_validation": "not implemented in this slice",
+  "authenticated_operator_decision_api": "not implemented in this slice",
+  "durable_production_delivery_and_recovery": "not implemented in this slice",
+  "network_or_gitops_write_methods_added": false,
+  "schema_migrations_added": false,
+  "live_qualified": false,
+  "milestone_accepted": false,
+  "logs": [
+    {
+      "path": "ASTRA-M09-PRODUCTION-DECISION-MATERIAL-TESTS.log",
+      "sha256": "d2e80e3532e93a34ecb34b383e3a8f553419fd27dca3e217999ec847c58f8d98"
+    },
+    {
+      "path": "ASTRA-M09-PRODUCTION-DECISION-MATERIAL-CLIPPY.log",
+      "sha256": "6453a8a112320d39a5f05ae14c0f51111f66eb85c268d59162f7082e535c66fd"
+    },
+    {
+      "path": "ASTRA-M09-PRODUCTION-DECISION-MATERIAL-ARCHITECTURE.log",
+      "sha256": "c14f889e23c77b067016fcd1d1e442311a9edc75bbea5e79cfeb6d38ea41f2a3"
+    }
+  ]
+}

@@ -76,6 +76,10 @@ fn staging_request_is_one_digest_change_on_the_expected_gitops_head() {
             p.updated_content.as_bytes()
         );
         let old: Value = serde_yaml::from_str(&p.original_content).unwrap();
+        assert_eq!(
+            p.previous_image_digest(&a).unwrap(),
+            old["images"][0]["digest"].as_str().unwrap()
+        );
         let new: Value = serde_yaml::from_str(&p.updated_content).unwrap();
         let mut expected = old.clone();
         expected["images"][0]["digest"] = json!(a.image_digest);
@@ -96,6 +100,19 @@ fn staging_request_is_one_digest_change_on_the_expected_gitops_head() {
         assert!(p.commit_request(&a, 999).is_err());
         p.validate(&a).unwrap(); // Expired plans remain readable for observation.
     }
+}
+
+#[test]
+fn previous_staging_authority_stays_readable_but_cannot_dispatch_a_new_write() {
+    let mut a = authority(false);
+    a.schema_version = LEGACY_AUTHORITY_SCHEMA.into();
+    let p = plan(&a, false);
+    a.validate_identity().unwrap();
+    p.validate(&a).unwrap();
+    assert!(a.validate_for_dispatch(2_000).is_err());
+    assert!(p.commit_request(&a, 2_000).is_err());
+    a.schema_version = "pharness.dev/hosted-staging-gitops/v9".into();
+    assert!(a.validate_identity().is_err());
 }
 
 #[test]

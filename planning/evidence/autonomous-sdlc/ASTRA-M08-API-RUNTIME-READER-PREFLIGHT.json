@@ -1,0 +1,62 @@
+{
+  "observed_at": "2026-09-05T23:09:50.705693+00:00",
+  "cluster": "lucas_engineering",
+  "service_account": "system:serviceaccount:pharness:pharness-api",
+  "read_authorization": [
+    {
+      "namespace": "apps-staging",
+      "resource": "pods",
+      "verb": "list",
+      "allowed": false,
+      "exit_code": 1
+    },
+    {
+      "namespace": "apps-staging",
+      "resource": "deployments.apps",
+      "verb": "get",
+      "allowed": false,
+      "exit_code": 1
+    },
+    {
+      "namespace": "apps-staging",
+      "resource": "replicasets.apps",
+      "verb": "list",
+      "allowed": false,
+      "exit_code": 1
+    },
+    {
+      "namespace": "apps-staging",
+      "resource": "services",
+      "verb": "get",
+      "allowed": false,
+      "exit_code": 1
+    },
+    {
+      "namespace": "apps-staging",
+      "resource": "endpointslices.discovery.k8s.io",
+      "verb": "list",
+      "allowed": false,
+      "exit_code": 1
+    },
+    {
+      "namespace": "argocd",
+      "resource": "applications.argoproj.io",
+      "verb": "get",
+      "allowed": false,
+      "exit_code": 1
+    }
+  ],
+  "configured_telemetry_hosts": {
+    "PHARNESS_PROMETHEUS_URL": {
+      "configured": true,
+      "scheme": "http",
+      "host": "prometheus-server.monitoring.svc.cluster.local"
+    },
+    "PHARNESS_LOKI_URL": {
+      "configured": true,
+      "scheme": "http",
+      "host": "loki.monitoring.svc.cluster.local"
+    }
+  },
+  "scope": "Existing API read-authority and endpoint configuration only; not new reader deployment or runtime verification."
+}

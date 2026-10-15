@@ -1,0 +1,163 @@
+{
+  "observed_at": "2026-09-05T22:44:38.075647+00:00",
+  "cluster": "lucas_engineering",
+  "namespace": "monitoring",
+  "pod": {
+    "name": "promtail-2d7rh",
+    "uid": "e7da056e-285c-41d8-801a-1c478f24d3c9",
+    "node": "ubuntu-lucas-engineering",
+    "owners": [
+      {
+        "apiVersion": "apps/v1",
+        "blockOwnerDeletion": true,
+        "controller": true,
+        "kind": "DaemonSet",
+        "name": "promtail",
+        "uid": "c6ae5a77-0fbe-40bc-b80c-d0a37bbe30a8"
+      }
+    ],
+    "conditions": [
+      {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-09-04T15:41:42Z",
+        "observedGeneration": 1,
+        "status": "True",
+        "type": "PodReadyToStartContainers"
+      },
+      {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-09-04T15:40:29Z",
+        "observedGeneration": 1,
+        "status": "True",
+        "type": "Initialized"
+      },
+      {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-09-05T22:40:20Z",
+        "message": "containers with unready status: [promtail]",
+        "observedGeneration": 1,
+        "reason": "ContainersNotReady",
+        "status": "False",
+        "type": "Ready"
+      },
+      {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-09-05T22:40:20Z",
+        "message": "containers with unready status: [promtail]",
+        "observedGeneration": 1,
+        "reason": "ContainersNotReady",
+        "status": "False",
+        "type": "ContainersReady"
+      },
+      {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-09-04T15:40:23Z",
+        "observedGeneration": 1,
+        "status": "True",
+        "type": "PodScheduled"
+      }
+    ],
+    "containers": [
+      {
+        "name": "promtail",
+        "ready": false,
+        "restartCount": 333,
+        "lastState": {
+          "terminated": {
+            "containerID": "containerd://ea6d36664fbf445e4f037520b439003a66d2abe2e565817edb7b06e4555706e0",
+            "exitCode": 137,
+            "finishedAt": "2026-09-05T22:40:20Z",
+            "reason": "OOMKilled",
+            "startedAt": "2026-09-05T22:39:54Z"
+          }
+        },
+        "state": {
+          "waiting": {
+            "message": "back-off 5m0s restarting failed container=promtail pod=promtail-2d7rh_monitoring(e7da056e-285c-41d8-801a-1c478f24d3c9)",
+            "reason": "CrashLoopBackOff"
+          }
+        }
+      }
+    ]
+  },
+  "daemonset": {
+    "name": "promtail",
+    "uid": "c6ae5a77-0fbe-40bc-b80c-d0a37bbe30a8",
+    "generation": 5,
+    "labels": {
+      "app.kubernetes.io/instance": "promtail",
+      "app.kubernetes.io/managed-by": "Helm",
+      "app.kubernetes.io/name": "promtail",
+      "app.kubernetes.io/version": "3.0.0",
+      "helm.sh/chart": "promtail-6.16.6"
+    },
+    "annotations": {
+      "argocd.argoproj.io/tracking-id": "promtail:apps/DaemonSet:monitoring/promtail",
+      "deprecated.daemonset.template.generation": "4"
+    },
+    "status": {
+      "currentNumberScheduled": 2,
+      "desiredNumberScheduled": 2,
+      "numberAvailable": 1,
+      "numberMisscheduled": 0,
+      "numberReady": 1,
+      "numberUnavailable": 1,
+      "observedGeneration": 5,
+      "updatedNumberScheduled": 2
+    },
+    "containers": [
+      {
+        "name": "promtail",
+        "image": "docker.io/grafana/promtail:3.0.0",
+        "args": [
+          "-config.file=/etc/promtail/promtail.yaml"
+        ],
+        "resources": {
+          "limits": {
+            "memory": "128Mi"
+          },
+          "requests": {
+            "cpu": "50m",
+            "memory": "64Mi"
+          }
+        },
+        "livenessProbe": null,
+        "readinessProbe": {
+          "failureThreshold": 5,
+          "httpGet": {
+            "path": "/ready",
+            "port": "http-metrics",
+            "scheme": "HTTP"
+          },
+          "initialDelaySeconds": 10,
+          "periodSeconds": 10,
+          "successThreshold": 1,
+          "timeoutSeconds": 1
+        }
+      }
+    ]
+  },
+  "events": [
+    {
+      "reason": "Created",
+      "count": 327,
+      "first": "2026-09-04T15:41:41Z",
+      "last": "2026-09-05T22:01:21Z",
+      "type": "Normal"
+    },
+    {
+      "reason": "Pulled",
+      "count": 333,
+      "first": "2026-09-04T15:42:17Z",
+      "last": "2026-09-05T22:39:54Z",
+      "type": "Normal"
+    },
+    {
+      "reason": "BackOff",
+      "count": 7932,
+      "first": "2026-09-04T15:42:45Z",
+      "last": "2026-09-05T22:42:20Z",
+      "type": "Warning"
+    }
+  ]
+}

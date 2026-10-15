@@ -6,7 +6,10 @@ mod result;
 mod shell;
 
 pub use capability::{CapabilityKind, ToolCapability};
-pub use cluster::{FinanceTraceWindow, ReadOnlyClusterTools};
+pub use cluster::{
+    FinanceApplication, FinanceDeploymentExpectation, FinanceEnvironment, FinanceRuntimeEvidence,
+    FinanceRuntimeWindow, FinanceTraceWindow, FinanceVerificationPhase, ReadOnlyClusterTools,
+};
 pub use executor::{
     CompositeToolExecutor, NoopToolExecutor, ToolError, ToolErrorDisposition, ToolExecutor,
 };

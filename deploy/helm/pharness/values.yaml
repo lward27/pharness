@@ -92,10 +92,11 @@ api:
     environment: homelab
   cluster:
     argocdNamespace: argocd
+    # Preserve the legacy inventory endpoint. Finance time windows use Mimir.
     prometheusUrl: http://prometheus-server.monitoring.svc.cluster.local:80
+    financeMimirUrl: http://mimir-gateway.monitoring.svc.cluster.local:80/prometheus
     lokiUrl: http://loki.monitoring.svc.cluster.local:3100
-    # Enable with the next compatible runtime release: http://tempo.monitoring.svc.cluster.local:3200
-    tempoUrl: ""
+    tempoUrl: http://tempo.monitoring.svc.cluster.local:3200
     registryAliases: docker-registry.registry.svc.cluster.local:5000=registry.lucas.engineering
   resources:
     requests:

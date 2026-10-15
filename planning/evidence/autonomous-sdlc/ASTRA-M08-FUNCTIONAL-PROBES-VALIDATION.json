@@ -1,0 +1,33 @@
+{
+  "observed_at": "2026-09-05T21:33:37.066298+00:00",
+  "source_base": "3fd06db3b825f6c6322a87990eafb515adac9963",
+  "source_sha256": {
+    "crates/pharness-core/src/tools/cluster/finance.rs": "4decde88a0f61b0221cdfbf75737e51c1e053cce0b44ad337efa6969bad49dfd",
+    "crates/pharness-core/src/tools/cluster/finance/probes.rs": "eaa90d5f1107635398e40096f22bf4e8d2cbf20baca246312ce8143c4b333235",
+    "crates/pharness-core/src/tools/cluster/finance/probes/tests.rs": "153395dfd45e990937b6e5f9103697bf6fa6b9631b4b70b08f34bd143c6904a0"
+  },
+  "core_tests": {
+    "unit_passed": 176,
+    "integration_passed": 8,
+    "failed": 0,
+    "ignored_live_access": 3,
+    "new_probe_tests": 5
+  },
+  "live_reads": {
+    "yfinance_staging": "failed: 500 invalid ticker, 404 market route",
+    "frontend_staging": "passed: shell, runtime config, staging backend health proxy"
+  },
+  "clippy": "passed, all core targets, warnings denied",
+  "format": "passed",
+  "architecture": "passed",
+  "dependency_parser_tests": 5,
+  "log_sha256": {
+    "core-tests": "92b6308c044158f5db89b47fdf66d59fb0a82b0c283943d60501cdca29370db6",
+    "clippy": "0d294f39293c12501c1d7e0d34874d0b996c8e43c4439acc00c0a9dc51a18dfc",
+    "architecture": "0f7e4b97443e54aca647179972594d13bb587afcbf151fab8228148587ea844a"
+  },
+  "deployed": false,
+  "production_effects": [],
+  "runtime_acceptance": false,
+  "scope": "bounded deterministic application probes; live failures retained, no observation window, telemetry acceptance or autonomous delivery claim"
+}

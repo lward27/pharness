@@ -1,0 +1,47 @@
+{
+  "source_revision": "b1e878d6e629728e335a5ec3542fb0ac4604104d",
+  "parents": [
+    "d7c6b0f24b942457868baa3ae2d9469a0ad2c3d0",
+    "08b446f9bffb5ddd54e2a5892d5f20ba1975dbde"
+  ],
+  "observed_at": "2026-09-06T13:42:23.868877+00:00",
+  "core_package_tests_passed": 213,
+  "tests_failed": 0,
+  "existing_live_tests_ignored": 6,
+  "core_all_target_clippy_warnings_denied": "passed",
+  "format": "passed",
+  "production_types_byte_identical_to": "b71e267d452343203fcc45b1cc1efc9e9397779a",
+  "other_combined_source": {
+    "revision": "718d412745b2afe63f8fabc399f7ad242fa73e3e",
+    "evidence": "ASTRA-M08-M04-PROCESS-INTEGRATION-VALIDATION.json",
+    "workspace_tests_passed": 816,
+    "scope": "Prior combined source validation; not a claim of 816 tests rerun on this production-type addition"
+  },
+  "merge_conflict": "Only stale milestone wording; current M04/M08/M09 direction preserved",
+  "logs": [
+    {
+      "path": "ASTRA-M09-M04-PROCESS-INTEGRATION-TESTS.log",
+      "sha256": "e049189613196155f18f42fd270c95c344755512d31d3be2e4cee6eb16b1fc3d",
+      "original_log_sha256": "6604153845379340473c70fc2e9e334cd3378492cabcc3a550efb28da2adaaf7",
+      "normalization": "Trailing empty lines normalized to one final newline"
+    },
+    {
+      "path": "ASTRA-M09-M04-PROCESS-INTEGRATION-CLIPPY.log",
+      "sha256": "58beda1546e943453a833936aec08f558d0d1b6208e17fcbe26e44e0c5ee0dd0",
+      "original_log_sha256": "58beda1546e943453a833936aec08f558d0d1b6208e17fcbe26e44e0c5ee0dd0",
+      "normalization": "Trailing empty lines normalized to one final newline"
+    },
+    {
+      "path": "ASTRA-M09-M04-PROCESS-INTEGRATION-FORMAT.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "original_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalization": "Trailing empty lines normalized to one final newline"
+    }
+  ],
+  "authenticated_approval_endpoint": false,
+  "durable_production_admission": false,
+  "production_writer_execution": false,
+  "bounded_rollback_execution": false,
+  "deployed": false,
+  "native_human_approval_or_autonomous_acceptance_claimed": false
+}

@@ -1,0 +1,222 @@
+   Compiling pharness-core v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-runtime-evidence/crates/pharness-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.11s
+     Running unittests src/lib.rs (target/debug/deps/pharness_core-d5d05e2695986151)
+
+running 188 tests
+test agent::context::tests::reserves_output_and_keeps_only_the_configured_recent_history_budget ... ok
+test agent::context::tests::compacts_old_exchanges_without_orphaning_tool_calls ... ok
+test agent::context::tests::default_budget_bounds_a_long_coding_transcript ... ok
+test agent::runtime::tests::cancellation_before_first_turn_stops_run ... ok
+test agent::runtime::tests::empty_run_scope_serializes_as_null_in_runtime_events ... ok
+test agent::runtime::tests::completes_when_provider_finishes ... ok
+test agent::runtime::tests::coding_finish_requires_change_and_final_diff_but_general_finish_does_not ... ok
+test agent::runtime::tests::builder_submission_boundary_requires_acceptance_status_and_diff_after_mutation ... ok
+test agent::runtime::tests::fails_when_max_turns_is_exceeded ... ok
+test agent::runtime::tests::approved_action_recoverable_failure_reaches_the_resumed_model ... ok
+test agent::runtime::tests::ambiguous_patch_failure_is_returned_to_the_model ... ok
+test agent::runtime::tests::mandatory_context_overflow_fails_before_the_provider_is_called ... ok
+test agent::runtime::tests::executes_read_file_tool_and_continues_to_finish ... ok
+test agent::runtime::tests::builder_submission_boundary_exposes_only_terminal_submission ... ok
+test agent::runtime::tests::pauses_when_approval_is_required ... ok
+test agent::runtime::tests::policy_denies_privileged_shell_command ... ok
+test agent::runtime::tests::policy_pause_prevents_write_execution ... ok
+test agent::runtime::tests::resumable_transcript_restores_recovery_and_completion_state ... ok
+test agent::runtime::tests::reliability_v2_never_exceeds_two_protocol_corrections ... ok
+test agent::runtime::tests::reliability_v2_reports_a_denied_sub_action_as_a_tool_policy_rejection ... ok
+test agent::runtime::tests::soft_turn_budget_pauses_and_resumes_the_same_transcript ... ok
+test agent::runtime::tests::reliability_v2_corrects_one_protocol_error_then_accepts_terminal_submission ... ok
+test agent::runtime::tests::recoverable_tool_error_is_returned_to_the_model ... ok
+test agent::runtime::tests::reliability_v2_corrects_an_unexposed_action_without_executing_it ... ok
+test agent::runtime::tests::timeout_failure_is_returned_to_the_model ... ok
+test agent::runtime::tests::recovery_limits_stop_an_identical_error_loop ... ok
+test agent::runtime::tests::approved_action_executes_exact_paused_payload_and_continues ... ok
+test agent::runtime::tests::verifier_final_reserve_exposes_only_submission_and_finish_tools ... ok
+test agent::runtime::tests::workspace_command_artifact_payload_is_not_replayed_to_the_model ... ok
+test agent::runtime::tests::terminal_workspace_error_fails_without_a_recovery_turn ... ok
+test hosted_sdlc::build::tests::hosted_pipeline_identity_survives_defaults_but_rejects_replacement_and_mutation ... ok
+test hosted_sdlc::source_merge::tests::hosted_source_merge_accepts_only_current_bounded_authority_for_each_application ... ok
+test agent_execution::tests::mutable_runner_or_unsafe_sandbox_is_rejected ... ok
+test agent_execution::tests::qualification_contract_is_bound_to_exact_policy_and_stage ... ok
+test agent_execution::tests::policy_and_binding_hashes_are_deterministic ... ok
+test hosted_sdlc::source_merge::tests::hosted_source_merge_cannot_authorize_gitops_or_another_branch ... ok
+test agent_execution::tests::one_host_pool_cannot_mix_incompatible_runtime_requirements ... ok
+test hosted_sdlc::source_merge::tests::legacy_publication_authority_cannot_be_read_as_source_merge_authority ... ok
+test agent::runtime::tests::permission_grant_allows_write_and_emits_grant_id ... ok
+test hosted_sdlc::staging::tests::staging_authority_cannot_switch_application_production_or_execution_limits ... ok
+test hosted_sdlc::staging::tests::staging_plan_rejects_configuration_changes_mutable_baselines_and_no_ops ... ok
+test model::action::tests::builds_action_from_native_tool_call_arguments ... ok
+test model::action::tests::builds_typed_repo_mode_submission_from_native_tool_call ... ok
+test inference::tests::rejects_hostname_for_insecure_http ... ok
+test model::action::tests::builds_fixed_onboarding_test_and_verifier_submissions ... ok
+test inference::tests::rejects_openrouter_fallback ... ok
+test inference::tests::accepts_exact_private_http_opt_in ... ok
+test inference::tests::model_grants_are_short_lived_and_tamper_evident ... ok
+test inference::tests::resolved_agent_profile_hash_binds_the_inference_policy ... ok
+test hosted_sdlc::staging::tests::staging_request_is_one_digest_change_on_the_expected_gitops_head ... ok
+test model::action::tests::deserializes_structured_run_shell_action ... ok
+test model::action::tests::deserializes_structured_patch_action ... ok
+test model::action::tests::parses_fenced_json_action_text ... ok
+test model::action::tests::deserializes_typed_cluster_read_actions ... ok
+test model::action::tests::old_serialized_navigation_actions_use_new_field_defaults ... ok
+test model::action::tests::rejects_non_object_tool_arguments ... ok
+test policy::command_classifier::tests::classifies_privileged_and_secret_access ... ok
+test policy::command_classifier::tests::classifies_cluster_mutation_as_network ... ok
+test policy::command_classifier::tests::classifies_python_acceptance_commands_as_local_writes ... ok
+test policy::command_classifier::tests::classifies_read_only_commands ... ok
+test policy::safety_policy::tests::allows_prometheus_inventory ... ok
+test policy::safety_policy::tests::allows_loki_log_summary_and_denies_secret_shaped_query ... ok
+test policy::safety_policy::tests::allows_read_only_file_actions ... ok
+test policy::command_classifier::tests::rejects_setup_network_probes_even_inside_compound_commands ... ok
+test policy::safety_policy::tests::allows_registry_image_inspection_and_denies_secret_shaped_refs ... ok
+test policy::safety_policy::tests::allows_typed_cluster_reads ... ok
+test policy::safety_policy::tests::allows_typed_tekton_reads ... ok
+test policy::safety_policy::tests::allows_typed_tekton_pipeline_run_analysis ... ok
+test agent::runtime::tests::trusted_policy_allows_write_file_tool ... ok
+test policy::safety_policy::tests::allows_typed_tekton_task_run_reads ... ok
+test policy::safety_policy::tests::asks_for_file_writes_by_default ... ok
+test policy::safety_policy::tests::denies_privileged_shell_by_default ... ok
+test policy::safety_policy::tests::attempt_grant_enforces_every_run_workspace_and_path_dimension ... ok
+test policy::safety_policy::tests::denies_secret_shaped_cluster_reads ... ok
+test policy::safety_policy::tests::denies_secret_shaped_tekton_pipeline_run_analysis ... ok
+test policy::safety_policy::tests::denies_secret_shaped_tekton_reads ... ok
+test policy::safety_policy::tests::permission_grant_allows_matching_file_write ... ok
+test policy::safety_policy::tests::permission_grant_does_not_override_denials_or_wrong_subject ... ok
+test policy::safety_policy::tests::permission_grant_requires_matching_environment ... ok
+test policy::safety_policy::tests::permission_grant_requires_matching_run_scope ... ok
+test policy::safety_policy::tests::permission_grant_requires_matching_sdlc_envelope ... ok
+test policy::safety_policy::tests::permission_grant_scope_deserializes_sdlc_metadata ... ok
+test project::tests::acceptance_commands_deny_package_install_and_node_network_probes ... ok
+test project::tests::profile_requires_an_immutable_linux_amd64_artifact ... ok
+test project::tests::rejects_mutable_or_partially_hashed_dependency_locks ... ok
+test project::tests::validates_budget_caps ... ok
+test project::tests::validates_npm_lock_v3_and_rejects_unsafe_inputs ... ok
+test repo_mode::onboarding::tests::legacy_candidates_remain_readable_but_contradictions_never_authorize ... ok
+test repo_mode::tests::canonical_hash_ignores_object_insertion_order_but_preserves_arrays ... ok
+test repo_mode::tests::compiled_profiles_are_stable_and_role_scoped ... ok
+test repo_mode::tests::reliability_v2_profiles_are_terminal_and_controller_tested ... ok
+test repo_mode::onboarding::tests::retains_explicit_absence_without_granting_approval ... ok
+test project::tests::profile_and_dependency_lock_must_be_compatible ... ok
+test project::tests::conflicting_canonical_and_alias_contracts_block_loading ... ok
+test tools::capability::tests::preserves_mutation_and_production_risk_flags ... ok
+test tools::capability::tests::serializes_cluster_capability_kind_as_snake_case ... ok
+test project::tests::rejects_traversal_and_secret_paths ... ok
+test project::tests::rejects_unknown_fields_and_lock_drift ... ok
+test project::tests::rejects_declared_symlink_escapes ... ok
+test tools::cluster::finance::probes::tests::live_finance_deterministic_probes ... ignored, explicit read-only Finance Service forwarding and exact expected identities required
+test project::tests::loads_strict_hashed_contract ... ok
+test tools::cluster::finance::probes::tests::validation_status_shapes_and_environment_config_cannot_silently_change ... ok
+test project::tests::npm_contract_validation_detects_exact_lock_sha_drift ... ok
+test tools::cluster::finance::signals::live::live_finance_five_minute_signals ... ignored, explicit read-only cluster and telemetry access; waits for an actual five-minute window
+test repository::tests::discovery_enforces_entry_limit ... ok
+test repository::tests::discovery_does_not_follow_symlinks_or_inspect_secret_paths ... ok
+test project::tests::repo_mode_requires_canonical_contract_and_reports_matching_alias ... ok
+test tools::cluster::finance::signals::tests::freshness_and_restart_changes_cannot_be_green ... ok
+test tools::cluster::finance::signals::tests::log_coverage_and_uid_are_required_even_when_error_vector_is_empty ... ok
+test tools::cluster::finance::signals::tests::complete_pod_series_are_required_and_zero_readiness_is_an_anomaly ... ok
+test tools::cluster::finance::signals::tests::query_inputs_cannot_inject_syntax_or_select_another_pod ... ok
+test tools::cluster::finance::probes::tests::deterministic_backend_probes_keep_validation_and_trace_correlation_explicit ... ok
+test tools::cluster::finance::signals::tests::request_counter_zero_absence_and_nonfinite_values_are_inconclusive ... ok
+test tools::cluster::finance::signals::tests::window_requires_elapsed_time_and_matching_bracketed_native_identities ... ok
+test tools::cluster::finance::tests::live_finance_deployment_identity ... ignored, explicitly authorized read-only Finance deployment access and exact expected identities required
+test tools::cluster::finance::probes::tests::frontend_probes_do_not_claim_browser_execution_or_fabricate_traces ... ok
+test tools::cluster::finance::tests::healthy_argo_and_pods_cannot_mask_wrong_gitops_or_target ... ok
+test tools::cluster::finance::signals::tests::provider_transport_rejects_redirects_oversized_and_malformed_bodies ... ok
+test tools::cluster::finance::tests::missing_truncated_duplicate_and_malformed_resources_are_inconclusive ... ok
+test tools::cluster::finance::tests::all_finite_targets_require_full_source_and_image_identity ... ok
+test repository::tests::discovery_is_sorted_hashed_and_reports_legacy_contract ... ok
+test tools::cluster::finance::tests::retained_unready_probe_does_not_count_as_a_rollout_pod_or_endpoint ... ok
+test tools::cluster::finance::tests::ready_pod_must_have_exact_runtime_digest_and_current_owner ... ok
+test tools::cluster::finance::tests::rollout_must_match_generation_image_and_template ... ok
+test tools::cluster::tempo::tests::live_finance_tempo_sample ... ignored, explicitly authorized read-only Tempo access is required
+test tools::cluster::tempo::tests::normalizes_tempos_unpadded_trace_ids_before_detecting_duplicate_identities ... ok
+test tools::cluster::tempo::tests::captured_m02_tempo_shape_preserves_the_partial_search_and_cannot_be_current_acceptance ... ok
+test tools::cluster::finance::tests::service_must_route_only_to_verified_ready_pods ... ok
+test tools::cluster::tempo::tests::rejects_wrong_scope_timing_duplicate_identities_and_malformed_data_without_claiming_health ... ok
+test tools::cluster::finance::probes::tests::transport_loss_is_inconclusive_and_invalid_identity_prevents_requests ... ok
+test tools::cluster::tests::analyzes_argo_application_with_compact_terminal_operation_state ... ok
+test tools::cluster::tests::analyzes_argo_application_without_operation_details ... ok
+test tools::cluster::finance::signals::tests::unavailable_configuration_returns_explicit_inconclusive_without_credentials ... ok
+test tools::cluster::tests::analyzes_deployment_rollout_status_without_env_or_secrets ... ok
+test tools::cluster::tests::command_summary_uses_program_name_without_local_path ... ok
+test tools::cluster::finance::tests::unavailable_kubernetes_produces_fixed_inconclusive_diagnostics ... ok
+test tools::cluster::tests::builds_pipeline_run_analysis_from_pipeline_and_task_runs ... ok
+test tools::cluster::tests::compacts_argocd_application_status ... ok
+test tools::cluster::tests::compacts_loki_response_with_bounded_redacted_entries ... ok
+test tools::cluster::tests::compacts_prometheus_responses ... ok
+test tools::cluster::tests::compacts_prometheus_inventory_without_annotations_or_queries ... ok
+test tools::cluster::tests::compacts_kubernetes_lists_without_breaking_json_redaction ... ok
+test tools::cluster::tempo::tests::reads_only_the_fixed_finance_query_and_retains_sampling_limits ... ok
+test tools::cluster::tests::compacts_tekton_pipeline_run_status ... ok
+test tools::cluster::tests::compacts_tekton_task_run_status ... ok
+test tools::cluster::tests::image_alignment_is_unknown_when_executor_skips_deployment_lookup ... ok
+test tools::cluster::tests::image_alignment_preserves_unconfigured_registry_mismatch ... ok
+test tools::cluster::tests::normalizes_loki_window_and_limit ... ok
+test tools::cluster::tests::image_alignment_uses_configured_registry_aliases ... ok
+test tools::cluster::tests::parses_image_references_without_losing_repository_identity ... ok
+test tools::cluster::tests::parses_registry_alias_configuration ... ok
+test tools::cluster::tests::redacts_secret_shaped_json_fields ... ok
+test tools::cluster::tests::redacts_secret_shaped_text_lines ... ok
+test tools::cluster::tests::declared_pipeline_build_results_preserve_source_boundary_and_conflicts ... ok
+test tools::cluster::tests::inspects_registry_image_identity_without_registry_probe ... ok
+test tools::cluster::tests::rejects_loki_log_summary_when_url_is_missing ... ok
+test tools::cluster::tests::rejects_prometheus_inventory_when_url_is_missing ... ok
+test tools::cluster::tempo::tests::rejects_invalid_targets_and_elapsed_window_bounds_before_network_access ... ok
+test tools::cluster::tests::rejects_prometheus_query_when_url_is_missing ... ok
+test tools::cluster::tests::rejects_registry_base_urls_with_credentials ... ok
+test tools::cluster::tests::validates_kubernetes_names_without_shell_parsing ... ok
+test tools::cluster::tests::rejects_secret_shaped_kubernetes_request_before_command ... ok
+test tools::cluster::tests::rejects_secret_shaped_tekton_analysis_before_command ... ok
+test tools::cluster::tests::rejects_secret_shaped_tekton_request_before_command ... ok
+test tools::cluster::tests::rejects_secret_shaped_tekton_task_request_before_command ... ok
+test tools::fs::tests::reads_files_inside_workspace ... ok
+test tools::fs::tests::reads_requested_utf8_line_range_with_boundaries ... ok
+test tools::fs::tests::patch_rejects_ambiguous_single_replacement ... ok
+test tools::cluster::tempo::tests::unavailable_empty_malformed_and_unrelated_evidence_is_inconclusive ... ok
+test tools::fs::tests::rejects_paths_outside_workspace ... ok
+test tools::fs::tests::patch_can_replace_all_matches ... ok
+test tools::fs::tests::patches_files_inside_workspace ... ok
+test tools::shell::tests::denies_secret_shell_command_before_execution ... ok
+test tools::shell::tests::dry_run_shell_does_not_execute_command ... ok
+test tools::fs::tests::writes_files_inside_workspace ... ok
+test tools::fs::tests::search_can_use_an_explicit_safe_file_inside_an_ignored_directory ... ok
+test tools::fs::tests::searches_text_files ... ok
+test tools::shell::tests::truncation_preserves_diagnostic_head_tail_and_omitted_count ... ok
+test tools::shell::tests::rejects_cwd_outside_workspace ... ok
+test tools::shell::tests::typed_git_commands_trust_only_the_canonical_workspace ... ok
+test tools::fs::tests::search_and_directory_listing_apply_caps_and_ignore_rules ... ok
+test tools::shell::tests::nonzero_shell_exit_is_tool_result_error ... ok
+test tools::shell::tests::runs_shell_inside_workspace ... ok
+test tools::shell::tests::git_status_non_repo_is_structured_tool_error ... ok
+test tools::cluster::finance::probes::tests::redirects_bad_bodies_oversize_and_slow_streams_never_pass ... ok
+test tools::cluster::tempo::tests::enforces_the_body_cap_and_deadline_and_never_follows_redirects ... ok
+test tools::cluster::finance::tests::native_transport_keeps_only_identity_and_six_content_hashes ... ok
+test tools::cluster::finance::tests::native_reads_are_bounded_and_do_not_export_process_errors ... ok
+
+test result: ok. 184 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 1.32s
+
+     Running tests/core_types.rs (target/debug/deps/core_types-d97006b8b18a1376)
+
+running 6 tests
+test future_cluster_capabilities_are_typed ... ok
+test environment_ref_marks_production_context ... ok
+test execution_target_round_trips_local_process ... ok
+test resource_and_artifact_refs_round_trip ... ok
+test run_scope_carries_sdlc_metadata ... ok
+test execution_target_round_trips_kubernetes_job ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/hosted_sdlc.rs (target/debug/deps/hosted_sdlc-5d18b175279736a4)
+
+running 2 tests
+test bindings_are_finite_and_do_not_fall_back_when_enabled ... ok
+test policy_rejects_expanded_authority_and_incompatible_contracts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pharness_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
