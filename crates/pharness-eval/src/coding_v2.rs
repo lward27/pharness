@@ -542,7 +542,7 @@ fn resolve_target_policy(
     let default_policy = if suite_id == "repair-v2" {
         "repair-kimi-k3-v2"
     } else {
-        "builder-kimi-k2p7-code-v2"
+        "builder-kimi-k3-v2"
     };
     let registry = if config
         .inference

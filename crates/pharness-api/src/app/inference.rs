@@ -781,7 +781,7 @@ fn reliability_v2_default_policy(profile_id: &str) -> Option<InferencePolicyRef>
     let policy_id = match profile_id {
         "repository-onboarding-proposer" => "onboarding-minimax-m3-v2",
         "repo-planner" => "planner-kimi-k3-v2",
-        "repo-builder" => "builder-kimi-k2p7-code-v2",
+        "repo-builder" => "builder-kimi-k3-v2",
         "repo-repair" => "repair-kimi-k3-v2",
         "repo-test-diagnoser" => "test-diagnosis-kimi-k3-v2",
         "repo-verifier" => "verifier-kimi-k3-v2",
