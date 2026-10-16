@@ -40,3 +40,23 @@ The failure is model judgment on a systematic case, not transport or protocol. U
 - Protocol `inferverify_01a0e35aaa0673c3951d184674ce7a2b`: passed 30/30.
 - Qualification `infeval_01a0e35e08a57461a95ce01731af77b3` → `inferqual_01a0e377c359766295b4071e31ed1fea`: **not qualified, 21/24**. `wrong-test-selection` and `timeout` now pass on both attempts. The three failures are the last three cases of attempt 2 (`single-localized-failure`, `multiple-related-failures`, `passing-control`): `provider_or_protocol_failure` with no typed submission. The gateway logged Fireworks `412 PRECONDITION_FAILED` at 15:24:30–31, returned in 10–18 ms with zero tokens. That points to an account-level rejection (spend or credit limit, or key state), not model judgment. On every case that reached the model, the diagnoser's judgment was correct.
 - Stopped: no retry and no other stage. Before any further model-backed operation, the Fireworks account state must be checked.
+
+## Completion: all five hosted stages qualified, V2 and hosted creation enabled (2026-10-02 → 2026-10-15)
+
+- **Iteration:** #433 gave the Rust images shared BuildKit cargo caches, made PipelineRuns build in parallel, and added `scripts/pharness-release.sh [--merge]` (build → verify → archive only on new migrations → pin → PR/merge). Releases dropped from ~50 min to ~20–25 min; a resumed release finishes in under a minute. #435 waits for PR checks to register before `--merge`. #430 sizes the evaluation Job deadline to the scope (full 8 h, diagnostic 2 h) after the 24-case GLM Verifier run hit the flat 2 h deadline at 47 of 48 runs.
+- **Verifier:** GLM-5.3 scored 40/48 with false approvals on `stale-context` and `unapproved-context-head`, plus malformed tool calls. #432 added evidence-identity rules to the prompt (revision `2026-09-28.1`) and moved the default to `verifier-kimi-k3-v2`.
+- **Builder:** Fireworks now returns `NOT_FOUND` for `kimi-k2p7-code`. #436 moved the default to a new `builder-kimi-k3-v2` (same limits; target `fireworks-kimi-k3@v1`).
+- **Registry access:** after the registry prune, the gateway NetworkPolicy no longer admitted the operator laptop (`192.168.50.72`); lucas_engineering #75 admits `192.168.50.0/24`.
+- **Releases:** `b057dbe` (#434) and `6767eb7` (#437, registry `sha256:c6fe760a…`), both Synced/Healthy, with 14 WorkItems and 82 Runs unchanged.
+
+| Stage | Policy | Qualification | Result | Prompt tokens |
+| --- | --- | --- | --- | --- |
+| Plan | `planner-kimi-k3-v2` | `inferqual_01a0fdc6eccc7a9289e1da2d048a2e66` | 12/12 (1 attempt) | 0.24M |
+| Implement | `builder-kimi-k3-v2` | `inferqual_01a1422646e170e1a2fa4dd213af4ef9` | 48/48 (2 attempts) | 2.64M |
+| Repair | `repair-kimi-k3-v2` | `inferqual_01a0fdebecc175e3a538a749aa149371` | 48/48 (2 attempts) | 2.36M |
+| Test diagnosis | `test-diagnosis-kimi-k3-v2` | `inferqual_01a0e44a372c7432b94c992baa411df0` | 24/24 (2 attempts) | ~0.25M |
+| Verify | `verifier-kimi-k3-v2` | `inferqual_01a0fdb9ef497e419841caf6a4b7d02f` | 24/24 (1 attempt) | 0.58M |
+
+All five qualifications are bound to gateway contract `pharness.dev/inference-gateway/v1` and to their exact policy and target hashes; a read-only check of the live policy list confirmed each one meets hosted admission.
+
+**#438 (`51beb17`) enabled `codingReliabilityV2` (global) and `hostedWorkflow` for the `finance-yfinance` binding.** The API rolled out with both flags; Argo is Synced/Healthy and all five Deployments are 1/1. Hosted automatic actions stop at staging delivery and observation; production stays behind human approval. Rollback: revert #438.
