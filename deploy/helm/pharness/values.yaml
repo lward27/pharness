@@ -12,15 +12,18 @@ features:
   codingReliabilityV2:
     # Enables immutable V2 stage prompts, terminal typed submissions,
     # controller-owned deterministic Test, and one bounded repair execution
-    # for future engineering WorkItems only.
-    enabled: false
+    # for future engineering WorkItems only. The flag is global: it applies to
+    # every new engineering WorkItem, not only hosted ones. Enabled 2026-10-15
+    # after all five hosted stage policies qualified under gateway contract v1.
+    enabled: true
 
-# Reader/contract preparation only. Keep creation disabled until the hosted
-# controller and delivery gates are accepted. New builds apply migration 0055;
-# ASTRA-M04-DIAGNOSTIC-CANARIES.md describes the new compatible-reader requirement.
+# Hosted creation for the finance-yfinance binding. Automatic actions stop at
+# staging delivery and observation; production stays behind the human approval
+# boundary before any production GitOps merge. Staging Argo applications
+# auto-sync, so no Argo executor allowlist change is needed.
 # These IDs were returned by the supported API in dbgen_finance_20260827.
 hostedWorkflow:
-  enabled: false
+  enabled: true
   bindings:
     - schema_version: pharness.dev/lucas-delivery-binding/v1alpha1
       id: finance-yfinance
