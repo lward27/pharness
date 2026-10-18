@@ -1,0 +1,68 @@
+{
+  "recorded_at": "2026-09-06T00:28:09.739095+00:00",
+  "source_revision": "03205d90f10a5f9c0d665c8d9401ee87caaa3f88",
+  "source_base": "ab9fce1d881d0221c0ca227d924e0528a9b3f670",
+  "source_files_sha256": {
+    "crates/pharness-api/src/app/hosted_controller/staging.rs": "e696bbf38e948f5e2c903fa25577675b1783d6035f2427767b063ac8dbe4bacd",
+    "crates/pharness-api/src/app/hosted_controller/staging/baseline.rs": "15e4c63016b06e89695b3d1c983860133bf1d8a9119b1d0d182712914d5192a9",
+    "crates/pharness-api/src/app/hosted_controller/staging/baseline/admission.rs": "4681561f09d82a9d94c21235f822111faf1c96f5a82fd8093a61b1c87abb2408",
+    "crates/pharness-api/src/app/hosted_controller/staging/baseline/collection.rs": "f0c7f8a3523272a7a39bf6e2c672bafbf221a9312ad27af57ff5385358741cb7",
+    "crates/pharness-api/src/app/hosted_controller/staging/baseline/records.rs": "85b883932c6773dc2b47b43dee55edaef9aa5ebd6a39b8c3bc3dd1aac9f2a3a7",
+    "crates/pharness-api/src/app/hosted_controller/staging/baseline/test_support.rs": "7ace03f8f3148ac52cd89b0add5a73b332f2d12deb58b6db16e9a557c0128c34",
+    "crates/pharness-api/src/app/hosted_controller/staging/callbacks.rs": "aa43eb6e710dac86f1df63ccc0f2836e20b2efa82acfc532d36e3562387c1a32",
+    "crates/pharness-api/src/app/tests/hosted_staging.rs": "f71c827192fc0983b83cba98f9e84d87c81cdfcf7d63584ed2f213a9d90f9242",
+    "crates/pharness-api/src/app/tests/hosted_staging/baseline.rs": "cbc2ae0ea11fd828b99beb899a60d2d096a0935588146d170fd2679b84de0ff7",
+    "crates/pharness-api/src/app/tests/hosted_staging/fixtures/native-baseline.json": "2a08e7b6b021285af3f2ff549e68715d2a77e21ea313f5abe6d3061435efe95e",
+    "crates/pharness-api/src/app/tests/hosted_staging/fixtures/native-resources.json": "1283fe56da0f42a742269139d5a388c465101f96f03899f189ddb592b70cabec",
+    "crates/pharness-api/src/app/tests/hosted_staging/native.rs": "cc8bb02b9f7cde8fa023795f7043421d14782b77acaccec018a4417daffa5788",
+    "crates/pharness-core/src/hosted_sdlc/staging.rs": "6d8269878dca6691a4f9c4b2ddf08876a6eee1d42af1ec5ac9ea5c6dc65baf05",
+    "crates/pharness-core/src/hosted_sdlc/staging/tests.rs": "3b9f51fff33cb690b004ea5f221f88827b1bf68c762e355bd7d3991743235fef",
+    "crates/pharness-core/src/tools/cluster/finance/assessment.rs": "e93375a70fc651611bb8287734097a7f14483612682bc2c05fca5ae6795d8a33",
+    "crates/pharness-core/src/tools/cluster/finance/assessment/tests.rs": "dc5743d8c764800ecc66a23f414d0d38b6f357981f23e6c2cef582d685784a4e",
+    "crates/pharness-worker/src/staging_gitops.rs": "6a7eb96da88bd91e09a26b65bf9c2c859cbc0a2a8f56c6577d8c9fd506d82caa",
+    "crates/pharness-worker/src/staging_gitops/admission.rs": "c189c91247cd737e9beed0d216275ec607e46df8037b2b497af8a7094006f201",
+    "crates/pharness-worker/src/staging_gitops/admission/tests.rs": "e074843950280b583e57751fc5afe59ea58e10afd0acd09984ba8e6715d0bbc4",
+    "crates/pharness-worker/src/staging_gitops/github/tests/flow.rs": "255ed95feac7b012fb90ee1d828ebd7b73ae33c8ca9d9146ea8b18f24fcb187a"
+  },
+  "checks": {
+    "api_admin_total": 291,
+    "api_full_prior_run": 289,
+    "new_api_cases_passed_in_focused_run": 2,
+    "focused_staging_current": 14,
+    "core": 206,
+    "worker": 49,
+    "distinct_total": 546,
+    "ignored_explicit_live_core_tests": 6,
+    "clippy": "passed, three affected crates and all targets with warnings denied",
+    "formatting": "passed",
+    "architecture": "passed including five parser regressions"
+  },
+  "preserved_failures": [
+    "Initial compiler error converted a ToolError using an incompatible error constructor; corrected without changing behavior.",
+    "Initial architecture check rejected wildcard imports in test helpers; explicit imports restored.",
+    "First broad run passed API/core but failed one worker recovery fixture with no baseline admission; fixture updated, complete worker suite passed, and missing/expired admission transport regressions added."
+  ],
+  "authority_schema": "pharness.dev/hosted-staging-gitops/v1alpha2",
+  "database_migration_added": false,
+  "current_live_release": "19b0c55c48e3614d0b4507d56df3029a52475618",
+  "hosted_creation_enabled": false,
+  "deployment_or_autonomous_acceptance_claimed": false,
+  "limits_changed": false,
+  "logs_sha256": {
+    "ASTRA-M08-DURABLE-BASELINE-ADMISSION-CHECK-R1-FAILURE.log": "64e082d7e54d15c3a5ef5412f63fd0965b01061bfc4e731d4e1620772c114170",
+    "ASTRA-M08-DURABLE-BASELINE-ADMISSION-ARCHITECTURE-R1-FAILURE.log": "46dfba8ab547f277d1358203612de2f7ad38768e8651c2785d99393c44349766",
+    "ASTRA-M08-DURABLE-BASELINE-ADMISSION-TESTS-R2.log": "ada47b81913e0238b6db81bb73b3a80cc56fd4295020592d396917ae23339b68",
+    "ASTRA-M08-DURABLE-BASELINE-ADMISSION-API-TESTS-R3.log": "9e382d49f89b59078ae01ad23d2dcc3ca6949e92c56ce6cac6daeb84d3e7ef65",
+    "ASTRA-M08-DURABLE-BASELINE-ADMISSION-WORKER-TESTS.log": "56a2b960d8b4e8ddd1ad7f2dc2ad85de747cce9a7fc79e8ebe4237bd471c7e76",
+    "ASTRA-M08-DURABLE-BASELINE-ADMISSION-CLIPPY.log": "2a84844c5963d49d5e57e98afa08ca543df2dce345b5e170b27027373015bbf2",
+    "ASTRA-M08-DURABLE-BASELINE-ADMISSION-ARCHITECTURE.log": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5"
+  },
+  "scope": "Local core, API/controller and writer contract tests. No live API baseline, GitOps mutation, autonomous staging, production approval or M11 acceptance.",
+  "verbatim_log_whitespace": {
+    "retained": [
+      "API-TESTS-R3.log: trailing blank line at EOF",
+      "WORKER-TESTS.log: trailing blank line at EOF"
+    ],
+    "reason": "Logs retain their exact recorded bytes and hashes. Code and Markdown remain subject to git diff --check."
+  }
+}

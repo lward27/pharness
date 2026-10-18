@@ -11,6 +11,8 @@ pub(in crate::app) mod staging;
 mod state;
 
 #[cfg(test)]
+pub(in crate::app) use scheduler::reconcile_due;
+#[cfg(test)]
 pub(in crate::app) use scheduler::reconcile_once;
 pub(in crate::app) use scheduler::spawn;
 

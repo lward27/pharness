@@ -6,3 +6,10 @@ useDefault = true
 [[allowlists]]
 description = "The recorded served API source revision is a public Git commit ID, not a credential."
 regexes = ['''^49ecdc5cc4eaf86197707dede6244bc55c888732$''']
+
+[[allowlists]]
+description = "Planning evidence records public Git commit IDs (40 hex) and SHA-256 digests (64 hex) under keys such as api_revision; both conditions must hold so hex identifiers are only accepted there."
+condition = "AND"
+regexTarget = "secret"
+paths = ['''(^|/)planning/evidence/''']
+regexes = ['''^[0-9a-f]{40}$''', '''^[0-9a-f]{64}$''']

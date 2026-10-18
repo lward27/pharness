@@ -1,0 +1,62 @@
+{
+  "completed_at_unix_ms": 1788643823101,
+  "deployment_identity": "must_be_verified_separately",
+  "expected": {
+    "application": "frontend",
+    "environment": "staging",
+    "gitops_commit_sha": "491f081e3ea6e639528a98cce43466cc7858fdcc",
+    "image_digest": "sha256:248437be58bdeed738d614d13dd2c09232c18119ea0f10309e2a14ffed6d3f3d"
+  },
+  "latency_slo": "not_defined",
+  "limits": {
+    "http_method": "GET",
+    "redirects": false,
+    "request_timeout_ms": 15000,
+    "requests": 3,
+    "response_bytes": 65536,
+    "retries": 0
+  },
+  "probe_state": "passed",
+  "probes": [
+    {
+      "backend_trace_id": null,
+      "elapsed_ms": 272,
+      "http_status": 200,
+      "method": "GET",
+      "observed_at_unix_ms": 1788643823093,
+      "path": "/",
+      "reason": null,
+      "response_bytes": 463,
+      "response_sha256": "sha256:2f745f4a9829d2b877b7a93479d15a9204353da558e488712e5256155f295fc2",
+      "state": "passed"
+    },
+    {
+      "backend_trace_id": null,
+      "elapsed_ms": 280,
+      "http_status": 200,
+      "method": "GET",
+      "observed_at_unix_ms": 1788643823101,
+      "path": "/api/yfinance/healthz",
+      "reason": null,
+      "response_bytes": 15,
+      "response_sha256": "sha256:a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288",
+      "state": "passed"
+    },
+    {
+      "backend_trace_id": null,
+      "elapsed_ms": 271,
+      "http_status": 200,
+      "method": "GET",
+      "observed_at_unix_ms": 1788643823093,
+      "path": "/runtime-config.json",
+      "reason": null,
+      "response_bytes": 149,
+      "response_sha256": "sha256:9ed4a12d192fa8fc6125ea2bfe24aea44841de7146657be4b2976b44a525398c",
+      "state": "passed"
+    }
+  ],
+  "runtime_verification": "not_evaluated",
+  "schema_version": "pharness.dev/finance-functional-probes/v1alpha1",
+  "scope": "deterministic health, validation and frontend configuration responses; no live market-data correctness or browser-initialization claim",
+  "started_at_unix_ms": 1788643822820
+}

@@ -1,0 +1,256 @@
+{
+  "applications.argoproj.io": {
+    "kind": "Application",
+    "metadata": {
+      "name": "yfinance-staging",
+      "uid": "argo-test-uid",
+      "namespace": "argocd",
+      "resourceVersion": "test-120"
+    },
+    "spec": {
+      "source": {
+        "repoURL": "https://github.com/lward27/lucas_engineering.git",
+        "path": "charts/finance-staging/yfinance",
+        "targetRevision": "main"
+      },
+      "destination": {
+        "namespace": "apps-staging",
+        "server": "https://kubernetes.default.svc"
+      }
+    },
+    "status": {
+      "sync": {
+        "status": "Synced",
+        "revision": "04a98931af43b6ea1d189369442f6a1b76dda589",
+        "comparedTo": {
+          "source": {
+            "repoURL": "https://github.com/lward27/lucas_engineering.git",
+            "path": "charts/finance-staging/yfinance",
+            "targetRevision": "main"
+          },
+          "destination": {
+            "namespace": "apps-staging",
+            "server": "https://kubernetes.default.svc"
+          }
+        }
+      },
+      "health": {
+        "status": "Healthy"
+      },
+      "resources": [
+        {
+          "kind": "Deployment",
+          "namespace": "apps-staging",
+          "name": "yfinance-wrapper",
+          "status": "Synced"
+        }
+      ]
+    }
+  },
+  "deployments.apps": {
+    "kind": "Deployment",
+    "metadata": {
+      "name": "yfinance-wrapper",
+      "uid": "d0e76091-39f1-4f2a-9664-1ba120178403",
+      "namespace": "apps-staging",
+      "resourceVersion": "test-120",
+      "generation": 2,
+      "annotations": {
+        "deployment.kubernetes.io/revision": "2"
+      }
+    },
+    "spec": {
+      "replicas": 1,
+      "selector": {
+        "matchLabels": {
+          "app": "yfinance-wrapper"
+        }
+      },
+      "template": {
+        "metadata": {
+          "labels": {
+            "app": "yfinance-wrapper"
+          }
+        },
+        "spec": {
+          "containers": [
+            {
+              "name": "yfinance-wrapper",
+              "image": "registry.lucas.engineering/yfinance_wrapper@sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca"
+            }
+          ]
+        }
+      }
+    },
+    "status": {
+      "observedGeneration": 2,
+      "replicas": 1,
+      "readyReplicas": 1,
+      "availableReplicas": 1,
+      "updatedReplicas": 1
+    }
+  },
+  "replicasets.apps": {
+    "items": [
+      {
+        "kind": "ReplicaSet",
+        "metadata": {
+          "name": "yfinance-wrapper-abc",
+          "uid": "rs-test-uid",
+          "namespace": "apps-staging",
+          "resourceVersion": "test-120",
+          "annotations": {
+            "deployment.kubernetes.io/revision": "2"
+          },
+          "ownerReferences": [
+            {
+              "kind": "Deployment",
+              "name": "yfinance-wrapper",
+              "uid": "d0e76091-39f1-4f2a-9664-1ba120178403",
+              "controller": true
+            }
+          ]
+        },
+        "spec": {
+          "template": {
+            "metadata": {
+              "labels": {
+                "app": "yfinance-wrapper",
+                "pod-template-hash": "abc"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "name": "yfinance-wrapper",
+                  "image": "registry.lucas.engineering/yfinance_wrapper@sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "pods": {
+    "items": [
+      {
+        "kind": "Pod",
+        "metadata": {
+          "name": "yfinance-wrapper-d75f6dd89-lvj9m",
+          "uid": "712b407b-d379-49f7-8400-0c4e67f12895",
+          "namespace": "apps-staging",
+          "resourceVersion": "test-120",
+          "ownerReferences": [
+            {
+              "kind": "ReplicaSet",
+              "name": "yfinance-wrapper-abc",
+              "uid": "rs-test-uid",
+              "controller": true
+            }
+          ]
+        },
+        "spec": {
+          "containers": [
+            {
+              "name": "yfinance-wrapper",
+              "image": "registry.lucas.engineering/yfinance_wrapper@sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca"
+            }
+          ]
+        },
+        "status": {
+          "phase": "Running",
+          "podIP": "10.42.0.62",
+          "conditions": [
+            {
+              "type": "Ready",
+              "status": "True"
+            }
+          ],
+          "containerStatuses": [
+            {
+              "name": "yfinance-wrapper",
+              "imageID": "registry.lucas.engineering/yfinance_wrapper@sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca",
+              "ready": true,
+              "restartCount": 0,
+              "state": {
+                "running": {
+                  "startedAt": "2026-09-05T00:00:00Z"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "services": {
+    "kind": "Service",
+    "metadata": {
+      "name": "yfinance-wrapper",
+      "uid": "52c4f341-699d-422e-8ffb-0c725e7abac3",
+      "namespace": "apps-staging",
+      "resourceVersion": "test-120"
+    },
+    "spec": {
+      "type": "ClusterIP",
+      "selector": {
+        "app": "yfinance-wrapper"
+      },
+      "ports": [
+        {
+          "port": 8090,
+          "targetPort": 8000,
+          "protocol": "TCP"
+        }
+      ]
+    }
+  },
+  "endpointslices.discovery.k8s.io": {
+    "items": [
+      {
+        "kind": "EndpointSlice",
+        "metadata": {
+          "name": "yfinance-wrapper-slice",
+          "uid": "slice-test-uid",
+          "namespace": "apps-staging",
+          "resourceVersion": "test-120",
+          "labels": {
+            "kubernetes.io/service-name": "yfinance-wrapper"
+          },
+          "ownerReferences": [
+            {
+              "kind": "Service",
+              "name": "yfinance-wrapper",
+              "uid": "52c4f341-699d-422e-8ffb-0c725e7abac3",
+              "controller": true
+            }
+          ]
+        },
+        "ports": [
+          {
+            "port": 8000,
+            "protocol": "TCP"
+          }
+        ],
+        "endpoints": [
+          {
+            "addresses": [
+              "10.42.0.62"
+            ],
+            "conditions": {
+              "ready": true,
+              "terminating": false
+            },
+            "targetRef": {
+              "kind": "Pod",
+              "name": "yfinance-wrapper-d75f6dd89-lvj9m",
+              "namespace": "apps-staging",
+              "uid": "712b407b-d379-49f7-8400-0c4e67f12895"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

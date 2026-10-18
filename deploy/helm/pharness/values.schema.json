@@ -42,6 +42,13 @@
       "type": "object",
       "required": ["image", "operationalMode", "legacyWorkItemCreationEnabled", "databaseGeneration", "persistence"],
       "properties": {
+        "cluster": {
+          "type": "object",
+          "required": ["financeMimirUrl"],
+          "properties": {
+            "financeMimirUrl": { "enum": ["", "http://mimir-gateway.monitoring.svc.cluster.local:80/prometheus"] }
+          }
+        },
         "image": { "$ref": "#/$defs/immutableImage" },
         "operationalMode": { "enum": ["normal", "draining", "read_only"] },
         "legacyWorkItemCreationEnabled": { "type": "boolean" },

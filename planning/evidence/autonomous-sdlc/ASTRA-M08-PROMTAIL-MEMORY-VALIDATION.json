@@ -1,0 +1,27 @@
+{
+  "checked_at": "2026-09-05T22:47:17.128396+00:00",
+  "cluster": "lucas_engineering",
+  "namespace": "monitoring",
+  "resource": "DaemonSet/promtail",
+  "gitops_base": "202be9039eef831ece0a4d1c5022d71efbe75b31",
+  "helm_dependency": "promtail 6.16.6, unchanged",
+  "image": "docker.io/grafana/promtail:3.0.0, unchanged",
+  "rendered_changes": [
+    {
+      "path": "/spec/template/spec/containers/0/resources/limits/memory",
+      "before": "128Mi",
+      "after": "512Mi"
+    },
+    {
+      "path": "/spec/template/spec/containers/0/resources/requests/memory",
+      "before": "64Mi",
+      "after": "128Mi"
+    }
+  ],
+  "helm_lint": "passed, wrapper icon and no-template warnings only",
+  "server_dry_run": "passed, DaemonSet only",
+  "candidate_sha256": "275e6c79209b3327bd61dbdc751d3eeb4e2af276dbe27914f4205e9f6e686237",
+  "node_capacity_observation": "NAME                         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nubuntu-lucas-engineering     837m         10%      7734Mi          48%         \nubuntu-lucas-engineering-2   770m         9%       6059Mi          37%         \n",
+  "rollout": "Existing RollingUpdate default, maximum one unavailable daemon; positions and source logs stay on their existing hostPath volumes",
+  "scope": "Premerge validation only; no recovery or log coverage claimed yet"
+}

@@ -1,0 +1,66 @@
+{
+  "checked_at": "2026-09-05T23:00:05.783842+00:00",
+  "source_commit": "8173a4e83af22f1c2e178936e190644396f81ddc",
+  "source_files_sha256": {
+    "crates/pharness-core/src/tools/cluster/finance/identity.rs": "f84602b162a0a1b4dfb4bac78a355b36048f7895689911448025e86f8352b98d",
+    "crates/pharness-core/src/tools/cluster/finance/kubernetes.rs": "3a935ed896afafb9354cc65f4fe63f18333c80f7215709c7311819b16a50a30c",
+    "crates/pharness-core/src/tools/cluster/finance/probes/tests.rs": "153395dfd45e990937b6e5f9103697bf6fa6b9631b4b70b08f34bd143c6904a0",
+    "crates/pharness-core/src/tools/cluster/finance/probes.rs": "eaa90d5f1107635398e40096f22bf4e8d2cbf20baca246312ce8143c4b333235",
+    "crates/pharness-core/src/tools/cluster/finance/signals/analysis.rs": "bc578f2333e9340328401278dbe9f62587cb2a8d3ed1344207244149f1e01b31",
+    "crates/pharness-core/src/tools/cluster/finance/signals/live.rs": "63232bbde1f161b1a3a7e55f3e23c2f015fd276aaff3fc1663fdce8450e0acae",
+    "crates/pharness-core/src/tools/cluster/finance/signals/query.rs": "dbcda07203a133e37ae72a9c6920828788e656ea2a6695b011948c5cf81e4ae1",
+    "crates/pharness-core/src/tools/cluster/finance/signals/request.rs": "d4c5516a38695862cf533299577de1cbabf55f89a434381b86a2a2ea2c778e13",
+    "crates/pharness-core/src/tools/cluster/finance/signals/tests.rs": "8ed95f5eb55e2d6ffa66912d1290ce03b37396def8afdacbf921e460f8867135",
+    "crates/pharness-core/src/tools/cluster/finance/signals/window.rs": "5fd9e2e1bfde886086f2308ef4ea335349e562c3f19d60799697d8c8fd2d5072",
+    "crates/pharness-core/src/tools/cluster/finance/signals.rs": "5eece0e3d2f4fad6fd904ee54b485fd031309c7e7f37068ee129c3996afdcfee",
+    "crates/pharness-core/src/tools/cluster/finance/tests.rs": "d9be7849a362a100a1ab021b0b0affdd69a9b9eb575ccc3700dcc394078c009d"
+  },
+  "automatic_checks": {
+    "core_unit_and_integration_passed": 192,
+    "failed": 0,
+    "live_access_tests_ignored_by_default": 4,
+    "clippy": "all core targets, warnings denied, passed",
+    "architecture": "module/dependency checks and five parser tests passed",
+    "formatting_and_diff": "passed"
+  },
+  "live_signal_windows": [
+    {
+      "application": "yfinance",
+      "window": {
+        "end_unix_seconds": 1788649170,
+        "start_unix_seconds": 1788648870
+      },
+      "expected": {
+        "application": "yfinance",
+        "environment": "staging",
+        "gitops_commit_sha": "9232b110177556b80e8a03197e17fc062965f4c3",
+        "image_digest": "sha256:f1cfc06fcac62d7c37a4d7dc87237e2abe02df0d9c3824a7521c5359058879c1"
+      },
+      "queries": 7,
+      "signal_state": "observed",
+      "runtime_verification": "not_evaluated"
+    },
+    {
+      "application": "frontend",
+      "window": {
+        "end_unix_seconds": 1788649170,
+        "start_unix_seconds": 1788648870
+      },
+      "expected": {
+        "application": "frontend",
+        "environment": "staging",
+        "gitops_commit_sha": "9232b110177556b80e8a03197e17fc062965f4c3",
+        "image_digest": "sha256:248437be58bdeed738d614d13dd2c09232c18119ea0f10309e2a14ffed6d3f3d"
+      },
+      "queries": 5,
+      "signal_state": "observed",
+      "runtime_verification": "not_evaluated"
+    }
+  ],
+  "retained_failures": {
+    "first_live_windows": "unaligned Loki query grid and missing samples, inconclusive",
+    "second_live_windows": "actual log delivery loss from Promtail OOM, inconclusive",
+    "development": "unaligned unavailable-configuration fixture and Rust-1.80-incompatible helper caught by checks; corrected with gates unchanged"
+  },
+  "scope": "Native readers only, not deployed or integrated into durable progression. Successful signal windows do not override failed backend functional probes or establish frontend initialization, trace correlation, production approval or M08/M11 acceptance."
+}

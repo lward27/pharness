@@ -1,0 +1,85 @@
+   Compiling futures-io v0.3.32
+   Compiling tracing v0.1.44
+   Compiling hyper v1.9.0
+   Compiling secrecy v0.8.0
+   Compiling serde_spanned v0.6.9
+   Compiling toml_datetime v0.6.11
+   Compiling futures-util v0.3.32
+   Compiling tracing-subscriber v0.3.23
+   Compiling toml_edit v0.22.27
+   Compiling toml v0.8.23
+   Compiling hyper-util v0.1.20
+   Compiling tower v0.5.3
+   Compiling futures-executor v0.3.32
+   Compiling futures v0.3.32
+   Compiling tower-http v0.6.8
+   Compiling hyper-rustls v0.27.9
+   Compiling reqwest v0.12.28
+   Compiling pharness-core v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-baseline-admission/crates/pharness-core)
+   Compiling pharness-openai-compatible v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-baseline-admission/crates/pharness-openai-compatible)
+   Compiling pharness-fireworks v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-baseline-admission/crates/pharness-fireworks)
+   Compiling pharness-config v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-baseline-admission/crates/pharness-config)
+   Compiling pharness-runhost v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-baseline-admission/crates/pharness-runhost)
+   Compiling pharness-worker v0.1.0 (/Users/wardl/Personal/apps/pharness-astra-staging-baseline-admission/crates/pharness-worker)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.39s
+     Running unittests src/main.rs (target/debug/deps/pharness_worker-ce73ea694841fe2c)
+
+running 48 tests
+test source_merge::tests::source_merge_requires_strict_admin_enforced_app_bound_protection ... ok
+test source_merge::tests::source_merge_receipt_requires_the_exact_merged_parent_pair_and_real_tree ... ok
+test source_merge::tests::source_merge_refuses_stale_heads_bases_forks_and_unready_pull_requests ... ok
+test source_merge::tests::source_merge_needs_successful_execution_of_the_actual_required_source_check ... ok
+test source_merge::tests::source_merge_context_hash_and_execution_binding_are_checked_before_provider_access ... ok
+test staging_gitops::admission::tests::writer_rejects_missing_expired_rebound_or_expanded_baseline_admission ... ok
+test staging_gitops::github::tests::rejected_or_ambiguous_mutations_are_not_retried_and_do_not_echo_provider_bodies ... ok
+test staging_gitops::github::tests::native_staging_reads_a_pinned_file_and_submits_one_expected_head_mutation ... ok
+test tests::argo_sync_patch_is_minimal_and_never_requests_prune_or_force_true ... ok
+test tests::authoritative_empty_required_set_is_passing ... ok
+test tests::closed_unmerged_github_pull_request_discards_synthetic_merge_sha ... ok
+test tests::connect_proxy_accepts_only_exact_allowlisted_https_hosts ... ok
+test tests::git_writer_accepts_only_a_safe_github_repository_and_context ... ok
+test tests::git_writer_classifies_push_failures_without_persisting_provider_output ... ok
+test tests::git_writer_repairs_only_a_missing_patch_terminator ... ok
+test tests::git_writer_reports_only_the_failed_typed_git_stage ... ok
+test tests::keeps_observing_a_non_terminal_pipeline_run ... ok
+test tests::onboarding_materializer_accepts_an_exact_no_change_result ... ok
+test staging_gitops::github::tests::flow::stale_gitops_base_and_unacknowledged_plan_stop_before_admission ... ok
+test tests::private_check_runs_never_fall_back_to_anonymous_access ... ok
+test tests::provider_checks_require_both_check_run_and_status_for_duplicate_names ... ok
+test staging_gitops::github::tests::recovery_observes_the_original_commit_without_sending_a_mutation ... ok
+test tests::readiness_classifies_missing_declared_python_module_as_structural ... ok
+test tests::readiness_keeps_executable_test_failures_as_baseline_failures ... ok
+test tests::recognizes_a_failed_pipeline_run_with_a_safe_reason ... ok
+test staging_gitops::github::tests::flow::expired_or_missing_baseline_admission_cannot_send_the_github_post ... ok
+test tests::recognizes_failed_argo_operation_without_returning_raw_resource_text ... ok
+test tests::recognizes_a_successful_pipeline_run ... ok
+test tests::recognizes_only_a_successful_synced_argo_operation_as_terminal_success ... ok
+test tests::rejects_kustomization_mutations_that_are_not_digest_only ... ok
+test tests::provider_check_queries_preserve_a_sanitized_endpoint_error_code ... ok
+test tests::rejects_missing_or_ambiguous_kustomization_image_entries ... ok
+test tests::rejects_non_digest_pinned_kustomization_image_references ... ok
+test tests::resumed_workspace_must_match_the_pinned_commit_and_branch ... ok
+test staging_gitops::github::tests::flow::lost_commit_acknowledgement_recovers_by_reading_the_admitted_history ... ok
+test tests::scopes_a_shared_existing_digest_to_the_named_image_entry ... ok
+test tests::updates_exactly_one_declared_kustomization_image_with_an_immutable_digest ... ok
+test staging_gitops::github::tests::flow::recorded_admission_and_observer_flag_allow_only_read_only_recovery ... ok
+test tests::public_check_runs_retry_without_the_fine_grained_pat ... ok
+test tests::workspace_git_commands_scope_safe_directory_to_the_issued_workspace ... ok
+test staging_gitops::github::tests::flow::unknown_or_denied_admission_never_reaches_github_mutation ... ok
+test staging_gitops::github::tests::bounded_reads_reject_oversized_content_and_changed_branch_protection ... ok
+test tests::repo_mode_preparation_uses_the_canonical_prefixed_contract_hash ... ok
+test staging_gitops::github::tests::observation_rejects_unrelated_history_wrong_parents_and_unapproved_files ... ok
+test tests::retries_transient_internal_context_fetches_for_fresh_executor_pods ... ok
+test tests::workspace_git_reads_succeed_when_git_detects_a_different_workspace_owner ... ok
+test tests::tracked_workspace_state_preserves_existing_diff_and_detects_new_mutation ... ok
+test tests::node_preparation_ignores_lifecycle_scripts_and_keeps_tracked_files_clean ... ok
+
+test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s
+
+     Running tests/hosted_build.rs (target/debug/deps/hosted_build-9987312a38da0fe6)
+
+running 1 test
+test hosted_worker_never_retries_creation_after_uncertain_admission_or_observation_recovery ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.26s
+

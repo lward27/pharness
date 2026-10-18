@@ -229,6 +229,42 @@ async fn scheduler_leaves_legacy_idle_and_records_unqualified_hosted_blocker() {
     assert!(!reconcile_once(&fixture.state, "api").await.unwrap());
 }
 
+#[tokio::test]
+async fn every_due_work_item_is_serviced_in_one_scheduler_pass() {
+    use super::repo_mode_v1::repo_fixture_with_policy;
+    use crate::app::hosted_controller::reconcile_due;
+    let policy = || {
+        serde_json::from_str(include_str!(
+            "../../../../pharness-core/tests/fixtures/hosted-workflow.json"
+        ))
+        .unwrap()
+    };
+    let first = repo_fixture_with_policy(
+        "drain_first",
+        false,
+        super::characterization::test_state().await,
+        Some(policy()),
+    )
+    .await;
+    let second =
+        repo_fixture_with_policy("drain_second", false, first.state.clone(), Some(policy())).await;
+    assert_ne!(first.work_item_id, second.work_item_id);
+    let due = crate::app::clock::current_millis() as i64;
+    assert_eq!(reconcile_due(&first.state, "api").await, 2);
+    for fixture in [&first, &second] {
+        let control = fixture
+            .state
+            .store
+            .get_workflow_reconciliation(&fixture.work_item_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(control.claim_owner.is_none());
+        assert!(control.next_due_at > due, "{}", control.condition_reason);
+        assert!(control.observed_state_hash.is_some());
+    }
+    assert_eq!(reconcile_due(&first.state, "api").await, 0);
+}
 async fn completed_planner(
     fixture: &super::repo_mode_v1::RepoDeliveryFixture,
     contradictions: &[&str],

@@ -1,0 +1,84 @@
+# Native Finance observation runs in the existing single-writer API. It does
+# not borrow the model worker's broad observer identity or add a new executor.
+# These reads can be prepared before hosted creation is enabled. No mutation,
+# Secret, pod log, exec, port-forward, watch or cluster-wide list is granted.
+{{- range $namespace := list "apps-staging" "apps-prod" }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pharness-finance-runtime-observer
+  namespace: {{ $namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["yfinance-wrapper", "finance-frontend"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["services"]
+    resourceNames: ["yfinance-wrapper", "finance-frontend"]
+    verbs: ["get"]
+  # Kubernetes RBAC cannot constrain lists by label selector. The native reader
+  # uses fixed Finance selectors and verifies owner UIDs; the RBAC boundary for
+  # these three resources is the named namespace, not an enforced label filter.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["list"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pharness-finance-runtime-observer
+  namespace: {{ $namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+subjects:
+  - kind: ServiceAccount
+    name: pharness-api
+    namespace: {{ $.Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pharness-finance-runtime-observer
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pharness-finance-runtime-observer
+  namespace: {{ .Values.api.cluster.argocdNamespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    resourceNames:
+      - yfinance-staging
+      - finance-frontend-staging
+      - yfinance-wrapper
+      - finance-frontend
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pharness-finance-runtime-observer
+  namespace: {{ .Values.api.cluster.argocdNamespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+subjects:
+  - kind: ServiceAccount
+    name: pharness-api
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pharness-finance-runtime-observer
