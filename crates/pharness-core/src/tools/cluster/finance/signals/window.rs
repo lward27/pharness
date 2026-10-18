@@ -93,8 +93,23 @@ impl Context {
             }
         }
         let pods = Self::pods(before, expected)?;
-        if pods != Self::pods(after, expected)? {
-            return Err("pod_identity_or_restart_count_changed_during_window");
+        let current = Self::pods(after, expected)?;
+        if pods != current {
+            let same_pods = pods.len() == current.len()
+                && pods
+                    .iter()
+                    .zip(current.iter())
+                    .all(|((name, old), (new_name, new))| {
+                        name == new_name && old.uid == new.uid && old.ip == new.ip
+                    });
+            // The same pods with a higher restart count means the window itself
+            // observed a crash; a different pod set means a rollout the window
+            // cannot speak for.
+            return Err(if same_pods {
+                "pod_restarted_during_window"
+            } else {
+                "pod_identity_or_restart_count_changed_during_window"
+            });
         }
         Ok(Self {
             pods,

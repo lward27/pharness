@@ -239,7 +239,9 @@ pub(super) fn collected_trace_passes(
                             .saturating_mul(1_000_000)
                             .saturating_add(1_000_000_000)
             })
-        && trace["receipt"]["path"] == format!("/api/v2/traces/{}", health.trace_id)
+        && trace["receipt"]["path"]
+            .as_str()
+            .is_some_and(|path| path.ends_with(&format!("/api/v2/traces/{}", health.trace_id)))
         && trace["receipt"]["query_parameters"]
             == json!({"start":window.start_unix_seconds,"end":window.end_unix_seconds})
 }

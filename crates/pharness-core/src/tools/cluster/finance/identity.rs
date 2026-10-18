@@ -70,7 +70,12 @@ pub(super) fn verify(e: &FinanceDeploymentExpectation, r: &Resources) -> Check<V
     let name = e.workload();
     let image = e.image_ref();
     let a = &r.argo;
-    resource(a, "Application", "argocd", Some(e.argo_application()))?;
+    resource(
+        a,
+        "Application",
+        &r.argocd_namespace,
+        Some(e.argo_application()),
+    )?;
     let source = &a["spec"]["source"];
     let destination = &a["spec"]["destination"];
     if source["repoURL"] != crate::hosted_sdlc::staging::GITOPS_REPOSITORY

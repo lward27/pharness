@@ -222,6 +222,35 @@ fn green_collection_labels_cannot_hide_failures_caveats_or_missing_data() {
 }
 
 #[test]
+fn a_restart_of_the_same_pods_fails_while_a_changed_pod_set_is_inconclusive() {
+    let e = fixture(
+        FinanceApplication::Yfinance,
+        FinanceVerificationPhase::Staging,
+    );
+    let mut restarted = e.clone();
+    restarted.identity_after["identity"]["pods"][0]["restart_count"] = json!(1);
+    let result = assess(&restarted);
+    assert_eq!(result["runtime_verification"], "failed");
+    assert_eq!(result["reasons"], json!(["pod_restarted_during_window"]));
+    let mut replaced = e.clone();
+    replaced.identity_after["identity"]["pods"][0]["uid"] =
+        json!("00000000-0000-0000-0000-000000000000");
+    let result = assess(&replaced);
+    assert_eq!(result["runtime_verification"], "inconclusive");
+    assert_eq!(
+        result["reasons"],
+        json!(["pod_identity_or_restart_count_changed_during_window"])
+    );
+    let mut prefixed = e;
+    prefixed.health_trace["receipt"]["path"] = json!(format!(
+        "/tempo/api/v2/traces/{}",
+        prefixed.health_trace["trace_id"].as_str().unwrap()
+    ));
+    assert_eq!(assess(&prefixed)["runtime_verification"], "passed");
+    prefixed.health_trace["receipt"]["path"] = json!("/tempo/api/v2/traces/other");
+    assert_eq!(assess(&prefixed)["runtime_verification"], "inconclusive");
+}
+#[test]
 fn frontend_requires_real_responses_and_cannot_claim_uninstrumented_traces() {
     let mut e = fixture(
         FinanceApplication::Frontend,

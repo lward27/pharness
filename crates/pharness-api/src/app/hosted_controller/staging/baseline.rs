@@ -16,6 +16,7 @@ pub(super) async fn reconcile(
     claim: &StoredWorkflowReconciliation,
     saved: &preparation::Saved,
     expired: bool,
+    timed_out: bool,
 ) -> Result<Option<Condition>, ApiError> {
     if saved.plan.is_none() {
         return Ok(None);
@@ -46,7 +47,7 @@ pub(super) async fn reconcile(
         }
         return Ok(Some(condition("blocked", "The original staging baseline failed, is inconclusive or expired. Its evidence is retained; no replacement window or GitOps write is authorized.")));
     }
-    if expired || now() >= window.expires_at() {
+    if timed_out || now() >= window.expires_at() {
         records::fail(state, saved, "baseline_original_window_expired").await?;
     } else if records::read(state, saved, "before").await?.is_none() {
         if now() >= window.window.start_unix_seconds as i64 * 1000 {

@@ -5,6 +5,7 @@ use std::{process::Stdio, time::Duration};
 use tokio::{io::AsyncReadExt, process::Command};
 
 pub(super) struct Resources {
+    pub argocd_namespace: String,
     pub argo: Value,
     pub deployment: Value,
     pub replicasets: Value,
@@ -51,6 +52,7 @@ pub(super) async fn read(
     );
     let (a, d, r, p, s, e) = (a?, d?, r?, p?, s?, e?);
     Ok(Resources {
+        argocd_namespace: tools.argocd_namespace.clone(),
         argo: a.0,
         deployment: d.0,
         replicasets: r.0,

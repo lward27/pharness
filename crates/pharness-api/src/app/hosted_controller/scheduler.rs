@@ -17,18 +17,37 @@ pub(in crate::app) fn spawn(state: AppState) {
     CONTROLLER.mark_enabled();
     tokio::spawn(async move {
         loop {
-            let outcome = reconcile_once(&state, &owner).await;
-            CONTROLLER.record_tick(
-                now(),
-                outcome.as_ref().map(|claimed| *claimed).map_err(|_| ()),
-            );
-            if let Err(error) = outcome {
-                tracing::warn!(?error, "hosted reconciliation did not complete; persisted claim and operation retained");
-            }
+            reconcile_due(&state, &owner).await;
             tokio::time::sleep(Duration::from_millis(CONTROLLER_WAIT_INTERVAL_MS as u64)).await;
         }
     });
 }
+
+/// Service every WorkItem that is due, not just the first. Window completion
+/// and admission share a fixed slot after each window ends, so one item's
+/// turn must not wait behind others. Each pass re-arms its own next_due_at,
+/// so the drain ends once nothing is due.
+pub(in crate::app) async fn reconcile_due(state: &AppState, owner: &str) -> usize {
+    let mut claimed = 0;
+    for _ in 0..MAX_CLAIMS_PER_TICK {
+        let outcome = reconcile_once(state, owner).await;
+        CONTROLLER.record_tick(
+            now(),
+            outcome.as_ref().map(|claimed| *claimed).map_err(|_| ()),
+        );
+        match outcome {
+            Ok(true) => claimed += 1,
+            Ok(false) => break,
+            // The failed pass keeps its lease, so the next claim is another item.
+            Err(error) => {
+                tracing::warn!(?error, "hosted reconciliation did not complete; persisted claim and operation retained");
+            }
+        }
+    }
+    claimed
+}
+
+const MAX_CLAIMS_PER_TICK: usize = 64;
 
 pub(in crate::app) async fn reconcile_once(
     state: &AppState,

@@ -45,6 +45,7 @@ fn resources(e: &FinanceDeploymentExpectation) -> Resources {
     let destination = json!({"namespace":ns,"server":"https://kubernetes.default.svc"});
     let argo = json!({"kind":"Application","metadata":{"name":e.argo_application(),"namespace":"argocd","uid":"argo-uid","resourceVersion":"125"},"spec":{"source":source,"destination":destination},"status":{"sync":{"status":"Synced","revision":e.gitops_commit_sha,"comparedTo":{"source":source,"destination":destination}},"health":{"status":"Healthy"},"resources":[{"kind":"Deployment","namespace":ns,"name":name,"status":"Synced"}]}});
     Resources {
+        argocd_namespace: "argocd".into(),
         argo,
         deployment,
         replicasets: json!({"items":[rs]}),
@@ -79,6 +80,15 @@ fn all_finite_targets_require_full_source_and_image_identity() {
     assert!(serde_json::from_value::<FinanceDeploymentExpectation>(json!({"application":"arbitrary","environment":"staging","gitops_commit_sha":"a".repeat(40),"image_digest":expectation().image_digest})).is_err());
 }
 
+#[test]
+fn argo_application_is_verified_in_the_configured_namespace() {
+    let e = expectation();
+    let mut r = resources(&e);
+    r.argocd_namespace = "gitops-system".into();
+    assert_eq!(verify(&e, &r).unwrap_err(), "wrong_or_terminating_resource");
+    r.argo["metadata"]["namespace"] = json!("gitops-system");
+    assert!(verify(&e, &r).is_ok());
+}
 #[test]
 fn healthy_argo_and_pods_cannot_mask_wrong_gitops_or_target() {
     let e = expectation();

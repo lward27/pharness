@@ -76,6 +76,9 @@ impl FinanceRuntimeEvidence {
             Ok(()) => {}
             Err(reason) => {
                 result["reasons"] = json!([reason]);
+                if reason == "pod_restarted_during_window" {
+                    result["runtime_verification"] = json!("failed");
+                }
                 return result;
             }
         }

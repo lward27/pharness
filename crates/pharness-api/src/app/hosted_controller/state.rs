@@ -56,11 +56,17 @@ impl Snapshot {
             ));
         }
         let actions = repo_mode::repo_controller_actions(state, work_item_id).await?;
+        // Long-running operations progress through their resource refs while
+        // metadata, stages and runs stay unchanged. Without them here the
+        // unchanged-check counter would expire a build or staging wait that is
+        // still making progress.
+        let operation = state.store.active_workflow_operation(work_item_id).await?;
         let hash = canonical_material_hash(&json!({
             "metadata":metadata,
             "stages":stages.iter().map(|s| json!([s.id,s.status,s.input_hash,s.context_pack_id])).collect::<Vec<_>>(),
             "runs":runs.iter().map(|r| json!([r.id,r.status,r.budget_consumption,r.finished_at])).collect::<Vec<_>>(),
             "actions":actions.iter().map(|a| json!([a.id,a.status,a.state_hash])).collect::<Vec<_>>(),
+            "operation":operation.as_ref().map(|o| json!([o.id,o.status,o.resource_refs])),
         }))?;
         Ok(Self {
             metadata,

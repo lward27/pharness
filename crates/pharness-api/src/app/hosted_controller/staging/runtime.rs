@@ -27,13 +27,13 @@ pub(super) async fn reconcile(
     claim: &StoredWorkflowReconciliation,
     saved: &preparation::Saved,
     receipt: &StoredArtifact,
-    expired: bool,
+    timed_out: bool,
 ) -> Result<Condition, ApiError> {
     let context = records::Context::new(state, saved, receipt).await?;
     if let Some(record) = context.read(state, "result").await? {
         return result::record(state, claim, &context, &record).await;
     }
-    if expired || now() >= saved.authority.expires_at_ms {
+    if timed_out || now() >= saved.authority.expires_at_ms {
         context
             .fail(state, "staging_original_operation_expired")
             .await?;
@@ -143,7 +143,15 @@ async fn save_window(
     if observation["identity_state"] != "verified" || created < context.commit_checked_at_ms {
         return Ok(false);
     }
-    let window = records::Window::new(context, created, step.into())?;
+    let Ok(window) = records::Window::new(context, created, step.into()) else {
+        // The identity is verified but five minutes plus the ingestion
+        // allowance no longer fit before the authority expires. Retrying each
+        // tick would only repeat the same conflict until expiry.
+        context
+            .fail(state, "staging_runtime_window_exceeds_authority")
+            .await?;
+        return Ok(true);
+    };
     let start = window.window.start_unix_seconds as i64 * 1000;
     if now() >= start
         || observation["completed_at_unix_ms"]

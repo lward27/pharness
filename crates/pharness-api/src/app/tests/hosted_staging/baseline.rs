@@ -193,7 +193,7 @@ async fn fresh_baseline_cannot_admit_a_restarted_pod_or_reuse_failed_identity_co
         .await
         .unwrap_err()
         .message
-        .contains("restart_count_changed"));
+        .contains("pod_restarted_during_window"));
     assert_eq!(native::reads(&fake), reads + 6);
     std::fs::write(&path, original).unwrap();
     assert!(admit(&f, &a, &p).await.is_err());
@@ -239,6 +239,77 @@ async fn paused_reconciliation_retains_the_original_window_without_replaying_rea
     assert_eq!(creates(&fake), 2);
 }
 
+#[tokio::test]
+async fn a_stale_snapshot_heuristic_cannot_end_the_original_window() {
+    use crate::app::CONTROLLER_WAIT_MAX_CHECKS;
+    use pharness_store::FinishWorkflowReconciliation;
+    let fake = KubectlFixture::new(false);
+    let (f, op, a) = start("baseline_stale_snapshot", &fake).await;
+    let p = plan(&a);
+    let _ = save(&f, &a, &p).await.unwrap();
+    let _ = native::evidence(&f, &fake, &a, &p, 0).await;
+    let store = &f.state.store;
+    let observed = || async {
+        store
+            .get_workflow_reconciliation(&f.work_item_id)
+            .await
+            .unwrap()
+            .unwrap()
+    };
+    tick(&f).await;
+    let linked = observed().await.observed_state_hash.unwrap();
+    tick(&f).await;
+    let settled = observed().await;
+    let hash = settled.observed_state_hash.unwrap();
+    assert_ne!(
+        linked, hash,
+        "linking the window into the operation refs is visible progress"
+    );
+    assert_eq!(settled.unchanged_checks, 0);
+    let window = artifact(&f, &a, "window").await.unwrap();
+    let before = artifact(&f, &a, "before").await.unwrap();
+    // Replay the unchanged observation count that marks a wait expired.
+    for check in 0..=CONTROLLER_WAIT_MAX_CHECKS {
+        let time = now() + i64::from(check) * 2;
+        store.wake_workflow(&f.work_item_id, time).await.unwrap();
+        let claim = store
+            .claim_due_workflow("stale-observer", time, 60_000)
+            .await
+            .unwrap()
+            .unwrap();
+        store
+            .finish_workflow_reconciliation(
+                &claim,
+                FinishWorkflowReconciliation {
+                    next_due_at: time + 1,
+                    condition: "waiting",
+                    reason: "unchanged fixture",
+                    observed_state_hash: Some(&hash),
+                },
+                time,
+            )
+            .await
+            .unwrap();
+    }
+    let reads = native::reads(&fake);
+    tick(&f).await;
+    assert!(
+        artifact(&f, &a, "result").await.is_none(),
+        "the window ends on its own clock, not on the unchanged-check count"
+    );
+    assert_eq!(
+        artifact(&f, &a, "window").await.unwrap().content_json,
+        window.content_json
+    );
+    assert_eq!(
+        artifact(&f, &a, "before").await.unwrap().content_json,
+        before.content_json
+    );
+    assert_eq!(native::reads(&fake), reads);
+    assert_eq!(operation(&f).await.id, op.id);
+    let control = observed().await;
+    assert_eq!(control.condition, "waiting", "{}", control.condition_reason);
+}
 #[tokio::test]
 async fn interrupted_or_missed_baseline_is_recorded_once_without_a_replacement_window() {
     for (suffix, created_offset, interrupted) in [

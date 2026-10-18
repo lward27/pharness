@@ -103,7 +103,11 @@ pub(super) async fn reconcile(
     operation: &StoredWorkflowOperation,
     expired: bool,
 ) -> Result<Condition, ApiError> {
-    let expired = expired || now() >= deadline(operation);
+    // The scheduler's unchanged-snapshot heuristic only stops new work. A
+    // started window or admitted write ends on this operation's own clocks,
+    // never on how many ticks the snapshot looked the same.
+    let timed_out = now() >= deadline(operation);
+    let expired = expired || timed_out;
     let mut operation = operation.clone();
     if operation.resource_refs.get("staging_dispatch").is_none() {
         if claim.control != "active" || expired {
@@ -191,7 +195,7 @@ pub(super) async fn reconcile(
             state.store.record_workflow_operation(claim, &operation.id, "running", &refs, "Staging GitOps commit observed; deployment and runtime verification remain required", now()).await?;
         }
         let saved = preparation::saved(state, id, execution).await?;
-        return runtime::reconcile(state, claim, &saved, &receipt, expired).await;
+        return runtime::reconcile(state, claim, &saved, &receipt, timed_out).await;
     }
     let admitted = state
         .store
@@ -199,7 +203,9 @@ pub(super) async fn reconcile(
         .await?
         .is_some();
     if !admitted {
-        if let Some(condition) = baseline::reconcile(state, claim, &saved, expired).await? {
+        if let Some(condition) =
+            baseline::reconcile(state, claim, &saved, expired, timed_out).await?
+        {
             return Ok(condition);
         }
     }
