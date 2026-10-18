@@ -235,4 +235,6 @@ Rehearse the restore quarterly against a disposable namespace:
 3. Follow section 3 into a new claim and confirm the WorkItem is present and
    `pharness_build_info` reports the expected revision.
 
-Record the digests, generation ID, and elapsed time in the rehearsal note.
+Record the digests, generation ID, and elapsed time in a note under
+`planning/operations/rehearsals/` (first one:
+[`sqlite-restore-20261018.md`](../rehearsals/sqlite-restore-20261018.md)).
