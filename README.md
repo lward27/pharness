@@ -45,6 +45,11 @@ Use the [architecture guardrails](scripts/check-app-module-boundaries.sh) and
 checks declared in [ui/package.json](ui/package.json). Fixes must preserve the
 single-writer database and scoped reader/writer/effect responsibilities.
 
+The [CI workflow](.github/workflows/ci.yml) runs the commands above, the
+guardrails, the release script tests, Helm lint and render checks, and the
+console unit tests on every pull request. It compiles for verification only;
+release images are still built by Tekton from a verified source revision.
+
 ## Operate and release
 
 Use [operational runbooks](planning/operations/README.md) and the
@@ -85,6 +90,13 @@ Build receipts include the Tekton/TaskRun identities and returned digests; run
 the independent registry verification before release pinning. A digest
 identifies an artifact; it is not by itself an SBOM, signature, or vulnerability
 attestation.
+
+The API exposes Prometheus metrics on a separate listener
+(`PHARNESS_METRICS_BIND`, chart value `api.metrics`) covering controller tick
+age, hosted reconciliation conditions, active operations, and SQLite size. Alert
+rules live in `deploy/helm/pharness/files/prometheus-rules.yaml`, and the
+scheduled SQLite archive plus its restore procedure are described in the
+[backup and restore runbook](planning/operations/runbooks/sqlite-backup-and-restore.md).
 
 ## Reliability and roadmap
 

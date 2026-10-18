@@ -1,0 +1,44 @@
+{{- if .Values.api.metrics.serviceMonitor.enabled }}
+# Requires the Prometheus Operator CRDs. Annotation-based discovery (see the
+# API Pod template) covers the community prometheus chart without CRDs.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: pharness-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: pharness-api
+    app.kubernetes.io/part-of: pharness
+    {{- with .Values.api.metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app: pharness-api
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.api.metrics.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.api.metrics.serviceMonitor.scrapeTimeout }}
+{{- end }}
+{{- if .Values.api.metrics.prometheusRule.enabled }}
+---
+# The same rule groups live in files/prometheus-rules.yaml so a Prometheus
+# without the operator can load them through its own rule files.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pharness
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    {{- with .Values.api.metrics.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- .Files.Get "files/prometheus-rules.yaml" | nindent 2 }}
+{{- end }}

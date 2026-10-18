@@ -132,7 +132,7 @@ async fn main() -> anyhow::Result<()> {
             "operator token auth enabled"
         );
     }
-    let app = app::router_with_runtime_configs(
+    let app::AppRouters { app, metrics } = app::routers_with_runtime_configs(
         store,
         dispatcher,
         cluster_tools,
@@ -148,6 +148,17 @@ async fn main() -> anyhow::Result<()> {
         config.agent_execution.clone(),
         config.hosted_workflow.clone(),
     );
+    if let Some(metrics_bind) = config.api.metrics_bind {
+        let metrics_listener = tokio::net::TcpListener::bind(metrics_bind)
+            .await
+            .with_context(|| format!("failed to bind metrics listener on {metrics_bind}"))?;
+        tracing::info!(%metrics_bind, "metrics listener enabled");
+        tokio::spawn(async move {
+            if let Err(error) = axum::serve(metrics_listener, metrics).await {
+                tracing::error!(%error, "metrics listener stopped");
+            }
+        });
+    }
     tracing::info!(%bind, "starting pharness-api");
     let listener = tokio::net::TcpListener::bind(bind).await?;
     tracing::info!(%bind, "pharness-api listening");

@@ -37,6 +37,7 @@ mod inference;
 mod internal;
 mod json_values;
 mod lifecycle_timeline;
+mod metrics;
 mod operator;
 mod operator_experience;
 mod pipeline;
@@ -213,7 +214,15 @@ pub fn router_with_inference(
     )
 }
 
+/// The operator/worker application plus the unauthenticated metrics router
+/// that must only be served on a private listener.
+pub struct AppRouters {
+    pub app: Router,
+    pub metrics: Router,
+}
+
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 pub fn router_with_runtime_configs(
     store: Arc<SqliteStore>,
     worker: RunDispatcher,
@@ -226,6 +235,34 @@ pub fn router_with_runtime_configs(
     agent_execution: pharness_config::AgentExecutionBackendConfig,
     hosted_workflow: pharness_core::hosted_sdlc::HostedWorkflowConfig,
 ) -> Router {
+    routers_with_runtime_configs(
+        store,
+        worker,
+        cluster_tools,
+        policy,
+        worker_token,
+        operator_tokens,
+        workspace,
+        inference,
+        agent_execution,
+        hosted_workflow,
+    )
+    .app
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn routers_with_runtime_configs(
+    store: Arc<SqliteStore>,
+    worker: RunDispatcher,
+    cluster_tools: ReadOnlyClusterTools,
+    policy: SafetyPolicy,
+    worker_token: Option<String>,
+    operator_tokens: Vec<(String, String)>,
+    workspace: WorkspaceProvisioner,
+    inference: pharness_config::InferenceGatewayConfig,
+    agent_execution: pharness_config::AgentExecutionBackendConfig,
+    hosted_workflow: pharness_core::hosted_sdlc::HostedWorkflowConfig,
+) -> AppRouters {
     let state = AppState {
         store,
         worker,
@@ -273,7 +310,8 @@ pub fn router_with_runtime_configs(
             require_operator_token,
         ));
 
-    operator_routes
+    let metrics = metrics::router(state.clone());
+    let app = operator_routes
         .merge(internal::router(state.clone()))
         .merge(agent_hosts::internal_router(state.clone()))
         .layer(
@@ -281,7 +319,8 @@ pub fn router_with_runtime_configs(
                 .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
                 .on_response(DefaultOnResponse::new().level(Level::INFO)),
         )
-        .with_state(state)
+        .with_state(state);
+    AppRouters { app, metrics }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

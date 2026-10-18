@@ -1,5 +1,5 @@
 use super::operations::{execute_operation, reconcile_operation};
-use super::state::{condition, continuation_candidate, now, Condition, Snapshot};
+use super::state::{condition, continuation_candidate, now, workflow_policy, Condition, Snapshot};
 use crate::app::hashing::canonical_material_hash;
 use crate::app::hosted_workflow::stages as hosted;
 use crate::app::{ApiError, AppState};
@@ -156,11 +156,8 @@ pub(super) async fn advance(
 }
 
 fn require_authority(snapshot: &Snapshot, action: HostedAutomaticAction) -> Result<(), ApiError> {
-    if !snapshot
-        .metadata
-        .workflow_policy
-        .as_ref()
-        .unwrap()
+    if !workflow_policy(&snapshot.metadata)?
+        .0
         .automatic_actions
         .contains(&action)
     {

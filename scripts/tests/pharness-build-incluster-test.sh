@@ -61,21 +61,20 @@ case "${1:-}" in
         printf '%s\n' '{"metadata":{"labels":{"workload":"build","kubernetes.io/arch":"amd64"}}}'
         ;;
       pipelinerun/*)
-        if [[ -f "${PHARNESS_TEST_RUN_RECORD:-}" ]]; then
-          requested_name="${2#pipelinerun/}"
-          recorded_name="$(jq -r '.metadata.name // empty' "$PHARNESS_TEST_RUN_RECORD")"
-          if [[ "$requested_name" == "$recorded_name" ]]; then
-            jq -c '.' "$PHARNESS_TEST_RUN_RECORD"
-          else
-            printf '%s\n' '{}'
-          fi
+        # One record per deterministic run name: a release submits several
+        # PipelineRuns before it collects any of them.
+        record="${PHARNESS_TEST_RUN_RECORD}.${2#pipelinerun/}"
+        if [[ -f "$record" ]]; then
+          jq -c '.' "$record"
         else
           printf '%s\n' '{}'
         fi
         ;;
       taskrun/*)
         taskrun_name="${2#taskrun/}"
-        run_json="$(cat "$PHARNESS_TEST_RUN_RECORD")"
+        parent_run="${taskrun_name%-fetch-source}"
+        parent_run="${parent_run%-build-push}"
+        run_json="$(cat "${PHARNESS_TEST_RUN_RECORD}.${parent_run}")"
         if [[ "$taskrun_name" == *-fetch-source ]]; then
           jq -n --arg service_account tekton-ci-build --arg revision "$PHARNESS_TEST_REVISION" \
             '{spec:{serviceAccountName:$service_account},status:{results:[{name:"commit",value:$revision}]}}'
@@ -100,7 +99,7 @@ case "${1:-}" in
         '.status={conditions:[{type:"Succeeded",status:"True"}],childReferences:[
           {kind:"TaskRun",pipelineTaskName:"fetch-source",name:($run+"-fetch-source")},
           {kind:"TaskRun",pipelineTaskName:"build-push",name:($run+"-build-push")}]} ' \
-        "$run_manifest" >"$PHARNESS_TEST_RUN_RECORD"
+        "$run_manifest" >"${PHARNESS_TEST_RUN_RECORD}.${run_name}"
       echo "pipelinerun.tekton.dev/${run_name}"
     else
       echo "unexpected or persisted dry-run kubectl create: $*" >&2
@@ -210,12 +209,15 @@ if output="$(PATH="${TEST_ROOT}/bin:${PATH}" \
   PHARNESS_TEST_MANIFEST="${TEST_ROOT}/run-manifest.json" \
   PHARNESS_TEST_RUN_RECORD="${TEST_ROOT}/run-record.json" \
   PHARNESS_KUBECTL="${TEST_ROOT}/bin/kubectl" \
-  bash "$BUILD_SCRIPT" runtime --revision "$REVISION" 2>&1)"; then
+  bash "$BUILD_SCRIPT" runtime --revision "$REVISION" 2>"${TEST_ROOT}/run-stderr.log")"; then
   :
 else
+  cat "${TEST_ROOT}/run-stderr.log" >&2
   echo "$output" >&2
   exit 1
 fi
+# Submission progress goes to stderr so stdout stays a single JSON document.
+[[ "$(cat "${TEST_ROOT}/run-stderr.log")" == "submitted pharness-runtime-0123456789ab" ]]
 jq -e '.status == "builds_completed" and .production_rollout == false
   and .components[0].source_revision == "'"$REVISION"'"
   and .components[0].digest == "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -232,9 +234,10 @@ if output="$(PATH="${TEST_ROOT}/bin:${PATH}" \
   PHARNESS_TEST_RUN_RECORD="${TEST_ROOT}/bundle-run-record.json" \
   PHARNESS_BUNDLE_OUTPUT_DIR="${TEST_ROOT}/dist" \
   PHARNESS_KUBECTL="${TEST_ROOT}/bin/kubectl" \
-  bash "$BUILD_SCRIPT" codex-host --revision "$REVISION" 2>&1)"; then
+  bash "$BUILD_SCRIPT" codex-host --revision "$REVISION" 2>"${TEST_ROOT}/bundle-run-stderr.log")"; then
   :
 else
+  cat "${TEST_ROOT}/bundle-run-stderr.log" >&2
   echo "$output" >&2
   exit 1
 fi

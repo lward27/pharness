@@ -56,12 +56,12 @@ pub(super) async fn candidate(
         .store
         .get_work_plan_by_work_item(&snapshot.metadata.work_item_id)
         .await?
-        .unwrap();
+        .ok_or_else(|| ApiError::conflict("hosted build requires the delivered WorkPlan"))?;
     let change = state
         .store
         .get_change_set_by_work_plan(&plan.id)
         .await?
-        .unwrap();
+        .ok_or_else(|| ApiError::conflict("hosted build requires the delivered ChangeSet"))?;
     let input_hash = hash(
         &json!({"change_set_id":change.id,"source_provenance":provenance,"workflow_policy_hash":snapshot.metadata.workflow_policy_hash}),
     )?;

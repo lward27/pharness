@@ -265,6 +265,7 @@ pub(in crate::app) async fn execute_work_item_action(
                 serde_json::to_value(
                     decide_approval_gate(
                         state.clone(),
+                        identity.clone(),
                         gate_id.to_string(),
                         "satisfied",
                         DecideApprovalGateRequest {

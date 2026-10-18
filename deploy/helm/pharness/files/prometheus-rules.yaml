@@ -1,0 +1,93 @@
+groups:
+  - name: pharness-control-plane
+    rules:
+      - alert: PharnessApiDown
+        # Keyed on an exported series rather than `up{job=...}` so the rule
+        # holds for both ServiceMonitor and annotation-based discovery.
+        expr: absent(pharness_build_info)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: pharness-api metrics endpoint is not being scraped
+          description: No pharness_build_info series has been scraped for 5 minutes (series go stale 5 minutes after the last successful scrape).
+      - alert: PharnessControllerStalled
+        # The hosted loop ticks every 15s. A stale tick with the controller
+        # enabled means claims and waits are no longer being observed.
+        expr: pharness_controller_enabled == 1 and pharness_controller_last_tick_age_seconds > 120
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: hosted controller loop has not ticked for over 2 minutes
+          description: pharness_controller_last_tick_age_seconds is {{ $value | humanizeDuration }}.
+      - alert: PharnessControllerReconcileErrors
+        expr: increase(pharness_controller_reconcile_errors_total[15m]) > 3
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: hosted reconciliation passes are failing
+          description: More than three reconciliation passes failed in the last 15 minutes.
+      - alert: PharnessHostedWorkBlocked
+        expr: pharness_hosted_reconciliations{condition="blocked"} > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: hosted WorkItems have been blocked for 30 minutes
+          description: '{{ $value }} open hosted WorkItems carry condition=blocked; inspect their controller reasons.'
+      - alert: PharnessHostedWaitExpired
+        expr: pharness_hosted_reconciliations{condition="wait_expired"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: a hosted WorkItem exhausted its wait budget
+          description: '{{ $value }} hosted WorkItems have condition=wait_expired and need an operator decision.'
+      - alert: PharnessHostedReconciliationBacklog
+        # Due work that stays unclaimed for several loop intervals means the
+        # controller is wedged or saturated.
+        expr: pharness_hosted_reconciliations_oldest_due_age_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: due hosted reconciliations are not being claimed
+          description: The oldest due reconciliation has waited {{ $value | humanizeDuration }}.
+      - alert: PharnessHostedOperationStuck
+        expr: pharness_hosted_operations_oldest_active_age_seconds > 7200
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: a hosted operation has been active for over 2 hours
+          description: The oldest unfinished hosted operation is {{ $value | humanizeDuration }} old.
+  - name: pharness-storage
+    rules:
+      - alert: PharnessSqliteDatabaseLarge
+        # The default claim is 2Gi; alert well before SQLite can no longer
+        # checkpoint its WAL.
+        expr: pharness_sqlite_database_bytes > 1.5 * 1024 * 1024 * 1024
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: SQLite database is approaching its claim size
+          description: pharness_sqlite_database_bytes is {{ $value | humanize1024 }}B.
+      - alert: PharnessBackupJobFailed
+        expr: kube_job_status_failed{job_name=~"pharness-backup-.*"} > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: a scheduled SQLite backup Job failed
+          description: Job {{ $labels.job_name }} in {{ $labels.namespace }} reported failure.
+      - alert: PharnessBackupMissing
+        expr: time() - max(kube_job_status_completion_time{job_name=~"pharness-backup-.*"}) > 36 * 3600
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: no SQLite backup Job has completed in 36 hours
+          description: The nightly backup CronJob has not produced a successful archive recently.

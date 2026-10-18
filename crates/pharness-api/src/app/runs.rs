@@ -2,7 +2,7 @@ use super::approvals::{
     active_permission_grants, decide_current_run_approval, ApprovalDecisionInput,
 };
 use super::audit::append_workspace_audit_event;
-use super::auth::OperatorIdentity;
+use super::auth::{DecisionActor, OperatorIdentity};
 use super::clock::{current_millis, unique_suffix};
 use super::environment::select_profile;
 use super::operator::{all_runs_for_operator_groups, group_operator_records, run_group_resource};
@@ -1470,17 +1470,18 @@ pub(super) async fn cancel_run(
 
 pub(super) async fn decide_run_approval(
     State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
     Path(run_id): Path<String>,
     Json(request): Json<DecideApprovalRequest>,
 ) -> Result<Json<DecideApprovalResponse>, ApiError> {
     decide_current_run_approval(
         state,
         RunId::new(run_id),
-        ApprovalDecisionInput {
-            decision: request.decision,
-            decided_by: request.decided_by,
-            reason: request.reason,
-        },
+        ApprovalDecisionInput::new(
+            request.decision,
+            DecisionActor::resolve(identity.as_ref(), request.decided_by),
+            request.reason,
+        ),
         None,
     )
     .await

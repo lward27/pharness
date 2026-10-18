@@ -45,7 +45,7 @@ pub(super) async fn prepare(
         .store
         .get_pipeline_intent(&created.pipeline_intent.id)
         .await?
-        .unwrap();
+        .ok_or_else(|| ApiError::internal("created build PipelineIntent is unavailable"))?;
     hosted::validate_intent(state, &intent).await?;
     if intent.intent_json["hosted_build"]
         != json!({"operation_id":operation.id,"workflow_policy_hash":metadata.workflow_policy_hash})
@@ -55,8 +55,14 @@ pub(super) async fn prepare(
         ));
     }
     if intent.status == "proposed" {
-        let Json(_) = intents::transition_pipeline_intent(State(state.clone()),Path(intent.id.clone()),Json(serde_json::from_value(json!({"target_status":"approved","actor":"controller:hosted-workflow","reason":format!("Saved workflow {} authorizes this finite non-deploying build",metadata.workflow_policy_hash.as_deref().unwrap_or_default())})).unwrap())).await?;
-        intent = state.store.get_pipeline_intent(&intent.id).await?.unwrap();
+        let Json(_) = intents::transition_pipeline_intent(State(state.clone()),Path(intent.id.clone()),Json(serde_json::from_value(json!({"target_status":"approved","actor":"controller:hosted-workflow","reason":format!("Saved workflow {} authorizes this finite non-deploying build",metadata.workflow_policy_hash.as_deref().unwrap_or_default())})).map_err(|_| ApiError::internal("invalid build approval transition"))?)).await?;
+        intent = state
+            .store
+            .get_pipeline_intent(&intent.id)
+            .await?
+            .ok_or_else(|| {
+                ApiError::conflict("build PipelineIntent disappeared during approval")
+            })?;
     }
     if intent.status != "approved" || intent.intent_json.get("execution_state").is_some() {
         return Err(ApiError::conflict("build preparation found an existing execution without its recorded dispatch; intervention is required"));
@@ -184,7 +190,7 @@ async fn ensure_grant(
             "Saved hosted workflow permits the non-deploying build operation {}",
             operation.id
         );
-        crate::app::approvals::validate_permission_grant_request(&serde_json::from_value(json!({"subject":state.policy.subject,"reason":reason,"scope":scope,"policy":grant_policy,"expires_at":expiry.to_string()})).unwrap())?;
+        crate::app::approvals::validate_permission_grant_request(&serde_json::from_value(json!({"subject":state.policy.subject,"reason":reason,"scope":scope,"policy":grant_policy,"expires_at":expiry.to_string()})).map_err(|_| ApiError::internal("invalid hosted build permission grant"))?)?;
         let grant = state
             .store
             .create_permission_grant(CreatePermissionGrant {

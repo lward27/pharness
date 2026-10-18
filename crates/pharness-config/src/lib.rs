@@ -255,6 +255,10 @@ pub struct WorkerKubernetesConfig {
 #[derive(Clone)]
 pub struct ApiConfig {
     pub bind: SocketAddr,
+    /// Optional second listener that serves only `/metrics`. It is kept off
+    /// the operator port so scrapes never need an operator credential and the
+    /// public ingress never exposes it.
+    pub metrics_bind: Option<SocketAddr>,
 }
 
 #[derive(Clone)]
@@ -390,6 +394,7 @@ impl ApiRuntimeConfig {
         Ok(Self {
             api: ApiConfig {
                 bind: parse_socket_addr(DEFAULT_BIND, "default api.bind")?,
+                metrics_bind: None,
             },
             storage: StorageConfig {
                 path: PathBuf::from(DEFAULT_DB_PATH),
@@ -507,6 +512,9 @@ impl ApiRuntimeConfig {
         if let Some(api) = file.api {
             if let Some(bind) = api.bind {
                 self.api.bind = parse_socket_addr(&bind, "api.bind")?;
+            }
+            if let Some(bind) = api.metrics_bind {
+                self.api.metrics_bind = Some(parse_socket_addr(&bind, "api.metrics_bind")?);
             }
         }
 
@@ -879,6 +887,13 @@ impl ApiRuntimeConfig {
         }
         if let Some(value) = env.get("PHARNESS_BIND") {
             self.api.bind = parse_socket_addr(value, "PHARNESS_BIND")?;
+        }
+        if let Some(value) = env.get("PHARNESS_METRICS_BIND") {
+            self.api.metrics_bind = if value.trim().is_empty() {
+                None
+            } else {
+                Some(parse_socket_addr(value, "PHARNESS_METRICS_BIND")?)
+            };
         }
         if let Some(value) = env.get("PHARNESS_DB_PATH") {
             self.storage.path = expand_tilde(PathBuf::from(value));
@@ -1606,6 +1621,7 @@ struct FileWorkerKubernetesConfig {
 #[serde(default)]
 struct FileApiConfig {
     bind: Option<String>,
+    metrics_bind: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -2035,6 +2051,7 @@ mod tests {
         let config = ApiRuntimeConfig::from_sources(None, &BTreeMap::new()).unwrap();
 
         assert_eq!(config.api.bind.to_string(), "127.0.0.1:4777");
+        assert_eq!(config.api.metrics_bind, None);
         assert_eq!(config.storage.path, PathBuf::from(".pharness/pharness.db"));
         assert_eq!(
             config.storage.workspace_root,
@@ -2243,6 +2260,10 @@ registry_aliases = ["file.registry=public.registry"]
         let mut env = BTreeMap::new();
         env.insert("PHARNESS_BIND".to_string(), "127.0.0.1:4999".to_string());
         env.insert(
+            "PHARNESS_METRICS_BIND".to_string(),
+            "127.0.0.1:4998".to_string(),
+        );
+        env.insert(
             "PHARNESS_DB_PATH".to_string(),
             ".pharness/from-env.db".to_string(),
         );
@@ -2326,6 +2347,10 @@ registry_aliases = ["file.registry=public.registry"]
         let config = ApiRuntimeConfig::from_sources(Some(&path), &env).unwrap();
 
         assert_eq!(config.api.bind.to_string(), "127.0.0.1:4999");
+        assert_eq!(
+            config.api.metrics_bind.map(|bind| bind.to_string()),
+            Some("127.0.0.1:4998".to_string())
+        );
         assert_eq!(config.storage.path, PathBuf::from(".pharness/from-env.db"));
         assert_eq!(
             config.storage.workspace_allowed_repos,

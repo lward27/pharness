@@ -1,7 +1,7 @@
 use super::{SqliteStore, StoreError};
 use crate::{
-    BeginWorkflowOperation, FinishWorkflowReconciliation, StoredWorkflowOperation,
-    StoredWorkflowReconciliation,
+    BeginWorkflowOperation, DatabaseSize, FinishWorkflowReconciliation, HostedControllerMetrics,
+    StoredWorkflowOperation, StoredWorkflowReconciliation,
 };
 use sqlx::{Row, Sqlite, Transaction};
 
@@ -344,6 +344,87 @@ impl SqliteStore {
         }
         tx.commit().await?;
         operation_from_row(row)
+    }
+
+    pub async fn hosted_controller_metrics(
+        &self,
+        now: i64,
+    ) -> Result<HostedControllerMetrics, StoreError> {
+        // Mirror the eligibility predicate in `claim_due_workflow` so every
+        // number here describes the population the scheduler still visits.
+        const ELIGIBLE: &str = "(w.closed_at IS NULL OR EXISTS (
+            SELECT 1 FROM hosted_operations o WHERE o.work_item_id = w.id
+            AND o.status != 'succeeded'))";
+        let by_condition = sqlx::query(&format!(
+            "SELECT r.condition AS condition, COUNT(*) AS count FROM hosted_reconciliations r
+             JOIN work_items w ON w.id = r.work_item_id
+             WHERE {ELIGIBLE} GROUP BY r.condition ORDER BY r.condition"
+        ))
+        .fetch_all(&self.pool)
+        .await?;
+        let reconciliations_by_condition = by_condition
+            .into_iter()
+            .map(|row| Ok((row.try_get("condition")?, row.try_get("count")?)))
+            .collect::<Result<Vec<(String, i64)>, StoreError>>()?;
+        let due = sqlx::query(&format!(
+            "SELECT COUNT(*) AS count, MIN(r.next_due_at) AS oldest FROM hosted_reconciliations r
+             JOIN work_items w ON w.id = r.work_item_id
+             WHERE {ELIGIBLE} AND r.next_due_at <= ?1
+               AND (r.claim_until IS NULL OR r.claim_until <= ?1)"
+        ))
+        .bind(now)
+        .fetch_one(&self.pool)
+        .await?;
+        let due_unclaimed: i64 = due.try_get("count")?;
+        let oldest_due: Option<i64> = due.try_get("oldest")?;
+        let claimed: i64 = sqlx::query_scalar(&format!(
+            "SELECT COUNT(*) FROM hosted_reconciliations r
+             JOIN work_items w ON w.id = r.work_item_id
+             WHERE {ELIGIBLE} AND r.claim_until IS NOT NULL AND r.claim_until > ?1"
+        ))
+        .bind(now)
+        .fetch_one(&self.pool)
+        .await?;
+        let by_status = sqlx::query(
+            "SELECT status, COUNT(*) AS count FROM hosted_operations
+             WHERE status != 'succeeded' GROUP BY status ORDER BY status",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let operations_by_status = by_status
+            .into_iter()
+            .map(|row| Ok((row.try_get("status")?, row.try_get("count")?)))
+            .collect::<Result<Vec<(String, i64)>, StoreError>>()?;
+        let oldest_active: Option<i64> = sqlx::query_scalar(
+            "SELECT MIN(created_at) FROM hosted_operations WHERE status != 'succeeded'",
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(HostedControllerMetrics {
+            reconciliations_by_condition,
+            due_unclaimed,
+            oldest_due_age_millis: oldest_due.map(|oldest| now.saturating_sub(oldest).max(0)),
+            claimed,
+            operations_by_status,
+            oldest_active_operation_age_millis: oldest_active
+                .map(|oldest| now.saturating_sub(oldest).max(0)),
+        })
+    }
+
+    pub async fn database_size(&self) -> Result<DatabaseSize, StoreError> {
+        let page_size: i64 = sqlx::query_scalar("PRAGMA page_size")
+            .fetch_one(&self.pool)
+            .await?;
+        let page_count: i64 = sqlx::query_scalar("PRAGMA page_count")
+            .fetch_one(&self.pool)
+            .await?;
+        let freelist_count: i64 = sqlx::query_scalar("PRAGMA freelist_count")
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(DatabaseSize {
+            total_bytes: page_size.saturating_mul(page_count),
+            freelist_bytes: page_size.saturating_mul(freelist_count),
+        })
     }
 }
 

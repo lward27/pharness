@@ -1,4 +1,5 @@
 use super::approval_policy::approval_gate_uses_dedicated_lifecycle_action;
+use super::auth::{DecisionActor, OperatorIdentity};
 use super::clock::{current_millis, unique_suffix};
 use super::gitops::deployment_evidence::observed_gitops_merge_for_deployment;
 use super::operator::{
@@ -16,7 +17,7 @@ use crate::dto::{
     RevokePermissionGrantRequest,
 };
 use axum::extract::{Path, Query, State};
-use axum::Json;
+use axum::{Extension, Json};
 use pharness_core::{
     AgentEvent, EventId, EventKind, PermissionGrant, PermissionGrantPolicy, PermissionGrantScope,
     RunId,
@@ -480,34 +481,39 @@ async fn approval_gate_response(
 
 pub(super) async fn satisfy_approval_gate(
     State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
     Path(gate_id): Path<String>,
     Json(request): Json<DecideApprovalGateRequest>,
 ) -> Result<Json<DecideApprovalGateResponse>, ApiError> {
-    decide_approval_gate(state, gate_id, "satisfied", request).await
+    decide_approval_gate(state, identity, gate_id, "satisfied", request).await
 }
 
 async fn waive_approval_gate(
     State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
     Path(gate_id): Path<String>,
     Json(request): Json<DecideApprovalGateRequest>,
 ) -> Result<Json<DecideApprovalGateResponse>, ApiError> {
-    decide_approval_gate(state, gate_id, "waived", request).await
+    decide_approval_gate(state, identity, gate_id, "waived", request).await
 }
 
 async fn reject_approval_gate(
     State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
     Path(gate_id): Path<String>,
     Json(request): Json<DecideApprovalGateRequest>,
 ) -> Result<Json<DecideApprovalGateResponse>, ApiError> {
-    decide_approval_gate(state, gate_id, "rejected", request).await
+    decide_approval_gate(state, identity, gate_id, "rejected", request).await
 }
 
 pub(super) async fn decide_approval_gate(
     state: AppState,
+    identity: Option<Extension<OperatorIdentity>>,
     gate_id: String,
     status: &str,
     request: DecideApprovalGateRequest,
 ) -> Result<Json<DecideApprovalGateResponse>, ApiError> {
+    let actor = DecisionActor::resolve(identity.as_ref(), request.decided_by);
     let current = state
         .store
         .get_approval_gate(&gate_id)
@@ -526,17 +532,19 @@ pub(super) async fn decide_approval_gate(
         .decide_approval_gate(
             &gate_id,
             status,
-            clean_optional_text(request.decided_by.clone()),
-            clean_optional_text(request.reason.clone()),
+            actor.name,
+            clean_optional_text(request.reason),
         )
         .await?;
-    append_approval_gate_audit_event(
-        &state.store,
-        &gate,
-        &format!("approval_gate.{status}"),
-        status,
-    )
-    .await?;
+    state
+        .store
+        .create_audit_event(approval_gate_audit_event_with_claim(
+            &gate,
+            &format!("approval_gate.{status}"),
+            status,
+            actor.claimed.as_deref(),
+        ))
+        .await?;
 
     Ok(Json(DecideApprovalGateResponse {
         approval_gate: gate.into(),
@@ -545,6 +553,7 @@ pub(super) async fn decide_approval_gate(
 
 pub(super) async fn batch_decide_approval_gates(
     State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
     Json(request): Json<BatchDecideApprovalGatesRequest>,
 ) -> Result<Json<BatchDecideApprovalGatesResponse>, ApiError> {
     if request.gate_ids.is_empty() || request.gate_ids.len() > 100 {
@@ -558,9 +567,12 @@ pub(super) async fn batch_decide_approval_gates(
             "batch approval gate decision must be satisfied, waived, or rejected",
         ));
     }
-    let decided_by = request.decided_by.trim();
+    let (decided_by, claimed_by) =
+        DecisionActor::resolve(identity.as_ref(), Some(request.decided_by))
+            .require("batch approval gate decisions require an actor and reason")?;
+    let decided_by = decided_by.as_str();
     let reason = request.reason.trim();
-    if decided_by.is_empty() || reason.is_empty() {
+    if reason.is_empty() {
         return Err(ApiError::bad_request(
             "batch approval gate decisions require an actor and reason",
         ));
@@ -607,10 +619,11 @@ pub(super) async fn batch_decide_approval_gates(
             decided_gate.status = decision.to_string();
             decided_gate.decided_by = Some(decided_by.to_string());
             decided_gate.decision_reason = Some(reason.to_string());
-            approval_gate_audit_event(
+            approval_gate_audit_event_with_claim(
                 &decided_gate,
                 &format!("approval_gate.{decision}"),
                 decision,
+                claimed_by.as_deref(),
             )
         })
         .collect::<Vec<_>>();
@@ -625,6 +638,7 @@ pub(super) async fn batch_decide_approval_gates(
             "approval_gate_ids": gate_ids,
             "decision": decision,
             "decided_by": decided_by,
+            "claimed_by": claimed_by,
             "reason": reason,
             "count": current_gates.len(),
         }),
@@ -794,9 +808,17 @@ pub(super) async fn get_permission_grant(
 
 pub(super) async fn create_permission_grant(
     State(state): State<AppState>,
-    Json(request): Json<CreatePermissionGrantRequest>,
+    identity: Option<Extension<OperatorIdentity>>,
+    Json(mut request): Json<CreatePermissionGrantRequest>,
 ) -> Result<Json<PermissionGrantResponse>, ApiError> {
-    let grant = create_permission_grant_record(&state.store, request).await?;
+    // Validate first so a blank created_by is still rejected rather than
+    // normalized away by actor resolution.
+    validate_permission_grant_request(&request)?;
+    let actor = DecisionActor::resolve(identity.as_ref(), request.created_by.take());
+    request.created_by = actor.name;
+    let grant =
+        create_permission_grant_record_with_claim(&state.store, request, actor.claimed.as_deref())
+            .await?;
 
     Ok(Json(grant.into()))
 }
@@ -804,6 +826,14 @@ pub(super) async fn create_permission_grant(
 pub(super) async fn create_permission_grant_record(
     store: &SqliteStore,
     request: CreatePermissionGrantRequest,
+) -> Result<StoredPermissionGrant, ApiError> {
+    create_permission_grant_record_with_claim(store, request, None).await
+}
+
+async fn create_permission_grant_record_with_claim(
+    store: &SqliteStore,
+    request: CreatePermissionGrantRequest,
+    claimed_by: Option<&str>,
 ) -> Result<StoredPermissionGrant, ApiError> {
     validate_permission_grant_request(&request)?;
     let created_by = clean_optional_text(request.created_by.clone());
@@ -817,26 +847,35 @@ pub(super) async fn create_permission_grant_record(
             expires_at: request.expires_at,
         })
         .await?;
-    append_permission_grant_audit_event(store, "permission_grant.created", &grant, created_by)
-        .await?;
+    append_permission_grant_audit_event_with_claim(
+        store,
+        "permission_grant.created",
+        &grant,
+        created_by,
+        claimed_by,
+    )
+    .await?;
 
     Ok(grant)
 }
 
 pub(super) async fn revoke_permission_grant(
     State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
     Path(grant_id): Path<String>,
     Json(request): Json<RevokePermissionGrantRequest>,
 ) -> Result<Json<PermissionGrantResponse>, ApiError> {
+    let actor = DecisionActor::resolve(identity.as_ref(), request.revoked_by);
     let grant = state
         .store
-        .revoke_permission_grant(&grant_id, request.revoked_by.clone(), request.reason)
+        .revoke_permission_grant(&grant_id, actor.name.clone(), request.reason)
         .await?;
-    append_permission_grant_audit_event(
+    append_permission_grant_audit_event_with_claim(
         &state.store,
         "permission_grant.revoked",
         &grant,
-        request.revoked_by,
+        actor.name,
+        actor.claimed.as_deref(),
     )
     .await?;
 
@@ -848,6 +887,16 @@ pub(super) async fn append_permission_grant_audit_event(
     kind: &str,
     grant: &StoredPermissionGrant,
     actor: Option<String>,
+) -> Result<(), StoreError> {
+    append_permission_grant_audit_event_with_claim(store, kind, grant, actor, None).await
+}
+
+async fn append_permission_grant_audit_event_with_claim(
+    store: &SqliteStore,
+    kind: &str,
+    grant: &StoredPermissionGrant,
+    actor: Option<String>,
+    claimed_by: Option<&str>,
 ) -> Result<(), StoreError> {
     store
         .create_audit_event(CreateAuditEvent {
@@ -868,6 +917,7 @@ pub(super) async fn append_permission_grant_audit_event(
                 "revoked_at": grant.revoked_at,
                 "revoked_by": grant.revoked_by,
                 "revoke_reason": grant.revoke_reason,
+                "claimed_by": claimed_by,
             }),
         })
         .await
@@ -881,15 +931,18 @@ pub(super) async fn append_approval_gate_audit_event(
     decision: &str,
 ) -> Result<(), StoreError> {
     store
-        .create_audit_event(approval_gate_audit_event(gate, kind, decision))
+        .create_audit_event(approval_gate_audit_event_with_claim(
+            gate, kind, decision, None,
+        ))
         .await
         .map(|_| ())
 }
 
-fn approval_gate_audit_event(
+fn approval_gate_audit_event_with_claim(
     gate: &StoredApprovalGate,
     kind: &str,
     decision: &str,
+    claimed_by: Option<&str>,
 ) -> CreateAuditEvent {
     CreateAuditEvent {
         id: format!("aud_{}_{}", gate.id, unique_suffix()),
@@ -924,6 +977,7 @@ fn approval_gate_audit_event(
             "stale_at": gate.stale_at,
             "stale_by": gate.stale_by,
             "stale_reason": gate.stale_reason,
+            "claimed_by": claimed_by,
         }),
     }
 }
@@ -987,34 +1041,36 @@ pub(super) fn validate_permission_grant_request(
 
 async fn approve_approval(
     State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
     Path(approval_id): Path<String>,
     Json(request): Json<ReviewApprovalRequest>,
 ) -> Result<Json<DecideApprovalResponse>, ApiError> {
     decide_approval_by_id(
         state,
         approval_id,
-        ApprovalDecisionInput {
-            decision: ApprovalDecision::Approve,
-            decided_by: request.decided_by,
-            reason: request.reason,
-        },
+        ApprovalDecisionInput::new(
+            ApprovalDecision::Approve,
+            DecisionActor::resolve(identity.as_ref(), request.decided_by),
+            request.reason,
+        ),
     )
     .await
 }
 
 pub(super) async fn deny_approval(
     State(state): State<AppState>,
+    identity: Option<Extension<OperatorIdentity>>,
     Path(approval_id): Path<String>,
     Json(request): Json<ReviewApprovalRequest>,
 ) -> Result<Json<DecideApprovalResponse>, ApiError> {
     decide_approval_by_id(
         state,
         approval_id,
-        ApprovalDecisionInput {
-            decision: ApprovalDecision::Deny,
-            decided_by: request.decided_by,
-            reason: request.reason,
-        },
+        ApprovalDecisionInput::new(
+            ApprovalDecision::Deny,
+            DecisionActor::resolve(identity.as_ref(), request.decided_by),
+            request.reason,
+        ),
     )
     .await
 }
@@ -1040,7 +1096,23 @@ async fn decide_approval_by_id(
 pub(super) struct ApprovalDecisionInput {
     pub(super) decision: ApprovalDecision,
     pub(super) decided_by: Option<String>,
+    pub(super) claimed_by: Option<String>,
     pub(super) reason: Option<String>,
+}
+
+impl ApprovalDecisionInput {
+    pub(super) fn new(
+        decision: ApprovalDecision,
+        actor: DecisionActor,
+        reason: Option<String>,
+    ) -> Self {
+        Self {
+            decision,
+            decided_by: actor.name,
+            claimed_by: actor.claimed,
+            reason,
+        }
+    }
 }
 
 pub(super) async fn decide_current_run_approval(
@@ -1063,6 +1135,7 @@ pub(super) async fn decide_current_run_approval(
     }
 
     let decided_by = input.decided_by;
+    let claimed_by = input.claimed_by;
     let reason = input.reason;
 
     match input.decision {
@@ -1078,6 +1151,7 @@ pub(super) async fn decide_current_run_approval(
                 "approval.denied",
                 "denied",
                 decided_by,
+                claimed_by,
                 reason,
             )
             .await?;
@@ -1126,6 +1200,7 @@ pub(super) async fn decide_current_run_approval(
                 "approval.approved",
                 "approved",
                 decided_by,
+                claimed_by,
                 reason,
             )
             .await?;
@@ -1146,6 +1221,7 @@ async fn append_approval_decision_audit_event(
     kind: &str,
     decision: &str,
     actor: Option<String>,
+    claimed_by: Option<String>,
     reason: Option<String>,
 ) -> Result<(), StoreError> {
     store
@@ -1167,6 +1243,7 @@ async fn append_approval_decision_audit_event(
                 "action": approval_action_kind(approval),
                 "run_scope": approval.run_scope_json,
                 "decided_by": actor,
+                "claimed_by": claimed_by,
                 "reason": reason,
             }),
         })

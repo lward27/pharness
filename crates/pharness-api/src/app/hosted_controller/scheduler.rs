@@ -1,5 +1,6 @@
 use super::state::{now, Snapshot};
 use super::{progression, DISPATCH_BOUNDARY};
+use crate::app::metrics::CONTROLLER;
 use crate::app::{
     ApiError, AppState, OperationalMode, CONTROLLER_WAIT_INTERVAL_MS, CONTROLLER_WAIT_MAX_CHECKS,
 };
@@ -13,9 +14,15 @@ pub(in crate::app) fn spawn(state: AppState) {
     // Creation may be disabled while already-authorized work still needs
     // observation or recovery. Only persisted hosted rows are eligible.
     let owner = format!("hosted-api-{}", uuid::Uuid::now_v7().simple());
+    CONTROLLER.mark_enabled();
     tokio::spawn(async move {
         loop {
-            if let Err(error) = reconcile_once(&state, &owner).await {
+            let outcome = reconcile_once(&state, &owner).await;
+            CONTROLLER.record_tick(
+                now(),
+                outcome.as_ref().map(|claimed| *claimed).map_err(|_| ()),
+            );
+            if let Err(error) = outcome {
                 tracing::warn!(?error, "hosted reconciliation did not complete; persisted claim and operation retained");
             }
             tokio::time::sleep(Duration::from_millis(CONTROLLER_WAIT_INTERVAL_MS as u64)).await;

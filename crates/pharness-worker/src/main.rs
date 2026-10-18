@@ -5315,23 +5315,35 @@ package_installation: preparation_only
             .status
             .success());
 
-        let unscoped = std::process::Command::new("git")
-            .args(["status", "--porcelain", "--untracked-files=no"])
-            .env("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
-            .current_dir(&root)
-            .output()
-            .unwrap();
-        assert!(!unscoped.status.success());
+        // Hosted runners ship a system-wide `safe.directory = *`, which would
+        // make the unscoped read succeed and prove nothing; hide host config.
+        let isolated_git = |args: Vec<String>| {
+            std::process::Command::new("git")
+                .args(args)
+                .env("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
+                .env("GIT_CONFIG_NOSYSTEM", "1")
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .current_dir(&root)
+                .output()
+                .unwrap()
+        };
 
-        let scoped = std::process::Command::new("git")
-            .args(workspace_git_args(
-                &root,
-                &["status", "--porcelain", "--untracked-files=no"],
-            ))
-            .env("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
-            .current_dir(&root)
-            .output()
-            .unwrap();
+        let unscoped = isolated_git(
+            ["status", "--porcelain", "--untracked-files=no"]
+                .iter()
+                .map(|arg| (*arg).to_string())
+                .collect(),
+        );
+        assert!(
+            !unscoped.status.success(),
+            "{}",
+            String::from_utf8_lossy(&unscoped.stderr)
+        );
+
+        let scoped = isolated_git(workspace_git_args(
+            &root,
+            &["status", "--porcelain", "--untracked-files=no"],
+        ));
         assert!(
             scoped.status.success(),
             "{}",
