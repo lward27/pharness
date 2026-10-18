@@ -112,10 +112,9 @@ api:
   # Prometheus exposition is served on its own listener so the public API
   # ingress never forwards it. Only pods in scrapeNamespace may reach it.
   metrics:
-    # Flip to true in the release pin that first ships a runtime digest with
-    # the listener; an older image ignores PHARNESS_METRICS_BIND and the
-    # annotation scrape would record up == 0.
-    enabled: false
+    # Requires a runtime digest built from 8f8ab08 or later; an older image
+    # ignores PHARNESS_METRICS_BIND and the annotation scrape records up == 0.
+    enabled: true
     port: 4778
     scrapeNamespace: monitoring
     # prometheus.io/* Pod annotations for annotation-based discovery (the
