@@ -1,6 +1,20 @@
 # Deployment Contracts
 
-## Decisions
+This reference preserves the shipped legacy sync contract. The
+[hosted SDLC program](../../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md)
+defines the current development direction. Source `19b0c55` contains schema-54
+staging/production records and the durable staging GitOps foundation, with hosted
+creation still disabled. The newer
+[native baseline gate](../../evidence/autonomous-sdlc/ASTRA-M08-DURABLE-BASELINE-ADMISSION.md)
+is implemented separately and requires a compatible API/worker release before use.
+
+Hosted completion requires the exact deployed digest, functional behavior and
+fresh application-scoped runtime evidence. Argo auto-sync is observed after the
+authorized GitOps change; an extra manual sync receipt or healthy Prometheus
+inventory cannot satisfy that contract. Production GitOps merge still requires
+human approval. These requirements do not rewrite historical source-only outcomes.
+
+## Legacy sync contract
 
 - A DeploymentContract is durable operator policy for one exact Argo CD target:
   target environment, target namespace, and Application name. It is not a
@@ -15,8 +29,9 @@
   reports unhealthy targets, problem rules, or alerts prevents Release
   completion and records `attention_required`; it never fails open.
 - Omitting `post_sync_verification` keeps Prometheus inventory disabled for
-  backwards-compatible contracts. Loki and traces are intentionally not
-  contract criteria yet because they need stronger target/query ownership.
+  backwards-compatible contracts. This legacy inventory contract has no Loki
+  or trace criteria; the hosted Finance path binds those signals to native
+  application identity and observation windows instead.
 - Post-sync verification reads the immutable `deployment_contract_id` recorded
   in the completed Argo execution receipt. A missing legacy id has no
   contract-backed runtime criterion; a missing, retired, or target-mismatched
@@ -31,7 +46,7 @@
   explicit Application names. An active exact contract and matching grant are
   rechecked by both dispatch and the worker context route.
 
-## Backlog
+## Legacy executor boundaries
 
 - The purpose-built `pharness-argo-runner` Job is only eligible after the
   existing preflight proves an exact active contract, satisfied build evidence,

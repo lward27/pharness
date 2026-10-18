@@ -83,6 +83,8 @@ pub(super) async fn advance(
         require_authority(snapshot, HostedAutomaticAction::StagingDelivery)?;
         require_authority(snapshot, HostedAutomaticAction::Observe)?;
         (super::staging::ACTION.into(), hash, resource)
+    } else if super::staging::completed(state, snapshot).await? {
+        return Ok(condition("waiting", "Staging runtime verification is complete. Production approval and verification are still required; no source, build or staging work is repeated."));
     } else if let Some(run) = continuation_candidate(snapshot) {
         require_authority(snapshot, HostedAutomaticAction::Test)?;
         require_authority(snapshot, HostedAutomaticAction::Verify)?;

@@ -1,0 +1,35 @@
+{
+  "recorded_at": "2026-09-05T21:22:45.309346+00:00",
+  "source_base": "19b0c55c48e3614d0b4507d56df3029a52475618",
+  "source_sha256": {
+    "crates/pharness-core/src/tools/cluster.rs": "8bb079780fb8c0b96665b99e199edd100542e4b6a4e730e0e6d5ab4dab64aced",
+    "crates/pharness-core/src/tools/mod.rs": "cd421371c6061868d8eda25b8ece686436826d83529e7772149774f51218da33",
+    "crates/pharness-core/src/tools/cluster/finance.rs": "bd2917742731869c0080c6ce934bc565d7c0d1aac9ecb139accac3da26a014f0",
+    "crates/pharness-core/src/tools/cluster/finance/identity.rs": "f84602b162a0a1b4dfb4bac78a355b36048f7895689911448025e86f8352b98d",
+    "crates/pharness-core/src/tools/cluster/finance/tests.rs": "d9be7849a362a100a1ab021b0b0affdd69a9b9eb575ccc3700dcc394078c009d",
+    "crates/pharness-core/src/tools/cluster/finance/kubernetes.rs": "3a935ed896afafb9354cc65f4fe63f18333c80f7215709c7311819b16a50a30c"
+  },
+  "core_tests": {
+    "unit": 171,
+    "integration": 8,
+    "ignored_live_tests": 2,
+    "failed": 0,
+    "new_automatic_tests": 10
+  },
+  "separate_live_reads": {
+    "yfinance_staging": "passed",
+    "frontend_staging": "passed"
+  },
+  "clippy": "passed, all core targets, warnings denied",
+  "format": "passed",
+  "dependency_check": "passed",
+  "dependency_parser_tests": 5,
+  "log_sha256": {
+    "core-tests": "810f1e3fabcc778588709b31eed62b4a8f79180acc33a9808b421fbfd37c55f1",
+    "clippy": "c2729b26c488789d1290f2d2a5b346fe8e721c15c8753370e62fe8091ddce9e9",
+    "architecture": "baf49b59538192f3e136ca0404cac516ecb8dd2fe5ba1416604056f3080fa49c"
+  },
+  "deployed": false,
+  "runtime_acceptance": false,
+  "scope": "Read-only deployment identity on existing M02 staging images; no delivery, runtime window or production approval claim"
+}
