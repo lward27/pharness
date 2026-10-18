@@ -30,6 +30,9 @@ RUN --mount=type=cache,id=pharness-cargo-registry,target=/usr/local/cargo/regist
 
 FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
 ARG KUBECTL_VERSION=v1.34.4
+# Published at https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256.
+# Update both values together; the build fails on any mismatch.
+ARG KUBECTL_SHA256=d50c359d95e0841eaad08ddc27c7be37cba8fdccfba5c8e2ded65e121ff112db
 ARG PHARNESS_BUILD_REVISION=unknown
 LABEL org.opencontainers.image.source="https://github.com/lward27/pharness" \
       org.opencontainers.image.revision="${PHARNESS_BUILD_REVISION}"
@@ -38,6 +41,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates git curl \
     && curl -fsSL -o /usr/local/bin/kubectl \
         "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+    && echo "${KUBECTL_SHA256}  /usr/local/bin/kubectl" | sha256sum -c - \
     && chmod 0755 /usr/local/bin/kubectl \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 65532 --user-group --home-dir /home/pharness --create-home pharness
