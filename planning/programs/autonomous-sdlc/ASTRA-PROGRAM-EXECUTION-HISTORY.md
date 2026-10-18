@@ -445,3 +445,38 @@ suite passes 62/62, and the migration subset passes three consecutive
 eight-thread runs; store all-target Clippy and package formatting checks pass.
 This fixes test isolation only. It is not API process-restart or live M06
 acceptance evidence; the M04E release approval and rollout gate is unchanged.
+
+## Platform hardening slice (FABLE review FB-02/03/05/06/13) — 2026-10-18
+
+An independent architecture review (recorded under
+[`planning/reviews/`](../../reviews/FABLE_00_EXECUTIVE_SUMMARY.md)) ranked the
+platform gaps that M11/M12 unattended operation would expose. The five
+model-free items from its recommended sequence landed together on branch
+`codex/platform-hardening-20261018`:
+
+- **FB-02 CI**: `.github/workflows/ci.yml` runs fmt, Clippy (`-D warnings`),
+  the full workspace tests, the ignored Helm render tests, the module-boundary
+  guardrail, shell/Python script tests, `helm lint`/`template`, the UI unit
+  tests and bundle, and advisory audits. Compilation is verification only; image
+  builds stay in Tekton.
+- **FB-03 approver identity**: approval-gate, approval, run-approval, and
+  permission-grant decisions now resolve the actor from the authenticated
+  `OperatorIdentity`; a differing body name is recorded as `claimed_by` in the
+  audit payload instead of being trusted.
+- **FB-05 observability and backup**: the API serves Prometheus metrics on a
+  separate listener (`PHARNESS_METRICS_BIND`, chart `api.metrics`) with
+  controller tick age, hosted reconciliation conditions, active operations, and
+  SQLite size; the chart gains a scrape NetworkPolicy rule, value-gated
+  `ServiceMonitor`/`PrometheusRule`, alert rules in
+  `files/prometheus-rules.yaml`, and a value-gated nightly `pharness-admin`
+  archive CronJob. Restore steps are in
+  [`sqlite-backup-and-restore.md`](../../operations/runbooks/sqlite-backup-and-restore.md).
+  `api.metrics.enabled` stays `false` until the first runtime digest with the
+  listener is pinned.
+- **FB-06**: `kubectl` in the runtime image is checksum-verified.
+- **FB-13**: hosted-controller `workflow_policy` and intent lookups return
+  `ApiError` conditions instead of panicking.
+
+Local evidence only: 390 store/config/API tests, workspace Clippy, Helm render
+variants, and a loopback smoke of both listeners. No image, rollout, migration,
+or hosted WorkItem dispatch; those follow in the release pin for this change.
