@@ -109,6 +109,27 @@ api:
       cpu: 1000m
       memory: 1Gi
       ephemeral-storage: 1Gi
+  # Prometheus exposition is served on its own listener so the public API
+  # ingress never forwards it. Only pods in scrapeNamespace may reach it.
+  metrics:
+    # Flip to true in the release pin that first ships a runtime digest with
+    # the listener; an older image ignores PHARNESS_METRICS_BIND and the
+    # annotation scrape would record up == 0.
+    enabled: false
+    port: 4778
+    scrapeNamespace: monitoring
+    # prometheus.io/* Pod annotations for annotation-based discovery (the
+    # community prometheus chart's kubernetes-pods job).
+    podAnnotations: true
+    # Both CRD-backed resources stay off until the operator CRDs are present.
+    serviceMonitor:
+      enabled: false
+      interval: 30s
+      scrapeTimeout: 10s
+      labels: {}
+    prometheusRule:
+      enabled: false
+      labels: {}
 
 inferenceGateway:
   enabled: true
@@ -211,6 +232,32 @@ archivePersistence:
   retain: true
   storageClass: local-path
   size: 4Gi
+
+# Scheduled offline archives of the active database claim, written by
+# pharness-admin from the runtime digest above. Restore steps live in
+# planning/operations/runbooks/sqlite-backup-and-restore.md.
+backup:
+  enabled: false
+  schedule: "15 3 * * *"
+  prefix: nightly
+  # Archive directories older than this many days are removed after each
+  # successful run; 0 keeps everything.
+  retainDays: 14
+  activeDeadlineSeconds: 1800
+  persistence:
+    create: true
+    claimName: pharness-api-backups-finance-20260827
+    storageClass: local-path
+    size: 8Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+      ephemeral-storage: 64Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+      ephemeral-storage: 256Mi
 
 worker:
   serviceAccount: pharness-worker

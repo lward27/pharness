@@ -20,8 +20,8 @@ pub use agent_execution::{
     StoredAgentLease,
 };
 pub use hosted_controller::{
-    BeginWorkflowOperation, FinishWorkflowReconciliation, StoredWorkflowOperation,
-    StoredWorkflowReconciliation,
+    BeginWorkflowOperation, DatabaseSize, FinishWorkflowReconciliation, HostedControllerMetrics,
+    StoredWorkflowOperation, StoredWorkflowReconciliation,
 };
 pub use models::{
     ApprovalBooleanCountBucket, ApprovalCountBucket, ApprovalGateCountBucket,

@@ -104,6 +104,12 @@ spec:
       labels:
         app: pharness-api
         app.kubernetes.io/part-of: pharness
+      {{- if and .Values.api.metrics.enabled .Values.api.metrics.podAnnotations }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.api.metrics.port | quote }}
+        prometheus.io/path: /metrics
+      {{- end }}
     spec:
       serviceAccountName: pharness-api
       securityContext:
@@ -120,9 +126,17 @@ spec:
           ports:
             - containerPort: 4777
               name: http
+            {{- if .Values.api.metrics.enabled }}
+            - containerPort: {{ .Values.api.metrics.port }}
+              name: metrics
+            {{- end }}
           env:
             - name: PHARNESS_BIND
               value: "0.0.0.0:4777"
+            {{- if .Values.api.metrics.enabled }}
+            - name: PHARNESS_METRICS_BIND
+              value: "0.0.0.0:{{ .Values.api.metrics.port }}"
+            {{- end }}
             - name: PHARNESS_DB_PATH
               value: {{ .Values.api.dbPath | quote }}
             - name: PHARNESS_DATABASE_GENERATION_ID
@@ -439,3 +453,8 @@ spec:
     - name: http
       port: 4777
       targetPort: http
+    {{- if .Values.api.metrics.enabled }}
+    - name: metrics
+      port: {{ .Values.api.metrics.port }}
+      targetPort: metrics
+    {{- end }}

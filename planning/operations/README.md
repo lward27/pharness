@@ -12,6 +12,9 @@ and effect boundary before it runs.
   prepares LM Studio for the existing PHarness gateway and separates initial setup from qualification.
 - [`release-verification-smoke-playbook.md`](runbooks/release-verification-smoke-playbook.md)
   exercises read-only release verification and durable completion evidence.
+- [`sqlite-backup-and-restore.md`](runbooks/sqlite-backup-and-restore.md)
+  covers the scheduled `pharness-admin` archives, their verification, and
+  restoring into a new claim.
 - [`tekton-e2e-smoke.md`](runbooks/tekton-e2e-smoke.md) describes the bounded
   inert Tekton fixture.
 - [`tekton-executor-smoke-playbook.md`](runbooks/tekton-executor-smoke-playbook.md)

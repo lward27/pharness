@@ -1,0 +1,107 @@
+{{- if .Values.backup.enabled }}
+{{- if .Values.backup.persistence.create }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.backup.persistence.claimName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    pharness.dev/data-generation: {{ .Values.api.databaseGeneration.id | quote }}
+    pharness.dev/archive-role: scheduled-backup
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.backup.persistence.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.backup.persistence.size }}
+---
+{{- end }}
+# Scheduled offline SQLite archive. It runs pharness-admin from the exact
+# runtime digest the API runs, so the archive is read through the same SQLite
+# build and migration set. The source claim is mounted writable only because
+# WAL readers need the -shm file; the admin connection itself is read-only.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pharness-backup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+    app.kubernetes.io/component: data-archive
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: pharness
+        app.kubernetes.io/component: data-archive
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: {{ .Values.backup.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            app: pharness-backup
+            app.kubernetes.io/part-of: pharness
+            app.kubernetes.io/component: data-archive
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            fsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: archive
+              image: "{{ .Values.api.image.repository }}@{{ .Values.api.image.digest }}"
+              imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+              command: ["/bin/sh", "-euc"]
+              args:
+                - |
+                  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+                  /usr/local/bin/pharness-admin data archive \
+                    --database {{ .Values.api.dbPath | quote }} \
+                    --output-dir "/archive/{{ .Values.backup.prefix }}/${stamp}"
+                  {{- if gt (int .Values.backup.retainDays) 0 }}
+                  find "/archive/{{ .Values.backup.prefix }}" -mindepth 1 -maxdepth 1 -type d \
+                    -mtime +{{ .Values.backup.retainDays }} -exec rm -rf {} +
+                  {{- end }}
+              env:
+                - name: HOME
+                  value: /tmp
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: source
+                  mountPath: {{ dir .Values.api.dbPath | quote }}
+                - name: archive
+                  mountPath: /archive
+                - name: tmp
+                  mountPath: /tmp
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+          volumes:
+            - name: source
+              persistentVolumeClaim:
+                claimName: {{ ternary .Values.api.persistence.claimName .Values.api.persistence.existingClaim .Values.api.persistence.create }}
+            - name: archive
+              persistentVolumeClaim:
+                claimName: {{ .Values.backup.persistence.claimName }}
+            - name: tmp
+              emptyDir: {}
+{{- end }}

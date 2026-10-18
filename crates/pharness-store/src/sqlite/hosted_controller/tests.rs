@@ -547,3 +547,89 @@ async fn reopening_sqlite_recovers_dispatch_identity_without_freeing_external_lo
     restarted.pool.close().await;
     std::fs::remove_file(path).unwrap();
 }
+
+#[tokio::test]
+async fn controller_metrics_count_open_hosted_work_and_unfinished_operations() {
+    let store = SqliteStore::connect_in_memory().await.unwrap();
+    seed(&store, "a", true).await;
+    seed(&store, "b", true).await;
+    seed(&store, "legacy", false).await;
+
+    let idle = store.hosted_controller_metrics(150).await.unwrap();
+    assert_eq!(
+        idle.reconciliations_by_condition,
+        vec![("ready".to_string(), 2)]
+    );
+    assert_eq!(idle.due_unclaimed, 2);
+    assert_eq!(idle.oldest_due_age_millis, Some(50));
+    assert_eq!(idle.claimed, 0);
+    assert!(idle.operations_by_status.is_empty());
+    assert_eq!(idle.oldest_active_operation_age_millis, None);
+
+    let a = store
+        .claim_due_workflow("api", 150, 1_000)
+        .await
+        .unwrap()
+        .unwrap();
+    store
+        .begin_workflow_operation(&a, operation("op_a", &["coding"]), 160)
+        .await
+        .unwrap();
+    store
+        .record_workflow_operation(
+            &a,
+            "op_a",
+            "running",
+            &json!({"run_id":"r"}),
+            "dispatched",
+            170,
+        )
+        .await
+        .unwrap();
+    store
+        .finish_workflow_reconciliation(
+            &a,
+            FinishWorkflowReconciliation {
+                next_due_at: 10_000,
+                condition: "waiting",
+                reason: "operation in flight",
+                observed_state_hash: Some("h1"),
+            },
+            180,
+        )
+        .await
+        .unwrap();
+    let b = store
+        .claim_due_workflow("api", 200, 1_000)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(b.work_item_id, "b");
+
+    let busy = store.hosted_controller_metrics(260).await.unwrap();
+    assert_eq!(
+        busy.reconciliations_by_condition,
+        vec![("ready".to_string(), 1), ("waiting".to_string(), 1)]
+    );
+    assert_eq!(busy.due_unclaimed, 0);
+    assert_eq!(busy.oldest_due_age_millis, None);
+    assert_eq!(busy.claimed, 1);
+    assert_eq!(busy.operations_by_status, vec![("running".to_string(), 1)]);
+    assert_eq!(busy.oldest_active_operation_age_millis, Some(100));
+
+    sqlx::query("UPDATE work_items SET closed_at = '300' WHERE id = 'b'")
+        .execute(&store.pool)
+        .await
+        .unwrap();
+    let closed = store.hosted_controller_metrics(1_300).await.unwrap();
+    assert_eq!(
+        closed.reconciliations_by_condition,
+        vec![("waiting".to_string(), 1)]
+    );
+    assert_eq!(closed.claimed, 0);
+
+    let size = store.database_size().await.unwrap();
+    assert!(size.total_bytes > 0);
+    assert!(size.freelist_bytes >= 0);
+    assert!(size.freelist_bytes <= size.total_bytes);
+}

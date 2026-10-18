@@ -1354,3 +1354,55 @@ async fn planner_sealing_preserves_decisions_and_prevents_automatic_approval() {
         }
     }
 }
+
+#[tokio::test]
+async fn metrics_router_exposes_hosted_controller_state_without_operator_auth() {
+    use tower::ServiceExt;
+    let fixture = repo_fixture_with_workflow("hosted_metrics", false, true).await;
+    let scrape = |router: axum::Router| async move {
+        router
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/metrics")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+    };
+
+    let response = scrape(crate::app::metrics::router(fixture.state.clone())).await;
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get(axum::http::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok()),
+        Some("text/plain; version=0.0.4; charset=utf-8")
+    );
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body = std::str::from_utf8(&body).unwrap();
+    assert!(body.contains("# TYPE pharness_build_info gauge"));
+    assert!(body.contains("pharness_hosted_reconciliations{condition=\"ready\"} 1"));
+    assert!(body.contains("pharness_hosted_reconciliations_due_unclaimed 1"));
+    assert!(body.contains("pharness_hosted_reconciliations_claimed 0"));
+    assert!(body.contains("# TYPE pharness_controller_ticks_total counter"));
+    assert!(body.contains("pharness_sqlite_database_bytes "));
+    assert!(!body.contains("pharness_sqlite_database_bytes 0\n"));
+
+    // The scrape endpoint is not part of the operator application, so the
+    // public ingress never serves it.
+    let operator_app = crate::app::router(
+        fixture.state.store.clone(),
+        crate::dispatch::RunDispatcher::Disabled,
+        pharness_core::ReadOnlyClusterTools::default(),
+        pharness_core::SafetyPolicy::default(),
+        None,
+        vec![("lucas".to_string(), "operator-secret".to_string())],
+        crate::workspace::WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
+    );
+    let response = scrape(operator_app).await;
+    assert_ne!(response.status(), axum::http::StatusCode::OK);
+}

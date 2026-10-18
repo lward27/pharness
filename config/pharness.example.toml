@@ -149,4 +149,6 @@ git_observer_ttl_seconds_after_finished = 3600
 
 [api]
 bind = "127.0.0.1:4777"
+# Optional Prometheus listener serving only /metrics. Leave unset to disable.
+# metrics_bind = "127.0.0.1:4778"
 cors_origin = "http://127.0.0.1:5173"

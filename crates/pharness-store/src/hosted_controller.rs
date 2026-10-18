@@ -45,3 +45,22 @@ pub struct FinishWorkflowReconciliation<'a> {
     pub reason: &'a str,
     pub observed_state_hash: Option<&'a str>,
 }
+
+/// Aggregate hosted-controller state for monitoring. Only open WorkItems and
+/// unfinished operations are counted so the numbers describe current load,
+/// not history.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HostedControllerMetrics {
+    pub reconciliations_by_condition: Vec<(String, i64)>,
+    pub due_unclaimed: i64,
+    pub oldest_due_age_millis: Option<i64>,
+    pub claimed: i64,
+    pub operations_by_status: Vec<(String, i64)>,
+    pub oldest_active_operation_age_millis: Option<i64>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DatabaseSize {
+    pub total_bytes: i64,
+    pub freelist_bytes: i64,
+}
