@@ -480,3 +480,33 @@ model-free items from its recommended sequence landed together on branch
 Local evidence only: 390 store/config/API tests, workspace Clippy, Helm render
 variants, and a loopback smoke of both listeners. No image, rollout, migration,
 or hosted WorkItem dispatch; those follow in the release pin for this change.
+
+## Platform hardening release 8f8ab08 and backup enablement — 2026-10-18
+
+The hardening branch merged as `8f8ab08` (#440) after its own new CI caught
+three hosted-runner differences: the in-cluster build test captured the build
+script's `submitted <run>` stderr line into its JSON, Rust 1.99 Clippy reports
+`double_must_use` on every `#[async_trait]` trait (now allowed workspace-wide),
+and the worker's `safe.directory` test assumed a host without the runner's
+system-wide `safe.directory = *`. Eight Tekton PipelineRuns built the images
+from `8f8ab08`; runtime, UI, and codex-host were inspected by digest
+(`linux/amd64`, OCI revision label equal to the source SHA). `lucas-ops` was
+not installed, so the independent artifact verification step was skipped and
+no SBOM or signature evidence exists for these images.
+
+Release pin #441 merged as `fe9d7ef` with `api.metrics.enabled: true`. Argo
+synced it at 11:58:25Z; the five Deployments rolled to the pinned digests with
+zero restarts, `/health` returned 200, the public listener returns 404 for
+`/metrics`, and the monitoring namespace's `prometheus-server`
+(`kubernetes-pods` job) scrapes `pharness_build_info{revision="8f8ab08…"}`
+with `up == 1`. `/api/system/readiness` was not exercised (operator token).
+Runtime digest: `sha256:2617628d1b955daa28671b2074c4674f03f309b3fb94c9915cb7e147d0a828a1`.
+
+This slice turns on `backup.enabled` so the nightly `pharness-backup` CronJob
+and its retained claim exist in production; a manual run and a restore
+rehearsal into a scratch claim follow once Argo applies it. The cluster runs
+the community Prometheus chart without the operator CRDs, so
+`prometheusRule.enabled` stays `false`; the same rule groups are loaded through
+`lucas_engineering/charts/prometheus` `serverFiles.alerting_rules.yml`
+instead. Alertmanager still has only its default receiver, so alerts are
+visible in Prometheus and Grafana but do not notify anyone yet.
