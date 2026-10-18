@@ -1,0 +1,31 @@
+{
+  "verified_live_argo_targets": {
+    "yfinance-staging": "apps-staging",
+    "finance-frontend-staging": "apps-staging",
+    "yfinance-wrapper": "apps-prod",
+    "finance-frontend": "apps-prod"
+  },
+  "recorded_at": "2026-09-05T23:28:29.371152+00:00",
+  "source_base": "63c64bbd831d4f36cc96632cd196fea9728e6b73",
+  "render_sha256": "ce1a2b00137202293df73643a32ecc626e76a2dfdddce8e56f2a6b4f28a74115",
+  "rbac_resources": 6,
+  "exact_role_scope_checked": true,
+  "secrets_logs_exec_mutations_cluster_lists_granted": false,
+  "namespace_scoped_list_limitation": "Pod/ReplicaSet/EndpointSlice label selectors are application validation, not an RBAC label restriction",
+  "legacy_prometheus_endpoint_unchanged": true,
+  "mimir_endpoint_scoped": true,
+  "tempo_endpoint_configured": true,
+  "hosted_and_v2_creation_disabled": true,
+  "server_dry_run": [
+    "role.rbac.authorization.k8s.io/pharness-finance-runtime-observer created (server dry run)",
+    "role.rbac.authorization.k8s.io/pharness-finance-runtime-observer created (server dry run)",
+    "role.rbac.authorization.k8s.io/pharness-finance-runtime-observer created (server dry run)",
+    "rolebinding.rbac.authorization.k8s.io/pharness-finance-runtime-observer created (server dry run)",
+    "rolebinding.rbac.authorization.k8s.io/pharness-finance-runtime-observer created (server dry run)",
+    "rolebinding.rbac.authorization.k8s.io/pharness-finance-runtime-observer created (server dry run)"
+  ],
+  "out_of_scope_chart_endpoint_rejected": true,
+  "applied": false,
+  "source_revision": "add7e4fa5bfe3c6ba1ba79548c907188e0ff916e",
+  "supersedes_scope_check": "R1 used apps instead of apps-prod; no permissions were applied"
+}

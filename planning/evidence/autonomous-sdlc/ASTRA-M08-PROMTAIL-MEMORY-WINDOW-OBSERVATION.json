@@ -1,0 +1,20 @@
+{
+  "observed_at": "2026-09-05T23:00:06.881805+00:00",
+  "gitops_revision": "9232b110177556b80e8a03197e17fc062965f4c3",
+  "collectors": [
+    {
+      "name": "promtail-7m2nj",
+      "uid": "de839aac-3d5c-4335-99a6-4c875ae4a1d6",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "name": "promtail-rw92f",
+      "uid": "a5b8475d-6072-4e3e-9b30-15662c12b8ff",
+      "ready": true,
+      "restarts": 0
+    }
+  ],
+  "memory_observation": "NAME             CPU(cores)   MEMORY(bytes)   \npromtail-7m2nj   236m         153Mi           \npromtail-rw92f   71m          89Mi            \n",
+  "scope": "Same two collector Pods remain ready with zero restarts after the two accepted five-minute Finance signal windows; longer unattended acceptance remains open."
+}

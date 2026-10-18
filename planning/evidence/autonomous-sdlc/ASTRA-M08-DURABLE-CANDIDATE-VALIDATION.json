@@ -1,0 +1,65 @@
+{
+  "observed_at": "2026-09-06T01:01:37.384145+00:00",
+  "source_revision": "f01b0bdd5ad9cfc7e300a5923366e9f77f38e327",
+  "integration_parent": "8775863c54c6cdb115a901a0dca4b82a2b5181f2",
+  "fresh_main_baseline": "bdf979a9b8ea375533155803010489083242545e",
+  "baseline_admission_parent": "c9febec",
+  "tree_clean_before_evidence": true,
+  "checks": {
+    "full_api_tests": 298,
+    "admin_tests": 1,
+    "focused_staging_tests": 22,
+    "candidate_cases": 8,
+    "clippy": "passed pharness-api all targets with warnings denied",
+    "formatting": "passed",
+    "architecture": "passed module boundaries and five dependency-parser cases"
+  },
+  "source_files": {
+    "crates/pharness-api/src/app/hosted_controller/progression.rs": "9f8cf651c194c35e99dcec85b5dcc12fdf052bf82f0f2db288e8df3d293e616c",
+    "crates/pharness-api/src/app/hosted_controller/staging.rs": "f6673f47957bed7dcaaf8b868b075c1f02fa5a00f590d08b2d8e1f90e159591d",
+    "crates/pharness-api/src/app/hosted_controller/staging/baseline.rs": "117c1752ffb28209b70919b1ae120d3383fd2b416b02222af979e8ecce4140f9",
+    "crates/pharness-api/src/app/hosted_controller/staging/baseline/admission.rs": "7f32cb3ae2cf8464c87a0d52a5d45001018d60cafd8fdf123ac631a1cc11e41a",
+    "crates/pharness-api/src/app/hosted_controller/staging/baseline/test_support.rs": "97d826c71702962336db57bc90ddda06c74d0bdbde5b477616a9a0a00db371b8",
+    "crates/pharness-api/src/app/hosted_controller/staging/runtime.rs": "67d729f7e101a59d609b420bd9b88bdcc722518d7c17d75abe4d4c974c2cd615",
+    "crates/pharness-api/src/app/hosted_controller/staging/runtime/collection.rs": "48e8a67d029d0850b2e0bfc4725b5acc1a51eb899509348f0f96aa5cab87be31",
+    "crates/pharness-api/src/app/hosted_controller/staging/runtime/records.rs": "ffa39d67483643e037abcf11d3fc0580967f4b90ea5965c0a05c2f3139298431",
+    "crates/pharness-api/src/app/hosted_controller/staging/runtime/result.rs": "21a357046832892e86e2713e32f2a3205f9bd85100bfda25daf34fcdeeaf13a9",
+    "crates/pharness-api/src/app/hosted_controller/staging/runtime/test_support.rs": "45f43d199af07eb63efe5a60f6213af478e3994463d32c63c253a9c31087341b",
+    "crates/pharness-api/src/app/tests/hosted_staging.rs": "1b15ece304046d402a882d644368f4d0874fd2ca81173ed22ccfddbc839b8bec",
+    "crates/pharness-api/src/app/tests/hosted_staging/native.rs": "c40947fdaca6938d06d60b031fb7f2d04dc1b2cc0df6ed4a650185d9e54526fd",
+    "crates/pharness-api/src/app/tests/hosted_staging/runtime.rs": "52dbf0e3acd528d43ecf25817f7741213b837f20494e26cc33e464a2e1630042"
+  },
+  "logs": {
+    "ASTRA-M08-DURABLE-CANDIDATE-TESTS-R1.log": {
+      "sha256": "94bbeaf770149d802afee0a851bd8f8bda2e54d6d10ab140d9ec9143cfbb69e7",
+      "bytes": 9421
+    },
+    "ASTRA-M08-DURABLE-CANDIDATE-FOCUSED-TESTS.log": {
+      "sha256": "a2b7769d8950cb47bfc16c10f70dc951182031d01db8ea03bb9447a6b7c0a688",
+      "bytes": 3270
+    },
+    "ASTRA-M08-DURABLE-CANDIDATE-TESTS.log": {
+      "sha256": "25c8d9b0345e08afa0cf4d43b3f307340e5ea9284ed73d15f944e43fd1458847",
+      "bytes": 30532
+    },
+    "ASTRA-M08-DURABLE-CANDIDATE-CLIPPY.log": {
+      "sha256": "1bdbf472035a97aad029984c0c38b4f74442c42c6887a6fcce1206bff2435073",
+      "bytes": 1015
+    },
+    "ASTRA-M08-DURABLE-CANDIDATE-ARCHITECTURE.log": {
+      "sha256": "79ee187c053ddbcc46ed453567b9e3001644e3d7b7d684e5f141d9f67cd63be5",
+      "bytes": 135
+    }
+  },
+  "live_deployed": false,
+  "autonomous_candidate_accepted": false,
+  "production_implemented_in_this_slice": false,
+  "work_item_success_accepted": false,
+  "notes": [
+    "The first focused run passed 18 cases; the final focused run passed all 22 after adding chronology, interrupted-collection, allowance and stale-source coverage.",
+    "The complete API run passed 299 distinct checks; the focused cases are included and not counted twice.",
+    "Synthetic persisted clocks and native-reader fixtures exercise SQLite claims and controller state; these are not live autonomous delivery evidence.",
+    "Verbatim logs retain original whitespace.",
+    "The native five-minute operator observation in ASTRA-M08-RUNTIME-ASSESSMENT.md remains a distinct source and cannot count as this controller deployment."
+  ]
+}
