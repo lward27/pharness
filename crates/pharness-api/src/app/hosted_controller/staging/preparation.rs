@@ -1,3 +1,4 @@
+use super::super::state::workflow_policy;
 use super::{artifact_id, deadline, evidence, hash, now, required, ApiError, AppState, ACTION};
 use pharness_core::hosted_sdlc::staging::{
     HostedStagingAuthority, StagingGitOpsPlan, AUTHORITY_SCHEMA,
@@ -24,7 +25,7 @@ pub(super) async fn prepare(
     let (pipeline, metadata, evidence_hash) = evidence::build(state, &claim.work_item_id)
         .await?
         .ok_or_else(|| ApiError::conflict("staging requires a verified autonomous build"))?;
-    let policy = metadata.workflow_policy.as_ref().unwrap();
+    let (policy, policy_hash) = workflow_policy(&metadata)?;
     let suffix = operation.id.trim_start_matches("workflowop_");
     let authority = HostedStagingAuthority {
         schema_version: AUTHORITY_SCHEMA.into(),
@@ -34,7 +35,7 @@ pub(super) async fn prepare(
         pipeline_intent_id: pipeline.id.clone(),
         deployment_intent_id: format!("dintent_staging_{suffix}"),
         gitops_change_set_id: format!("gcs_staging_{suffix}"),
-        workflow_policy_hash: metadata.workflow_policy_hash.clone().unwrap(),
+        workflow_policy_hash: policy_hash.to_string(),
         build_evidence_hash: evidence_hash,
         application_repository: policy.delivery_binding.source_repo.clone(),
         source_commit_sha: required(
@@ -184,7 +185,7 @@ pub(super) async fn validate_current(
     let (pipeline, metadata, build_hash) = evidence::build(state, &saved.authority.work_item_id)
         .await?
         .ok_or_else(|| ApiError::conflict("the original staging build is no longer eligible"))?;
-    let policy = metadata.workflow_policy.as_ref().unwrap();
+    let (policy, _) = workflow_policy(&metadata)?;
     if pipeline.id != saved.pipeline.id
         || build_hash != saved.authority.build_evidence_hash
         || pipeline.intent_json["source_provenance"]["merge_commit_sha"]

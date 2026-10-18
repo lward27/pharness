@@ -2,8 +2,25 @@ use crate::app::hashing::canonical_material_hash;
 use crate::app::repo_mode;
 use crate::app::{ApiError, AppState};
 use crate::dto::WorkItemActionResponse;
+use pharness_core::hosted_sdlc::HostedWorkflowPolicySnapshot;
 use pharness_store::{RunListFilter, StoredRepoWorkItemMetadata, StoredRun, StoredStageExecution};
 use serde_json::json;
+
+/// Hosted rows always persist the saved workflow and its hash together. A
+/// row without them must surface as a controller condition, never a panic.
+pub(super) fn workflow_policy(
+    metadata: &StoredRepoWorkItemMetadata,
+) -> Result<(&HostedWorkflowPolicySnapshot, &str), ApiError> {
+    let policy = metadata
+        .workflow_policy
+        .as_ref()
+        .ok_or_else(|| ApiError::conflict("source-only work cannot enter the hosted controller"))?;
+    let hash = metadata
+        .workflow_policy_hash
+        .as_deref()
+        .ok_or_else(|| ApiError::conflict("hosted WorkItem metadata has no saved workflow hash"))?;
+    Ok((policy, hash))
+}
 
 pub(super) struct Snapshot {
     pub(super) metadata: StoredRepoWorkItemMetadata,
@@ -20,12 +37,8 @@ impl Snapshot {
             .get_repo_work_item_metadata(work_item_id)
             .await?
             .ok_or_else(|| ApiError::conflict("hosted WorkItem metadata is unavailable"))?;
-        metadata
-            .workflow_policy
-            .as_ref()
-            .ok_or_else(|| {
-                ApiError::conflict("source-only work cannot enter the hosted controller")
-            })?
+        workflow_policy(&metadata)?
+            .0
             .validate()
             .map_err(ApiError::conflict)?;
         let stages = state.store.list_stage_executions(work_item_id).await?;

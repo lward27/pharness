@@ -247,7 +247,11 @@ pub(super) async fn settle(
         )
         .await?;
     }
-    let mut current = state.store.get_pipeline_intent(&intent.id).await?.unwrap();
+    let mut current = state
+        .store
+        .get_pipeline_intent(&intent.id)
+        .await?
+        .ok_or_else(|| ApiError::conflict("build PipelineIntent is no longer available"))?;
     if current.intent_json["execution_state"]
         .get("pipeline_run_uid")
         .is_none()

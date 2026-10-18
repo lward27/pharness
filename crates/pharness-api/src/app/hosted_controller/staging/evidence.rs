@@ -246,8 +246,10 @@ pub(super) fn validate_observation(
     // Independent re-observation may see a newer unrelated GitOps revision. The
     // admitted commit, base, blob and image can never change across callbacks.
     let mut identity = observation.clone();
-    for key in ["current_gitops_revision", "observation_attempts"] {
-        identity.as_object_mut().unwrap().remove(key);
+    if let Some(object) = identity.as_object_mut() {
+        for key in ["current_gitops_revision", "observation_attempts"] {
+            object.remove(key);
+        }
     }
     Ok(identity)
 }

@@ -1,4 +1,4 @@
-use super::state::{condition, now, Condition, Snapshot};
+use super::state::{condition, now, workflow_policy, Condition, Snapshot};
 use crate::app::repo_mode::{self, RepoWorkItemActionExecutionRequest};
 use crate::app::{ApiError, AppState, CONTROLLER_WAIT_INTERVAL_MS, CONTROLLER_WAIT_MAX_CHECKS};
 use crate::dispatch::SourceJobKind;
@@ -27,7 +27,7 @@ pub(super) async fn reconcile(
                 "source publication has no durable intent; no duplicate dispatch was attempted",
             )
         })?;
-    let policy = snapshot.metadata.workflow_policy.as_ref().unwrap();
+    let (policy, _) = workflow_policy(&snapshot.metadata)?;
     let work_item = state
         .store
         .get_work_item(&claim.work_item_id)
