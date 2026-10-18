@@ -236,7 +236,7 @@ archivePersistence:
 # pharness-admin from the runtime digest above. Restore steps live in
 # planning/operations/runbooks/sqlite-backup-and-restore.md.
 backup:
-  enabled: false
+  enabled: true
   schedule: "15 3 * * *"
   prefix: nightly
   # Archive directories older than this many days are removed after each
