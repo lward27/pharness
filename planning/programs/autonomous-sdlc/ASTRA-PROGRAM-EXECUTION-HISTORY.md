@@ -510,3 +510,44 @@ the community Prometheus chart without the operator CRDs, so
 `lucas_engineering/charts/prometheus` `serverFiles.alerting_rules.yml`
 instead. Alertmanager still has only its default receiver, so alerts are
 visible in Prometheus and Grafana but do not notify anyone yet.
+## M08 staging verification release 5bd705f — 2026-10-18
+
+The M08 staging-verification draft (#363, `codex/astra-staging-runtime-verification`,
+head `12d3a06`) was merged onto main with `--no-ff` as `fbf47f6` rather than
+rewritten: the hosted controller now runs a baseline window, admits the
+candidate through the worker's `v1alpha2` authority, waits for the exact Argo
+identity after the GitOps commit, runs a candidate window, and records a
+`staging_runtime_result`. Review of the merged code found two high findings in
+the API and three low ones in core, fixed in `6259964` with tests that fail
+without the fix: a staging window now ends only on its own deadline or the
+operation deadline instead of any snapshot-hash change (a scheduler expiry
+could irreversibly fail a healthy window), the scheduler drains every due
+WorkItem per tick (up to 64) instead of one, an unfittable candidate window
+fails once with `staging_runtime_window_exceeds_authority` instead of
+looping, the Argo namespace comes from `tools.argocd_namespace`, the Tempo
+receipt check matches the path suffix rather than the whole URL, and a pod
+restart during the window is reported as `pod_restarted_during_window` and
+fails runtime verification. Secret scanning flagged seventy hex commit IDs and
+digests under `planning/evidence/`; `.gitleaks.toml` (`1567ac9`) allowlists
+only 40/64-hex strings under that path, and a planted key under `src/` is
+still caught. PR #444 merged as `5bd705f`.
+
+Eight Tekton PipelineRuns built the images from `5bd705f` in a clean worktree;
+runtime, UI, and codex-host carry the source SHA as their OCI revision label.
+`lucas-ops` remains absent, so there is still no SBOM or signature evidence.
+Pin #445 merged as `06c5177` at 21:04:19Z; Argo synced it at 21:07:20Z and the
+five Deployments rolled to the pinned digests with zero restarts. The API pod
+carries `PHARNESS_FINANCE_MIMIR_URL` and `PHARNESS_TEMPO_URL`, and the
+`pharness-finance-runtime-observer` Role and RoleBinding exist in
+`apps-staging`, `apps-prod`, and `argocd`, the last limited by `resourceNames`
+to the four Finance applications; `kubectl auth can-i` confirms each named
+read and denies secrets. `/health` returned 200, Prometheus scrapes
+`pharness_build_info{revision="5bd705f…"}` from the new pod, and
+`PharnessApiDown` went pending during the pod swap and cleared.
+Runtime digest: `sha256:c49a57e58495d27a59582e97aec9ea604d07655ecaba0505c2d58332635ba1d4`.
+
+No hosted WorkItem has yet exercised the staging stages on this build; the
+flow is proven by the 26 staging and controller tests, not by a live run.
+`release` and `observe` sealing with production approval (#366), notifications
+(FB-09), the hard-coded Finance application mapping, and an Alertmanager
+receiver remain open.
