@@ -1697,6 +1697,7 @@ async fn future_production_gates_are_visible_but_cannot_be_decided_early() {
 
     let early = satisfy_approval_gate(
         State(state.clone()),
+        None,
         Path(source_gate.clone()),
         Json(DecideApprovalGateRequest {
             decided_by: Some("tester".to_string()),
@@ -1708,6 +1709,7 @@ async fn future_production_gates_are_visible_but_cannot_be_decided_early() {
     assert_eq!(early.status, StatusCode::CONFLICT);
     let batch = batch_decide_approval_gates(
         State(state.clone()),
+        None,
         Json(crate::dto::BatchDecideApprovalGatesRequest {
             gate_ids: vec![source_gate.clone(), pipeline_gate.clone()],
             decision: "satisfied".to_string(),

@@ -386,6 +386,7 @@ async fn create_run_snapshots_active_permission_grants() {
 
     let Json(grant) = create_permission_grant(
         State(state.clone()),
+        None,
         Json(CreatePermissionGrantRequest {
             subject: "agent:local-worker".to_string(),
             created_by: None,
@@ -1374,6 +1375,7 @@ async fn gets_and_denies_approval_by_id() {
         .unwrap();
     let Json(decided) = deny_approval(
         State(state.clone()),
+        None,
         Path("appr_by_id".to_string()),
         Json(ReviewApprovalRequest {
             decided_by: Some("operator".to_string()),
@@ -1455,6 +1457,7 @@ async fn approval_by_id_refuses_non_current_pending_approval() {
 
     let error = deny_approval(
         State(state),
+        None,
         Path("appr_old".to_string()),
         Json(ReviewApprovalRequest {
             decided_by: Some("operator".to_string()),
@@ -1628,6 +1631,7 @@ async fn creates_lists_gets_and_revokes_permission_grants() {
 
     let Json(created) = create_permission_grant(
         State(state.clone()),
+        None,
         Json(CreatePermissionGrantRequest {
             subject: "agent:local-worker".to_string(),
             created_by: Some("lucas".to_string()),
@@ -1658,6 +1662,7 @@ async fn creates_lists_gets_and_revokes_permission_grants() {
         .unwrap();
     let Json(revoked) = revoke_permission_grant(
         State(state.clone()),
+        None,
         Path(created.id.clone()),
         Json(RevokePermissionGrantRequest {
             revoked_by: Some("tester".to_string()),
@@ -2189,6 +2194,7 @@ async fn returns_filtered_incidents_and_single_incident() {
     .unwrap();
     let Json(decided_gate) = satisfy_approval_gate(
         State(state.clone()),
+        None,
         Path("agate_test".to_string()),
         Json(DecideApprovalGateRequest {
             decided_by: Some("lucas".to_string()),
@@ -2275,4 +2281,274 @@ async fn returns_filtered_incidents_and_single_incident() {
         .events
         .iter()
         .any(|event| event.kind == "approval_gate.satisfied"));
+}
+
+#[tokio::test]
+async fn authenticated_operator_identity_overrides_claimed_approval_gate_actor() {
+    let state = test_state().await;
+    let Json(created) = create_run(
+        State(state.clone()),
+        Json(CreateRunRequest {
+            task: "inspect pipeline".to_string(),
+            cwd: Some(".".to_string()),
+            max_turns: Some(4),
+            policy_mode: None,
+            scope: None,
+            inference_policy: None,
+        }),
+    )
+    .await
+    .unwrap();
+    let session_id = pharness_core::SessionId::new(format!("ses_{}", created.id.as_str()));
+    state
+        .store
+        .create_observation(CreateObservation {
+            id: "obs_identity".to_string(),
+            session_id: session_id.clone(),
+            run_id: Some(created.id.clone()),
+            source: "tekton".to_string(),
+            kind: "pipeline_run_analysis".to_string(),
+            subject: "build-app".to_string(),
+            summary: "analyzed Tekton PipelineRun ci/build-app".to_string(),
+            resource_namespace: Some("ci".to_string()),
+            resource_kind: Some("PipelineRun".to_string()),
+            resource_name: Some("build-app".to_string()),
+            resource_ref_json: None,
+            artifact_id: None,
+            data_json: serde_json::json!({"status":"failed"}),
+        })
+        .await
+        .unwrap();
+    state
+        .store
+        .create_incident(CreateIncident {
+            id: "inc_identity".to_string(),
+            observation_id: "obs_identity".to_string(),
+            session_id: session_id.clone(),
+            run_id: Some(created.id.clone()),
+            status: "candidate".to_string(),
+            severity: "high".to_string(),
+            title: "Tekton PipelineRun issue: ci/build-app".to_string(),
+            summary: "PipelineRun status is failed".to_string(),
+            resource_namespace: Some("ci".to_string()),
+            resource_kind: Some("PipelineRun".to_string()),
+            resource_name: Some("build-app".to_string()),
+            data_json: serde_json::json!({}),
+        })
+        .await
+        .unwrap();
+    state
+        .store
+        .create_remediation_plan(CreateRemediationPlan {
+            id: "rplan_identity".to_string(),
+            incident_id: "inc_identity".to_string(),
+            session_id: session_id.clone(),
+            run_id: Some(created.id.clone()),
+            status: "draft".to_string(),
+            title: "Draft remediation for ci/build-app".to_string(),
+            summary: "Review Tekton evidence before proposing a mutation".to_string(),
+            risk_level: "high".to_string(),
+            requires_approval: true,
+            resource_namespace: Some("ci".to_string()),
+            resource_kind: Some("PipelineRun".to_string()),
+            resource_name: Some("build-app".to_string()),
+            plan_json: serde_json::json!({}),
+        })
+        .await
+        .unwrap();
+    state
+        .store
+        .create_approval_gate(CreateApprovalGate {
+            id: "agate_identity".to_string(),
+            work_item_id: None,
+            remediation_plan_id: Some("rplan_identity".to_string()),
+            incident_id: Some("inc_identity".to_string()),
+            session_id,
+            run_id: Some(created.id.clone()),
+            status: "pending".to_string(),
+            gate_kind: "pipeline_mutation".to_string(),
+            gate_order: 1,
+            title: "Approve pipeline mutation".to_string(),
+            summary: "Require approval before rerunning Tekton resources".to_string(),
+            risk_level: "high".to_string(),
+            resource_namespace: Some("ci".to_string()),
+            resource_kind: Some("PipelineRun".to_string()),
+            resource_name: Some("build-app".to_string()),
+            gate_json: serde_json::json!({}),
+        })
+        .await
+        .unwrap();
+
+    let Json(decided_gate) = satisfy_approval_gate(
+        State(state.clone()),
+        Some(Extension(OperatorIdentity("alice".to_string()))),
+        Path("agate_identity".to_string()),
+        Json(DecideApprovalGateRequest {
+            decided_by: Some("bob".to_string()),
+            reason: Some("reviewed".to_string()),
+        }),
+    )
+    .await
+    .unwrap();
+    let Json(gate_audit_events) = list_audit_events(
+        State(state.clone()),
+        Query(ListAuditEventsQuery {
+            resource_kind: Some("approval_gate".to_string()),
+            resource_id: Some("agate_identity".to_string()),
+            run_id: None,
+            limit: Some(50),
+            ..Default::default()
+        }),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(decided_gate.approval_gate.status, "satisfied");
+    assert_eq!(
+        decided_gate.approval_gate.decided_by.as_deref(),
+        Some("alice")
+    );
+    let satisfied = gate_audit_events
+        .events
+        .iter()
+        .find(|event| event.kind == "approval_gate.satisfied")
+        .expect("satisfied audit event");
+    assert_eq!(satisfied.actor.as_deref(), Some("alice"));
+    assert_eq!(satisfied.payload["decided_by"], "alice");
+    assert_eq!(satisfied.payload["claimed_by"], "bob");
+}
+
+#[tokio::test]
+async fn authenticated_operator_identity_binds_permission_grant_actors() {
+    let state = test_state().await;
+
+    let Json(created) = create_permission_grant(
+        State(state.clone()),
+        Some(Extension(OperatorIdentity("alice".to_string()))),
+        Json(CreatePermissionGrantRequest {
+            subject: "agent:local-worker".to_string(),
+            created_by: Some("bob".to_string()),
+            reason: "trusted local write smoke".to_string(),
+            scope: serde_json::json!({
+                "environment": "local",
+                "capability_kinds": ["filesystem"]
+            }),
+            policy: serde_json::json!({
+                "policy_mode": "trusted_writes"
+            }),
+            expires_at: None,
+        }),
+    )
+    .await
+    .unwrap();
+    let Json(revoked) = revoke_permission_grant(
+        State(state.clone()),
+        Some(Extension(OperatorIdentity("alice".to_string()))),
+        Path(created.id.clone()),
+        Json(RevokePermissionGrantRequest {
+            revoked_by: Some("mallory".to_string()),
+            reason: Some("done".to_string()),
+        }),
+    )
+    .await
+    .unwrap();
+    let Json(audit_events) = list_audit_events(
+        State(state),
+        Query(ListAuditEventsQuery {
+            resource_kind: Some("permission_grant".to_string()),
+            resource_id: Some(created.id.clone()),
+            run_id: None,
+            limit: Some(50),
+            ..Default::default()
+        }),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(revoked.revoked_by.as_deref(), Some("alice"));
+    let created_event = audit_events
+        .events
+        .iter()
+        .find(|event| event.kind == "permission_grant.created")
+        .expect("created audit event");
+    assert_eq!(created_event.actor.as_deref(), Some("alice"));
+    assert_eq!(created_event.payload["claimed_by"], "bob");
+    let revoked_event = audit_events
+        .events
+        .iter()
+        .find(|event| event.kind == "permission_grant.revoked")
+        .expect("revoked audit event");
+    assert_eq!(revoked_event.actor.as_deref(), Some("alice"));
+    assert_eq!(revoked_event.payload["revoked_by"], "alice");
+    assert_eq!(revoked_event.payload["claimed_by"], "mallory");
+}
+
+#[tokio::test]
+async fn authenticated_operator_identity_binds_run_approval_decisions() {
+    let state = test_state().await;
+    let Json(created) = create_run(
+        State(state.clone()),
+        Json(CreateRunRequest {
+            task: "inspect approval".to_string(),
+            cwd: Some(".".to_string()),
+            max_turns: Some(4),
+            policy_mode: None,
+            scope: None,
+            inference_policy: None,
+        }),
+    )
+    .await
+    .unwrap();
+    state
+        .store
+        .create_approval(CreateApproval {
+            id: "appr_identity".to_string(),
+            session_id: pharness_core::SessionId::new(format!("ses_{}", created.id.as_str())),
+            run_id: created.id.clone(),
+            status: "pending".to_string(),
+            kind: "file_write".to_string(),
+            summary: "write README.md".to_string(),
+            risk_level: "medium".to_string(),
+            run_scope_json: None,
+            action_json: None,
+            preview_json: None,
+            resume_messages_json: None,
+            turns_completed: 1,
+        })
+        .await
+        .unwrap();
+
+    let Json(decided) = deny_approval(
+        State(state.clone()),
+        Some(Extension(OperatorIdentity("alice".to_string()))),
+        Path("appr_identity".to_string()),
+        Json(ReviewApprovalRequest {
+            decided_by: Some("bob".to_string()),
+            reason: Some("not aligned".to_string()),
+        }),
+    )
+    .await
+    .unwrap();
+    let Json(audit_events) = list_audit_events(
+        State(state),
+        Query(ListAuditEventsQuery {
+            resource_kind: Some("approval".to_string()),
+            resource_id: Some("appr_identity".to_string()),
+            run_id: None,
+            limit: Some(50),
+            ..Default::default()
+        }),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(decided.approval.status, "denied");
+    assert_eq!(decided.approval.decided_by.as_deref(), Some("alice"));
+    let denied = audit_events
+        .events
+        .iter()
+        .find(|event| event.kind == "approval.denied")
+        .expect("denied audit event");
+    assert_eq!(denied.actor.as_deref(), Some("alice"));
+    assert_eq!(denied.payload["claimed_by"], "bob");
 }

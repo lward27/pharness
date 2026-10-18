@@ -186,6 +186,7 @@ async fn transitions_and_revisions_stale_work_plan_gates() {
     .unwrap();
     let Json(satisfied_gate) = satisfy_approval_gate(
         State(state.clone()),
+        None,
         Path("agate_lifecycle".to_string()),
         Json(DecideApprovalGateRequest {
             decided_by: Some("lucas".to_string()),
@@ -620,6 +621,7 @@ async fn creates_transitions_and_revisions_stale_change_set_gates() {
     .unwrap();
     let Json(satisfied_gate) = satisfy_approval_gate(
         State(state.clone()),
+        None,
         Path("agate_changeset".to_string()),
         Json(DecideApprovalGateRequest {
             decided_by: Some("lucas".to_string()),
@@ -2300,6 +2302,7 @@ async fn denial_decides_pending_approval_and_blocks_run() {
 
     let Json(response) = decide_run_approval(
         State(state.clone()),
+        None,
         Path(created.id.to_string()),
         Json(DecideApprovalRequest {
             decision: ApprovalDecision::Deny,
