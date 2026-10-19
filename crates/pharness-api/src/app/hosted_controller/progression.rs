@@ -44,6 +44,8 @@ pub(super) async fn advance(
                     | "authorize_source_delivery"
             )
     });
+    let mut effect = "development";
+    let mut production_keys: Option<Vec<String>> = None;
     let (action, input_hash, resource) = if let Some(action) = candidate {
         let permission = match action.id.as_str() {
             "start_planner" | "approve_work_plan" => HostedAutomaticAction::Plan,
@@ -83,8 +85,17 @@ pub(super) async fn advance(
         require_authority(snapshot, HostedAutomaticAction::StagingDelivery)?;
         require_authority(snapshot, HostedAutomaticAction::Observe)?;
         (super::staging::ACTION.into(), hash, resource)
-    } else if super::staging::completed(state, snapshot).await? {
-        return Ok(condition("waiting", "Staging runtime verification is complete. Production approval and verification are still required; no source, build or staging work is repeated."));
+    } else if let Some(step) = super::production::next(state, snapshot).await? {
+        // Production steps carry their own effect and locks: proposing and
+        // observing are observation-only, the admitted write is development.
+        match step {
+            super::production::Step::Wait(condition) => return Ok(condition),
+            super::production::Step::Start(start) => {
+                effect = start.effect;
+                production_keys = Some(start.keys);
+                (start.action.into(), start.input_hash, start.resource)
+            }
+        }
     } else if let Some(run) = continuation_candidate(snapshot) {
         require_authority(snapshot, HostedAutomaticAction::Test)?;
         require_authority(snapshot, HostedAutomaticAction::Verify)?;
@@ -122,7 +133,9 @@ pub(super) async fn advance(
     );
     let repo_lock = format!("repository:{}", snapshot.metadata.repository_id);
     let staging_lock = format!("delivery:{}:staging", snapshot.metadata.repository_id);
-    let keys = if runs_worker {
+    let keys = if let Some(keys) = production_keys.as_ref() {
+        keys.iter().map(String::as_str).collect()
+    } else if runs_worker {
         vec!["coding", repo_lock.as_str()]
     } else if action == super::staging::ACTION {
         vec![
@@ -143,7 +156,7 @@ pub(super) async fn advance(
                 id: &id,
                 action: &action,
                 input_hash: &input_hash,
-                effect: "development",
+                effect,
                 resource_keys: &keys,
             },
             now(),

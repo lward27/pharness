@@ -38,7 +38,6 @@ pub(in crate::app::hosted_controller) fn artifact_id(kind: &str, execution: &str
 /// operation, commit receipt and runtime window still agree.
 pub(in crate::app::hosted_controller) struct Verified {
     pub saved: preparation::Saved,
-    pub receipt: pharness_store::StoredArtifact,
     pub result: pharness_store::StoredArtifact,
 }
 
@@ -82,11 +81,7 @@ pub(in crate::app::hosted_controller) async fn verified(
         .get_artifact(&context.id("result"))
         .await?
         .ok_or_else(|| ApiError::conflict("verified staging is missing its result artifact"))?;
-    Ok(Some(Verified {
-        saved,
-        receipt,
-        result,
-    }))
+    Ok(Some(Verified { saved, result }))
 }
 
 pub(super) async fn candidate(

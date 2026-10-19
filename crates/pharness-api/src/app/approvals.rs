@@ -341,6 +341,12 @@ pub(super) async fn approval_gate_lifecycle_readiness(
                 .to_string(),
         ));
     }
+    if gate.gate_kind == super::hosted_controller::production::GATE_KIND {
+        return Ok((
+            true,
+            "The exact production diff is at its single human decision boundary.".to_string(),
+        ));
+    }
     let Some(work_item_id) = gate.work_item_id.as_deref() else {
         return Ok((
             true,
@@ -527,15 +533,41 @@ pub(super) async fn decide_approval_gate(
         return Err(ApiError::conflict(blocker));
     }
 
-    let gate = state
-        .store
-        .decide_approval_gate(
-            &gate_id,
+    // The production gate persists its bound approval record together with
+    // the decision; the generic path would satisfy the gate without one.
+    let gate = if current.gate_kind == super::hosted_controller::production::GATE_KIND {
+        let claimed = actor.claimed.clone();
+        let gate = super::hosted_controller::production::decide_gate(
+            &state,
+            actor,
+            current,
             status,
-            actor.name,
-            clean_optional_text(request.reason),
+            request.reason,
         )
         .await?;
+        state
+            .store
+            .create_audit_event(approval_gate_audit_event_with_claim(
+                &gate,
+                &format!("approval_gate.{status}"),
+                status,
+                claimed.as_deref(),
+            ))
+            .await?;
+        return Ok(Json(DecideApprovalGateResponse {
+            approval_gate: gate.into(),
+        }));
+    } else {
+        state
+            .store
+            .decide_approval_gate(
+                &gate_id,
+                status,
+                actor.name,
+                clean_optional_text(request.reason),
+            )
+            .await?
+    };
     state
         .store
         .create_audit_event(approval_gate_audit_event_with_claim(
@@ -606,6 +638,11 @@ pub(super) async fn batch_decide_approval_gates(
         if !eligible {
             return Err(ApiError::conflict(format!(
                 "approval gate {gate_id} is not at its lifecycle boundary: {blocker}"
+            )));
+        }
+        if gate.gate_kind == super::hosted_controller::production::GATE_KIND {
+            return Err(ApiError::conflict(format!(
+                "approval gate {gate_id} decides a production release and must be decided alone"
             )));
         }
         current_gates.push(gate);

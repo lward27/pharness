@@ -3,6 +3,7 @@ pub(in crate::app) mod build;
 mod control;
 mod operations;
 mod preparation;
+pub(in crate::app) mod production;
 mod progression;
 mod scheduler;
 mod source;

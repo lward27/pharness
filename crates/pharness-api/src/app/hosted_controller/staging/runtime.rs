@@ -19,25 +19,6 @@ pub(super) async fn verified(state: &AppState, context: &Context) -> Result<bool
     result::verified(state, context, &record).await
 }
 
-/// Terminal status of the window, if one is recorded: `verified`, `failed`
-/// or `inconclusive`.
-pub(in crate::app::hosted_controller) async fn outcome(
-    state: &AppState,
-    context: &Context,
-) -> Result<Option<(String, Value)>, ApiError> {
-    let Some(record) = context.read(state, "result").await? else {
-        return Ok(None);
-    };
-    let status = if result::verified(state, context, &record).await? {
-        "verified"
-    } else if record["assessment"]["runtime_verification"] == "failed" {
-        "failed"
-    } else {
-        "inconclusive"
-    };
-    Ok(Some((status.into(), record)))
-}
-
 pub(in crate::app::hosted_controller) async fn reconcile(
     state: &AppState,
     claim: &StoredWorkflowReconciliation,
