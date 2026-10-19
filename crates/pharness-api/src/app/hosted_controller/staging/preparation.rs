@@ -9,7 +9,7 @@ use pharness_store::{
 };
 use serde_json::json;
 
-pub(super) struct Saved {
+pub(in crate::app::hosted_controller) struct Saved {
     pub operation: StoredWorkflowOperation,
     pub deployment: StoredDeploymentIntent,
     pub pipeline: StoredPipelineIntent,
@@ -92,7 +92,7 @@ pub(super) async fn prepare(
         .map_err(Into::into)
 }
 
-pub(super) async fn saved(
+pub(in crate::app::hosted_controller) async fn saved(
     state: &AppState,
     deployment_id: &str,
     execution: &str,
@@ -177,7 +177,7 @@ pub(super) async fn saved(
     })
 }
 
-pub(super) async fn validate_current(
+pub(in crate::app::hosted_controller) async fn validate_current(
     state: &AppState,
     saved: &Saved,
     for_write: bool,

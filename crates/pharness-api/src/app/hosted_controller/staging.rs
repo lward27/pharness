@@ -8,9 +8,9 @@ use serde_json::{json, Value};
 
 mod baseline;
 mod callbacks;
-mod evidence;
-mod preparation;
-mod runtime;
+pub(in crate::app::hosted_controller) mod evidence;
+pub(in crate::app::hosted_controller) mod preparation;
+pub(in crate::app::hosted_controller) mod runtime;
 #[cfg(test)]
 pub(in crate::app) use baseline::test_support::{
     seed_baseline, seed_historical_admission, seed_inputs, seed_pending, seed_window,
@@ -23,15 +23,70 @@ pub(in crate::app) use callbacks::{
 pub(in crate::app) use runtime::test_support::{
     seed_runtime, seed_runtime_identity_attempts, seed_runtime_step,
 };
-pub(super) const ACTION: &str = "stage_verified_build";
+pub(in crate::app::hosted_controller) const ACTION: &str = "stage_verified_build";
 
 fn deadline(operation: &StoredWorkflowOperation) -> i64 {
     operation.created_at.saturating_add(
         (CONTROLLER_WAIT_INTERVAL_MS as i64).saturating_mul(i64::from(CONTROLLER_WAIT_MAX_CHECKS)),
     )
 }
-fn artifact_id(kind: &str, execution: &str) -> String {
+pub(in crate::app::hosted_controller) fn artifact_id(kind: &str, execution: &str) -> String {
     format!("staging_{kind}_{execution}")
+}
+
+/// The verified staging result for this WorkItem's pipeline, if its original
+/// operation, commit receipt and runtime window still agree.
+pub(in crate::app::hosted_controller) struct Verified {
+    pub saved: preparation::Saved,
+    pub receipt: pharness_store::StoredArtifact,
+    pub result: pharness_store::StoredArtifact,
+}
+
+pub(in crate::app::hosted_controller) async fn verified(
+    state: &AppState,
+    snapshot: &Snapshot,
+) -> Result<Option<Verified>, ApiError> {
+    let Some((pipeline, _, _)) = evidence::build(state, &snapshot.metadata.work_item_id).await?
+    else {
+        return Ok(None);
+    };
+    let Some(deployment) = state
+        .store
+        .get_deployment_intent_for_stage(&pipeline.id, pharness_store::DeliveryStage::Staging)
+        .await?
+    else {
+        return Ok(None);
+    };
+    let execution = required(
+        &deployment.intent_json["hosted_staging"]["authority"],
+        "execution_id",
+    )?;
+    let saved = preparation::saved(state, &deployment.id, execution).await?;
+    if saved.operation.status != "succeeded"
+        || saved.operation.resource_refs["staging_runtime_result"]["status"] != "verified"
+    {
+        return Ok(None);
+    }
+    preparation::validate_current(state, &saved, false).await?;
+    let receipt = state
+        .store
+        .get_artifact(&artifact_id("commit", execution))
+        .await?
+        .ok_or_else(|| ApiError::conflict("completed staging is missing its commit receipt"))?;
+    let context = runtime::Context::new(state, &saved, &receipt).await?;
+    if !runtime::verified(state, &context).await? {
+        return Ok(None);
+    }
+    let result = state
+        .store
+        .get_artifact(&context.id("result"))
+        .await?
+        .ok_or_else(|| ApiError::conflict("verified staging is missing its result artifact"))?;
+    Ok(Some(Verified {
+        saved,
+        receipt,
+        result,
+    }))
 }
 
 pub(super) async fn candidate(
@@ -66,34 +121,7 @@ pub(super) async fn candidate(
 }
 
 pub(super) async fn completed(state: &AppState, snapshot: &Snapshot) -> Result<bool, ApiError> {
-    let Some((pipeline, _, _)) = evidence::build(state, &snapshot.metadata.work_item_id).await?
-    else {
-        return Ok(false);
-    };
-    let Some(deployment) = state
-        .store
-        .get_deployment_intent_for_stage(&pipeline.id, pharness_store::DeliveryStage::Staging)
-        .await?
-    else {
-        return Ok(false);
-    };
-    let execution = required(
-        &deployment.intent_json["hosted_staging"]["authority"],
-        "execution_id",
-    )?;
-    let saved = preparation::saved(state, &deployment.id, execution).await?;
-    if saved.operation.status != "succeeded"
-        || saved.operation.resource_refs["staging_runtime_result"]["status"] != "verified"
-    {
-        return Ok(false);
-    }
-    preparation::validate_current(state, &saved, false).await?;
-    let receipt = state
-        .store
-        .get_artifact(&artifact_id("commit", execution))
-        .await?
-        .ok_or_else(|| ApiError::conflict("completed staging is missing its commit receipt"))?;
-    runtime::verified(state, &saved, &receipt).await
+    Ok(verified(state, snapshot).await?.is_some())
 }
 
 pub(super) async fn reconcile(
@@ -195,7 +223,8 @@ pub(super) async fn reconcile(
             state.store.record_workflow_operation(claim, &operation.id, "running", &refs, "Staging GitOps commit observed; deployment and runtime verification remain required", now()).await?;
         }
         let saved = preparation::saved(state, id, execution).await?;
-        return runtime::reconcile(state, claim, &saved, &receipt, timed_out).await;
+        let context = runtime::Context::new(state, &saved, &receipt).await?;
+        return runtime::reconcile(state, claim, &context, timed_out).await;
     }
     let admitted = state
         .store
@@ -260,7 +289,10 @@ pub(super) async fn reconcile(
     ))
 }
 
-fn required<'a>(value: &'a Value, key: &str) -> Result<&'a str, ApiError> {
+pub(in crate::app::hosted_controller) fn required<'a>(
+    value: &'a Value,
+    key: &str,
+) -> Result<&'a str, ApiError> {
     value[key]
         .as_str()
         .filter(|v| !v.is_empty())

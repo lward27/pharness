@@ -1,6 +1,7 @@
 use super::*;
 use pharness_core::hosted_sdlc::{
-    gitops_patch::update_kustomization_image, staging::AUTHORITY_SCHEMA,
+    gitops_patch::update_kustomization_image,
+    staging::{HostedStagingAuthority, StagingGitOpsPlan, AUTHORITY_SCHEMA, PLAN_SCHEMA},
 };
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -77,7 +78,7 @@ async fn mock(responses: Vec<(u16, Value)>) -> Mock {
             let _ = socket.write_all(&body).await;
         }
     });
-    let mut git = GitHub::new("fixture-only-token".into()).unwrap();
+    let mut git = GitHub::new("fixture-only-token".into(), "staging").unwrap();
     git.rest = format!("http://{addr}/repos/lward27/lucas_engineering");
     git.graphql = format!("http://{addr}/graphql");
     Mock {
@@ -133,7 +134,7 @@ async fn native_staging_reads_a_pinned_file_and_submits_one_expected_head_mutati
     let p = plan(&a);
     let m=mock(vec![(200,branch(&p.base_commit_sha)),(200,file(&a,&p.original_content)),
         (200,json!({"data":{"createCommitOnBranch":{"clientMutationId":a.execution_id,"commit":{"oid":"c".repeat(40)}}}}))]).await;
-    let observed = m.git.plan(&a).await.unwrap();
+    let observed: StagingGitOpsPlan = m.git.plan(&a).await.unwrap();
     assert_eq!(observed, p);
     assert_eq!(
         m.git.commit_once(&a, &p, 2000).await.unwrap(),
@@ -238,11 +239,11 @@ async fn bounded_reads_reject_oversized_content_and_changed_branch_protection() 
     let mut protected = branch(&p.base_commit_sha);
     protected["protected"] = json!(true);
     let m = mock(vec![(200, protected)]).await;
-    assert!(m.git.plan(&a).await.is_err());
+    assert!(m.git.plan::<StagingGitOpsPlan>(&a).await.is_err());
     let m = mock(vec![(200, json!({"padding":"x".repeat(262145)}))]).await;
     assert!(m.git.branch().await.is_err());
     let mut oversize = file(&a, &p.original_content);
     oversize["size"] = json!(MAX_FILE_BYTES + 1);
     let m = mock(vec![(200, branch(&p.base_commit_sha)), (200, oversize)]).await;
-    assert!(m.git.plan(&a).await.is_err());
+    assert!(m.git.plan::<StagingGitOpsPlan>(&a).await.is_err());
 }

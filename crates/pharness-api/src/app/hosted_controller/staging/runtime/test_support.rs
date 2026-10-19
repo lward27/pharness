@@ -50,7 +50,7 @@ pub(in crate::app) async fn seed_runtime_identity_attempts(
     let context = Context::new(state, &saved, &receipt).await.unwrap();
     state
         .store
-        .wake_workflow(&saved.authority.work_item_id, now())
+        .wake_workflow(&context.work_item_id, now())
         .await
         .unwrap();
     let claim = state

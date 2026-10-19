@@ -1,13 +1,14 @@
 use super::{now, ApiError, AppState};
 use crate::app::hashing::canonical_material_hash as hash;
 use crate::app::pipeline::hosted;
+use pharness_core::hosted_sdlc::gitops_delivery::{GitOpsAuthority, GitOpsPlan};
 use pharness_core::hosted_sdlc::HostedAutomaticAction;
 use pharness_store::{
     CreateArtifact, StoredArtifact, StoredPipelineIntent, StoredRepoWorkItemMetadata,
 };
 use serde_json::{json, Value};
 
-pub(super) async fn build(
+pub(in crate::app::hosted_controller) async fn build(
     state: &AppState,
     item_id: &str,
 ) -> Result<Option<(StoredPipelineIntent, StoredRepoWorkItemMetadata, String)>, ApiError> {
@@ -146,7 +147,7 @@ pub(super) async fn build(
     Ok(Some((intent, metadata, evidence_hash)))
 }
 
-pub(super) async fn artifact(
+pub(in crate::app::hosted_controller) async fn artifact(
     state: &AppState,
     intent: &StoredPipelineIntent,
     id: &str,
@@ -182,7 +183,10 @@ pub(super) async fn artifact(
         .map_err(Into::into)
 }
 
-pub(super) async fn may_advance(state: &AppState, item: &str) -> Result<bool, ApiError> {
+pub(in crate::app::hosted_controller) async fn may_advance(
+    state: &AppState,
+    item: &str,
+) -> Result<bool, ApiError> {
     Ok(state
         .store
         .get_workflow_reconciliation(item)
@@ -191,9 +195,9 @@ pub(super) async fn may_advance(state: &AppState, item: &str) -> Result<bool, Ap
         && crate::app::OperationalMode::from_env() == crate::app::OperationalMode::Normal)
 }
 
-pub(super) fn validate_observation(
-    authority: &pharness_core::hosted_sdlc::staging::HostedStagingAuthority,
-    plan: &pharness_core::hosted_sdlc::staging::StagingGitOpsPlan,
+pub(in crate::app::hosted_controller) fn validate_observation<P: GitOpsPlan>(
+    authority: &P::Authority,
+    plan: &P,
     observation: &Value,
     checked: i64,
 ) -> Result<Value, ApiError> {
@@ -223,10 +227,10 @@ pub(super) fn validate_observation(
         !observation[*key]
             .as_str()
             .is_some_and(crate::app::identifiers::is_git_sha)
-    }) || observation["gitops_commit_sha"] == plan.base_commit_sha
-        || observation["file_blob_sha"] == plan.original_blob_sha
-        || observation["base_commit_sha"] != plan.base_commit_sha
-        || observation["authority_hash"] != plan.authority_hash
+    }) || observation["gitops_commit_sha"] == plan.base_commit_sha()
+        || observation["file_blob_sha"] == plan.original_blob_sha()
+        || observation["base_commit_sha"] != plan.base_commit_sha()
+        || observation["authority_hash"] != plan.binding_hash()
         || observation["plan_hash"] != plan.material_hash().map_err(ApiError::conflict)?
         || observation["path"] != authority.coordinates().map_err(ApiError::conflict)?.0
         || observation["image_ref"] != authority.image_ref().map_err(ApiError::conflict)?
@@ -236,11 +240,11 @@ pub(super) fn validate_observation(
         || !observation["observation_attempts"]
             .as_u64()
             .is_some_and(|n| (1..=12).contains(&n))
-        || checked < authority.created_at_ms
+        || checked < authority.created_at_ms()
         || checked > now().saturating_add(30_000)
     {
         return Err(ApiError::conflict(
-            "staging observation does not prove the admitted one-file digest change",
+            "observation does not prove the admitted one-file digest change",
         ));
     }
     // Independent re-observation may see a newer unrelated GitOps revision. The

@@ -10,7 +10,9 @@ use std::collections::BTreeSet;
 mod source_merge;
 pub use source_merge::{HostedSourceMergeAuthority, HOSTED_SOURCE_MERGE_SCHEMA};
 pub mod build;
+pub mod gitops_delivery;
 pub mod gitops_patch;
+pub mod production;
 pub mod staging;
 
 pub const HOSTED_WORKFLOW_SCHEMA: &str = "pharness.dev/hosted-workflow/v1alpha1";

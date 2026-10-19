@@ -3,9 +3,7 @@ use super::{
     records::{Context, Window},
     ApiError, AppState,
 };
-use pharness_core::tools::{
-    FinanceRuntimeEvidence, FinanceVerificationPhase, ToolError, ToolResult,
-};
+use pharness_core::tools::{FinanceRuntimeEvidence, ToolError, ToolResult};
 use serde_json::{json, Value};
 
 pub(super) fn content(result: Result<ToolResult, ToolError>) -> Value {
@@ -16,11 +14,13 @@ pub(super) fn content(result: Result<ToolResult, ToolError>) -> Value {
 
 pub(super) async fn collect(
     state: &AppState,
-    context: &Context<'_>,
+    context: &Context,
     window: &Window,
 ) -> Result<(), ApiError> {
     if now() >= window.expires_at() {
-        return context.fail(state, "staging_original_window_expired").await;
+        return context
+            .fail(state, &context.reason("original_window_expired"))
+            .await;
     }
     if now() < window.window.start_unix_seconds as i64 * 1000 {
         return Ok(());
@@ -28,12 +28,12 @@ pub(super) async fn collect(
     if context.read(state, "probes").await?.is_none() {
         if now() >= window.window.end_unix_seconds as i64 * 1000 {
             return context
-                .fail(state, "staging_functional_window_missed")
+                .fail(state, &context.reason("functional_window_missed"))
                 .await;
         }
         if !context.begin(state, "probes").await? {
             return context
-                .fail(state, "staging_functional_collection_interrupted")
+                .fail(state, &context.reason("functional_collection_interrupted"))
                 .await;
         }
         let probes = content(
@@ -51,13 +51,14 @@ pub(super) async fn collect(
     }
     if !context.begin(state, "complete").await? {
         return context
-            .fail(state, "staging_final_collection_interrupted")
+            .fail(state, &context.reason("final_collection_interrupted"))
             .await;
     }
     let before = context
         .read(state, &window.initial_step)
         .await?
-        .ok_or_else(|| ApiError::conflict("staging initial identity is missing"))?["observation"]
+        .ok_or_else(|| ApiError::conflict("initial identity observation is missing"))?
+        ["observation"]
         .clone();
     let probes = context.read(state, "probes").await?.unwrap()["observation"].clone();
     let after = content(
@@ -85,7 +86,7 @@ pub(super) async fn collect(
         ),
     );
     let evidence = FinanceRuntimeEvidence {
-        phase: FinanceVerificationPhase::Staging,
+        phase: context.phase,
         expected: context.expected.clone(),
         window: window.window.clone(),
         identity_before: before,

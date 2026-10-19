@@ -1,81 +1,95 @@
 //! Candidate observation starts only after the admitted GitOps change is observed.
+//! Shared by staging and production; the caller supplies the bound `Context`.
 use super::super::state::{condition, Condition};
 use super::{artifact_id, evidence, now, preparation, ApiError, AppState};
-use pharness_store::{StoredArtifact, StoredWorkflowReconciliation};
+use pharness_store::StoredWorkflowReconciliation;
 use serde_json::{json, Value};
 
 mod collection;
-mod records;
+pub(in crate::app::hosted_controller) mod records;
 mod result;
 #[cfg(test)]
 pub(super) mod test_support;
+pub(in crate::app::hosted_controller) use records::Context;
 
-pub(super) async fn verified(
-    state: &AppState,
-    saved: &preparation::Saved,
-    receipt: &StoredArtifact,
-) -> Result<bool, ApiError> {
-    let context = records::Context::new(state, saved, receipt).await?;
+pub(super) async fn verified(state: &AppState, context: &Context) -> Result<bool, ApiError> {
     let Some(record) = context.read(state, "result").await? else {
         return Ok(false);
     };
-    result::verified(state, &context, &record).await
+    result::verified(state, context, &record).await
 }
 
-pub(super) async fn reconcile(
+/// Terminal status of the window, if one is recorded: `verified`, `failed`
+/// or `inconclusive`.
+pub(in crate::app::hosted_controller) async fn outcome(
+    state: &AppState,
+    context: &Context,
+) -> Result<Option<(String, Value)>, ApiError> {
+    let Some(record) = context.read(state, "result").await? else {
+        return Ok(None);
+    };
+    let status = if result::verified(state, context, &record).await? {
+        "verified"
+    } else if record["assessment"]["runtime_verification"] == "failed" {
+        "failed"
+    } else {
+        "inconclusive"
+    };
+    Ok(Some((status.into(), record)))
+}
+
+pub(in crate::app::hosted_controller) async fn reconcile(
     state: &AppState,
     claim: &StoredWorkflowReconciliation,
-    saved: &preparation::Saved,
-    receipt: &StoredArtifact,
+    context: &Context,
     timed_out: bool,
 ) -> Result<Condition, ApiError> {
-    let context = records::Context::new(state, saved, receipt).await?;
     if let Some(record) = context.read(state, "result").await? {
-        return result::record(state, claim, &context, &record).await;
+        return result::record(state, claim, context, &record).await;
     }
-    if timed_out || now() >= saved.authority.expires_at_ms {
+    if timed_out || now() >= context.expires_at_ms {
         context
-            .fail(state, "staging_original_operation_expired")
+            .fail(state, &context.reason("original_operation_expired"))
             .await?;
     } else if let Some(record) = context.read(state, "window").await? {
         let window: records::Window = serde_json::from_value(record["window_record"].clone())
-            .map_err(|_| ApiError::conflict("staging runtime window record is invalid"))?;
-        window.validate(&context)?;
-        link_window(state, claim, &context, &saved.operation, &window).await?;
-        collection::collect(state, &context, &window).await?;
+            .map_err(|_| ApiError::conflict("runtime window record is invalid"))?;
+        window.validate(context)?;
+        link_window(state, claim, context, &context.operation, &window).await?;
+        collection::collect(state, context, &window).await?;
     } else {
-        wait_for_identity(state, claim, &context).await?;
+        wait_for_identity(state, claim, context).await?;
     }
     if let Some(record) = context.read(state, "result").await? {
-        return result::record(state, claim, &context, &record).await;
+        return result::record(state, claim, context, &record).await;
     }
-    Ok(condition("waiting","The staging GitOps commit is recorded. Waiting for the exact deployment and collecting its original five-minute runtime window; production remains unauthorized."))
+    Ok(condition("waiting", format!("The {} GitOps commit is recorded. Waiting for the exact deployment and collecting its original {}-second runtime window.", context.prefix, context.duration_seconds())))
 }
 
 async fn wait_for_identity(
     state: &AppState,
     claim: &StoredWorkflowReconciliation,
-    context: &records::Context<'_>,
+    context: &Context,
 ) -> Result<(), ApiError> {
     // Accepted callbacks allow a bounded worker clock skew. Wait for that
     // recorded time rather than creating an observation that predates it.
     if now() < context.commit_checked_at_ms {
         return Ok(());
     }
-    let mut operation = context.saved.operation.clone();
+    let mut operation = context.operation.clone();
     for index in 1..=crate::app::CONTROLLER_WAIT_MAX_CHECKS {
         let step = format!("identity_{index}");
-        let key = format!("staging_runtime_{step}");
+        let key = context.ref_key(&step);
         if let Some(marker) = operation.resource_refs.get(&key) {
-            let created = marker["started_at_ms"].as_i64().ok_or_else(|| {
-                ApiError::conflict("staging identity observation has no original clock")
-            })?;
+            let created = marker["started_at_ms"]
+                .as_i64()
+                .ok_or_else(|| ApiError::conflict("identity observation has no original clock"))?;
             if marker["artifact_id"] != context.id(&step)
                 || created < operation.created_at
                 || created > now()
             {
                 return Err(ApiError::conflict(
-                    "staging identity observation marker has different authority",
+                    "identity observation marker has different authority",
                 ));
             }
             if let Some(observation) = context.read(state, &step).await? {
@@ -94,7 +108,7 @@ async fn wait_for_identity(
                 }
             } else {
                 // A replacement claim cannot repeat a possibly consumed read.
-                context.write(state,&step,json!({"observation":{"identity_state":"inconclusive","reasons":["staging_identity_collection_interrupted"]}})).await?;
+                context.write(state,&step,json!({"observation":{"identity_state":"inconclusive","reasons":[context.reason("identity_collection_interrupted")]}})).await?;
             }
             continue;
         }
@@ -108,7 +122,7 @@ async fn wait_for_identity(
                 &operation.id,
                 "running",
                 &refs,
-                "One bounded native staging identity observation recorded before reading",
+                "One bounded native identity observation recorded before reading",
                 now(),
             )
             .await?;
@@ -126,14 +140,17 @@ async fn wait_for_identity(
         return Ok(());
     }
     context
-        .fail(state, "staging_identity_observation_allowance_exhausted")
+        .fail(
+            state,
+            &context.reason("identity_observation_allowance_exhausted"),
+        )
         .await
 }
 
 async fn save_window(
     state: &AppState,
     claim: &StoredWorkflowReconciliation,
-    context: &records::Context<'_>,
+    context: &Context,
     operation: &pharness_store::StoredWorkflowOperation,
     step: &str,
     created: i64,
@@ -144,11 +161,11 @@ async fn save_window(
         return Ok(false);
     }
     let Ok(window) = records::Window::new(context, created, step.into()) else {
-        // The identity is verified but five minutes plus the ingestion
-        // allowance no longer fit before the authority expires. Retrying each
-        // tick would only repeat the same conflict until expiry.
+        // The identity is verified but the window plus the ingestion allowance
+        // no longer fit before the authority expires. Retrying each tick would
+        // only repeat the same conflict until expiry.
         context
-            .fail(state, "staging_runtime_window_exceeds_authority")
+            .fail(state, &context.reason("runtime_window_exceeds_authority"))
             .await?;
         return Ok(true);
     };
@@ -175,12 +192,12 @@ async fn save_window(
 async fn link_window(
     state: &AppState,
     claim: &StoredWorkflowReconciliation,
-    context: &records::Context<'_>,
+    context: &Context,
     operation: &pharness_store::StoredWorkflowOperation,
     window: &records::Window,
 ) -> Result<(), ApiError> {
     let mut refs = operation.resource_refs.clone();
-    refs["staging_runtime_window"] = json!({"artifact_id":context.id("window"),"window":window.window,"expected":context.expected});
+    refs[context.ref_key("window")] = json!({"artifact_id":context.id("window"),"window":window.window,"expected":context.expected});
     if refs != operation.resource_refs {
         state
             .store
@@ -189,7 +206,7 @@ async fn link_window(
                 &operation.id,
                 "running",
                 &refs,
-                "Exact staging identity observed; its single five-minute runtime window is fixed",
+                "Exact identity observed; its single runtime window is fixed",
                 now(),
             )
             .await?;
