@@ -10,6 +10,9 @@ pub const RELIABILITY_V2_PROMPT_BUNDLE_VERSION: &str = "2026-09-05.1";
 pub const WORKSPACE_COMMAND_EXECUTABLES: [&str; 7] = [
     "cargo", "rustc", "python", "python3", "pytest", "node", "npm",
 ];
+/// Mirrors the RepositoryContract safe-identifier rule so the model is told
+/// the constraint before the submission tool rejects a command label.
+pub const ACCEPTANCE_COMMAND_NAME_PATTERN: &str = "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StagePromptPack {
@@ -586,7 +589,7 @@ fn onboarding_proposal_submission_schema() -> serde_json::Value {
                                 }
                             },
                             "writable_paths":{
-                                "description":"Future development write scope derived from discovery and existing constraints, not this onboarding Run's allowed_source_changes. Each expression is an exact repository-relative file (for example lib/handler.py) or an explicit recursive subtree (lib/**). Only a final /** grants descendant writes; lib or lib/ does not. Use canonical paths without trailing/repeated separators or . or .. components. Never silently expand exact-file authority.",
+                                "description":"Future development write scope derived from discovery and existing constraints, not this onboarding Run's allowed_source_changes. Each expression is an exact repository-relative file (for example lib/handler.py) or an explicit recursive subtree (lib/**). Only a final /** grants descendant writes; lib or lib/ does not. Every expression must lie inside one of the proposed roots: a directory root as root/**, an exact file below a root, or a documentation file that is itself a root. Manifests, lockfiles, toolchain files and other paths outside the roots are never writable. Use canonical paths without trailing/repeated separators or . or .. components. Never silently expand exact-file authority.",
                                 "type":"array","minItems":1,"maxItems":100,
                                 "items":{"type":"string","minLength":1,"maxLength":256}
                             },
@@ -596,8 +599,15 @@ fn onboarding_proposal_submission_schema() -> serde_json::Value {
                                     "type":"object","additionalProperties":false,
                                     "required":["name","command"],
                                     "properties":{
-                                        "name":{"type":"string","minLength":1},
-                                        "command":{"type":"string","minLength":1}
+                                        "name":{
+                                            "description":"Short identifier for this command, not the command text: 1 to 64 ASCII letters, digits, '.', '_' or '-', starting with a letter or digit (for example unit_tests).",
+                                            "type":"string","minLength":1,"maxLength":64,
+                                            "pattern":ACCEPTANCE_COMMAND_NAME_PATTERN
+                                        },
+                                        "command":{
+                                            "description":"Exact offline command text copied verbatim from a discovery command candidate.",
+                                            "type":"string","minLength":1
+                                        }
                                     }
                                 }
                             },

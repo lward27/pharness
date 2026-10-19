@@ -446,3 +446,58 @@ fn reconstructed_run_retains_original_contract_and_discovery() {
         }
     }
 }
+
+#[test]
+fn submission_tool_states_the_command_name_and_root_bound_scope_rules_up_front() {
+    let current = run(true);
+    let allowed = profile_tool_names(&current).unwrap();
+    let specs = tool_specs_for_run(&current, allowed.as_ref()).unwrap();
+    let contract = &specs
+        .iter()
+        .find(|s| s.name == "submit_onboarding_proposal")
+        .unwrap()
+        .parameters_schema["properties"]["proposal"]["properties"]["candidate_contract"]
+        ["properties"];
+    let name = &contract["acceptance_commands"]["items"]["properties"]["name"];
+    assert_eq!(
+        name["pattern"],
+        json!(crate::prompt::ACCEPTANCE_COMMAND_NAME_PATTERN)
+    );
+    assert_eq!(name["maxLength"], json!(64));
+    assert!(name["description"]
+        .as_str()
+        .unwrap()
+        .contains("not the command text"));
+    assert!(contract["writable_paths"]["description"]
+        .as_str()
+        .unwrap()
+        .contains("Manifests, lockfiles, toolchain files and other paths outside the roots are never writable"));
+
+    let prompt = current_prompt();
+    assert_eq!(prompt.revision, "2026-10-19.1");
+    assert!(prompt
+        .content
+        .contains("Every writable_paths expression must lie inside one of the proposed roots"));
+    assert!(prompt.content.contains("starts with a letter or digit"));
+
+    // The advertised pattern must agree with the production validator for the
+    // labels a model actually produces.
+    for (label, accepted) in [
+        ("npm_test", true),
+        ("unit-tests.v2", true),
+        ("npm test", false),
+        ("_private", false),
+        (&"x".repeat(65), false),
+    ] {
+        let mut proposal = legacy_proposal(false);
+        proposal["candidate_contract"]["acceptance_commands"][0]["name"] = json!(label);
+        let proposal: RepositoryOnboardingProposal = serde_json::from_value(proposal).unwrap();
+        let result = proposal.validate_submission();
+        assert_eq!(result.is_ok(), accepted, "{label:?}");
+        if !accepted {
+            assert!(result
+                .unwrap_err()
+                .contains("acceptance command name is not a safe identifier"));
+        }
+    }
+}
