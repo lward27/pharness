@@ -71,17 +71,20 @@ pub(in crate::app) async fn seed_runtime_identity_attempts(
         )
         .await
         .unwrap();
+    // One clock read: a due time derived from an earlier read is not in the
+    // future once the scheduler delays the second read by two milliseconds.
+    let finished = now();
     state
         .store
         .finish_workflow_reconciliation(
             &claim,
             FinishWorkflowReconciliation {
-                next_due_at: now() + 1,
+                next_due_at: finished + 1,
                 condition: "waiting",
                 reason: "Interrupted candidate fixture ready",
                 observed_state_hash: None,
             },
-            now(),
+            finished,
         )
         .await
         .unwrap();
@@ -201,17 +204,18 @@ pub(in crate::app::hosted_controller) async fn seed_window(
         }
         context.write(state, "result", result).await.unwrap();
     }
+    let finished = now();
     state
         .store
         .finish_workflow_reconciliation(
             &claim,
             FinishWorkflowReconciliation {
-                next_due_at: now() + 1,
+                next_due_at: finished + 1,
                 condition: "waiting",
                 reason: "Candidate fixture ready",
                 observed_state_hash: None,
             },
-            now(),
+            finished,
         )
         .await
         .unwrap();
