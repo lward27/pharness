@@ -595,3 +595,45 @@ No hosted WorkItem has yet exercised staging or production on a live build.
 Automatic `rollback_production` after a failed production window is the next
 PR; notifications (FB-09), the hard-coded Finance application mapping and an
 Alertmanager receiver remain open.
+
+## FB-01 automatic production rollback release a9eac23 — 2026-10-19
+
+PR #450 (`codex/fb01-production-rollback-20261019`) closes the production
+loop: a production window that fails now rolls production back to the
+recorded previous image automatically, inside the operation that owns the
+window (`promote_approved_release` for the `release` window,
+`observe_production_release` for the `observe` window). The rollback starts
+only from a `failed` assessment; an inconclusive window blocks the operation
+without any write, and paused control never dispatches one. A
+`HostedProductionRollbackAuthority` (30-minute window) binds the proposal,
+the delivery execution and hash, the admitted commit and the failed window
+artifact; the `ProductionRollbackPlan` is derived from the observed file,
+which must still pin exactly the candidate digest or the rollback is refused.
+The isolated worker reuses `execute_delivery` through a `rollback` phase with
+its own writer token and admission check and commits with `expectedHeadOid`.
+After the commit the controller takes bounded identity reads until Argo runs
+the previous digest at the rollback revision, records the result, blocks the
+operation and marks the WorkItem failed and closed. The observe operation now
+holds the GitOps lock for its whole step. No second GitOps ChangeSet and no
+new operation are introduced. Three controller tests, three core tests and a
+worker admission test cover the path (API 337, core 217). A `delivery ↔
+rollback` import cycle flagged by the module-boundary script was removed by
+calling the hook from the production dispatcher. Merged as `a9eac23`.
+
+Eight Tekton PipelineRuns built the images from `a9eac23` in a clean
+worktree; runtime, UI, codex-host and model-gateway carry the source SHA as
+their OCI revision label. `lucas-ops` remains absent, so there is still no
+SBOM or signature evidence. Pin #451 merged as `3fc6275` at 10:54:52Z; Argo
+synced it by 10:55:14Z and the five Deployments rolled to the pinned digests
+with zero restarts. `/health` returned 200 and Mimir scrapes
+`pharness_build_info{revision="a9eac23…"}` from the new pod with no alerts
+firing. CI needed one rerun on both PRs for timing flakes in the
+`tools::cluster::finance` fake-kubectl tests and once for a Vitest teardown
+error, none in files the PRs touch. Runtime digest:
+`sha256:818af47e3045e4d2a56e25e4274fa085891df33b1b4e582c2dae2e43a86b5bd7`.
+
+No hosted WorkItem has yet exercised staging, production or a rollback on a
+live build. A rollback whose writer disappears after admission blocks as
+`production_rollback_outcome_unconfirmed` for an operator. Notifications
+(FB-09), the hard-coded Finance application mapping, an Alertmanager receiver
+and the flaky fake-kubectl timing tests remain open.
