@@ -656,7 +656,7 @@ fn repository_instructions(cwd: &Path) -> anyhow::Result<(String, Vec<Repository
 
 fn deterministic_repository_map(cwd: &Path, run: &RunSpec) -> anyhow::Result<String> {
     let head = std::process::Command::new("git")
-        .args(["-C", cwd.to_string_lossy().as_ref(), "rev-parse", "HEAD"])
+        .args(git_evidence_args(cwd, &["rev-parse", "HEAD"]))
         .output()?;
     if !head.status.success() {
         anyhow::bail!("failed to resolve repository map source SHA");
@@ -672,7 +672,7 @@ fn deterministic_repository_map(cwd: &Path, run: &RunSpec) -> anyhow::Result<Str
         }
     }
     let tracked = std::process::Command::new("git")
-        .args(["-C", cwd.to_string_lossy().as_ref(), "ls-files", "-z"])
+        .args(git_evidence_args(cwd, &["ls-files", "-z"]))
         .output()?;
     if !tracked.status.success() {
         anyhow::bail!("failed to enumerate tracked paths for repository map");
@@ -3152,6 +3152,80 @@ mod workspace_source_tests {
                 "--no-ext-diff",
             ]
         );
+    }
+
+    #[test]
+    fn repository_map_git_reads_succeed_when_git_detects_a_different_workspace_owner() {
+        let root = std::env::temp_dir().join(format!(
+            "pharness-runhost-safe-directory-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("README.md"), "fixture\n").unwrap();
+        for args in [
+            vec!["init", "-q"],
+            vec!["add", "README.md"],
+            vec![
+                "-c",
+                "user.name=Map Fixture",
+                "-c",
+                "user.email=map@example.invalid",
+                "commit",
+                "-qm",
+                "initial",
+            ],
+        ] {
+            let result = std::process::Command::new("git")
+                .args(args)
+                .current_dir(&root)
+                .output()
+                .unwrap();
+            assert!(
+                result.status.success(),
+                "{}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+        }
+
+        // Hosted run pods mount the workspace PVC with a different owner than
+        // the runhost uid, and hosted runners ship a system-wide
+        // `safe.directory = *` that would hide the failure; isolate host config.
+        let isolated_git = |args: Vec<String>| {
+            std::process::Command::new("git")
+                .args(args)
+                .env("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
+                .env("GIT_CONFIG_NOSYSTEM", "1")
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .output()
+                .unwrap()
+        };
+
+        for read in [vec!["rev-parse", "HEAD"], vec!["ls-files", "-z"]] {
+            let unscoped = isolated_git(
+                ["-C", root.to_string_lossy().as_ref()]
+                    .iter()
+                    .chain(read.iter())
+                    .map(|arg| (*arg).to_string())
+                    .collect(),
+            );
+            assert!(
+                !unscoped.status.success(),
+                "{}",
+                String::from_utf8_lossy(&unscoped.stderr)
+            );
+            let scoped = isolated_git(git_evidence_args(&root, &read));
+            assert!(
+                scoped.status.success(),
+                "{}",
+                String::from_utf8_lossy(&scoped.stderr)
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(root);
     }
 
     fn git(cwd: &std::path::Path, args: &[&str]) -> String {
