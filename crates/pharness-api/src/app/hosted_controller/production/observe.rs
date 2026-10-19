@@ -1,6 +1,7 @@
-//! A second, independent production window after `release` is sealed. No
-//! GitOps write happens here; the window is bound to the sealed release
-//! outcome and starts only from identity reads taken after it.
+//! A second, independent production window after `release` is sealed. The
+//! window is bound to the sealed release outcome and starts only from identity
+//! reads taken after it; the only GitOps write this step can make is the
+//! automatic rollback after a failed window.
 use super::super::state::{Condition, Snapshot};
 use super::{
     deadline, delivery, hash, now, operation_id, proposal, required, runtime, seal, ApiError,

@@ -6,7 +6,7 @@ use pharness_core::hosted_sdlc::staging::GITOPS_REPOSITORY;
 use serde_json::{json, Value};
 
 /// Identity of one production worker Job. `preview` and `observe` run with the
-/// GitOps reader; only `deliver` receives the writer credential.
+/// GitOps reader; `deliver` and `rollback` receive the writer credential.
 pub struct HostedProductionJob<'a> {
     pub execution_id: &'a str,
     pub deployment_intent_id: &'a str,
@@ -25,11 +25,11 @@ impl RunDispatcher {
             anyhow::bail!("hosted production requires the existing Kubernetes executor");
         };
         anyhow::ensure!(
-            matches!(job.phase, "preview" | "deliver" | "observe"),
+            matches!(job.phase, "preview" | "deliver" | "observe" | "rollback"),
             "unsupported hosted production phase"
         );
         let config = &dispatcher.config;
-        let writes = job.phase == "deliver";
+        let writes = matches!(job.phase, "deliver" | "rollback");
         // The preview reader shares the execution identity with nothing else;
         // the observer recovers the writer's execution and must have its name.
         let job_execution = job.execution_id;

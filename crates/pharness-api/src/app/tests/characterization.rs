@@ -69,7 +69,7 @@ async fn route_inventory_matches_mounted_routes_and_auth_classes() {
     inventory.sort();
     assert_eq!(
         inventory.len(),
-        239,
+        243,
         "update the checked-in inventory only after reviewing an intentional route change"
     );
     assert_eq!(

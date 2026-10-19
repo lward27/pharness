@@ -78,6 +78,10 @@ GET	/api/internal/deployment-intents/:deployment_intent_id/production/preview-co
 POST	/api/internal/deployment-intents/:deployment_intent_id/production/attempt	worker
 POST	/api/internal/deployment-intents/:deployment_intent_id/production/outcome	worker
 POST	/api/internal/deployment-intents/:deployment_intent_id/production/preview	worker
+GET	/api/internal/deployment-intents/:deployment_intent_id/production/rollback/context	worker
+POST	/api/internal/deployment-intents/:deployment_intent_id/production/rollback/attempt	worker
+POST	/api/internal/deployment-intents/:deployment_intent_id/production/rollback/outcome	worker
+POST	/api/internal/deployment-intents/:deployment_intent_id/production/rollback/plan	worker
 GET	/api/internal/deployment-intents/:deployment_intent_id/staging/context	worker
 POST	/api/internal/deployment-intents/:deployment_intent_id/staging/plan	worker
 POST	/api/internal/deployment-intents/:deployment_intent_id/staging/attempt	worker

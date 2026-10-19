@@ -259,3 +259,153 @@ fn production_cannot_inherit_staging_or_source_authority_or_accept_undeclared_fi
         assert!(changed.validate().is_err());
     }
 }
+
+fn rollback_authority(p: &ProductionProposal) -> HostedProductionRollbackAuthority {
+    HostedProductionRollbackAuthority {
+        schema_version: ROLLBACK_AUTHORITY_SCHEMA.into(),
+        execution_id: "prollback_finance".into(),
+        delivery_execution_id: "pexec_finance".into(),
+        delivery_authority_hash: digest('7'),
+        proposal: p.clone(),
+        admitted_gitops_commit_sha: "8".repeat(40),
+        trigger: RollbackTrigger::Release,
+        failed_result_artifact_id: "artifact_production_runtime_result".into(),
+        failed_result_sha256: digest('9'),
+        created_at_ms: 3_000_000,
+        expires_at_ms: 3_000_000 + MAX_ROLLBACK_MS,
+    }
+}
+
+/// The file as the admitted production commit left it: candidate pinned.
+fn released_file(p: &ProductionProposal) -> String {
+    plan(p).updated_content
+}
+
+#[test]
+fn rollback_plan_restores_exactly_the_recorded_previous_digest() {
+    for repository in ["yfinance_wrapper", "finance-frontend"] {
+        let p = proposal(repository);
+        let authority = rollback_authority(&p);
+        authority.validate_for_dispatch(3_000_001).unwrap();
+        let rollback = ProductionRollbackPlan::from_observed(
+            &authority,
+            "4".repeat(40),
+            "5".repeat(40),
+            released_file(&p),
+        )
+        .unwrap();
+        assert_eq!(rollback.original_content, released_file(&p));
+        assert_eq!(rollback.updated_content, plan(&p).original_content);
+        assert_eq!(
+            authority.image_ref().unwrap(),
+            format!("{}@{}", p.coordinates().unwrap().1, p.previous_image_digest)
+        );
+        let request = rollback.commit_request(&authority, 3_000_001).unwrap();
+        let input = &request["variables"]["input"];
+        assert_eq!(input["expectedHeadOid"], json!("4".repeat(40)));
+        assert_eq!(input["clientMutationId"], json!("prollback_finance"));
+        assert_eq!(
+            input["fileChanges"]["additions"][0]["path"],
+            json!(p.coordinates().unwrap().0)
+        );
+        let body = input["message"]["body"].as_str().unwrap();
+        assert!(body.contains(&format!("Reverses: {}", "8".repeat(40))));
+        assert!(body.contains("Trigger: release"));
+        assert!(body.contains(&format!(
+            "Failed-window: artifact_production_runtime_result {}",
+            digest('9')
+        )));
+    }
+}
+
+#[test]
+fn rollback_refuses_a_drifted_file_or_one_that_no_longer_pins_the_candidate() {
+    let p = proposal("yfinance_wrapper");
+    let authority = rollback_authority(&p);
+    // Still on the baseline: there is nothing to undo.
+    assert!(ProductionRollbackPlan::from_observed(
+        &authority,
+        "4".repeat(40),
+        "5".repeat(40),
+        plan(&p).original_content,
+    )
+    .is_err());
+    // Someone already moved production elsewhere.
+    assert!(ProductionRollbackPlan::from_observed(
+        &authority,
+        "4".repeat(40),
+        "5".repeat(40),
+        released_file(&p).replace(&p.image_digest, &digest('6')),
+    )
+    .is_err());
+    // Another edit landed on top of the released candidate.
+    let valid = ProductionRollbackPlan::from_observed(
+        &authority,
+        "4".repeat(40),
+        "5".repeat(40),
+        released_file(&p),
+    )
+    .unwrap();
+    for suffix in ["namespace: apps-staging\n", "resources: []\n"] {
+        let mut changed = valid.clone();
+        changed.original_content.push_str(suffix);
+        changed.updated_content.push_str(suffix);
+        assert!(changed.validate(&authority).is_err());
+    }
+    let mut changed = valid.clone();
+    changed.updated_content = changed
+        .updated_content
+        .replace(&p.previous_image_digest, "latest");
+    assert!(changed.validate(&authority).is_err());
+    let mut changed = valid;
+    changed.updated_content = changed.original_content.clone();
+    assert!(changed.validate(&authority).is_err());
+}
+
+#[test]
+fn rollback_authority_requires_permission_window_and_the_failed_window_it_undoes() {
+    let p = proposal("yfinance_wrapper");
+    let authority = rollback_authority(&p);
+    authority.validate_identity().unwrap();
+    for (field, value) in [
+        ("schema_version", json!(AUTHORITY_SCHEMA)),
+        ("execution_id", json!("pexec_finance")),
+        ("execution_id", json!("")),
+        ("delivery_authority_hash", json!("8".repeat(40))),
+        ("admitted_gitops_commit_sha", json!("8".repeat(39))),
+        ("failed_result_artifact_id", json!("bad id")),
+        ("failed_result_sha256", json!("not-a-digest")),
+        ("created_at_ms", json!(p.created_at_ms - 1)),
+        ("expires_at_ms", json!(3_000_000)),
+        ("expires_at_ms", json!(3_000_000 + MAX_ROLLBACK_MS + 1)),
+    ] {
+        let mut changed = json!(authority);
+        changed[field] = value;
+        let changed: HostedProductionRollbackAuthority = serde_json::from_value(changed).unwrap();
+        assert!(changed.validate_identity().is_err(), "{field}");
+    }
+    let mut disabled = authority.clone();
+    disabled.proposal.rollback = HostedRollbackPermission::Disabled;
+    assert!(disabled.validate_identity().is_err());
+    for now in [
+        authority.created_at_ms - 1,
+        authority.expires_at_ms,
+        i64::MAX,
+    ] {
+        assert!(authority.validate_for_dispatch(now).is_err());
+    }
+    let mut extra = json!(authority);
+    extra["verified"] = json!(true);
+    assert!(serde_json::from_value::<HostedProductionRollbackAuthority>(extra).is_err());
+    // A plan derived under one authority does not transfer to a changed one.
+    let rollback = ProductionRollbackPlan::from_observed(
+        &authority,
+        "4".repeat(40),
+        "5".repeat(40),
+        released_file(&p),
+    )
+    .unwrap();
+    let mut observe = authority;
+    observe.trigger = RollbackTrigger::Observe;
+    assert!(rollback.validate(&observe).is_err());
+}

@@ -52,3 +52,72 @@ fn writer_rejects_missing_expired_rebound_or_expanded_baseline_admission() {
         "expiry is checked again immediately before the one POST"
     );
 }
+
+#[test]
+fn rollback_writer_rejects_admissions_for_another_window_commit_or_time() {
+    use pharness_core::hosted_sdlc::production::{
+        HostedProductionRollbackAuthority, ProductionRollbackPlan, PROPOSAL_SCHEMA,
+        ROLLBACK_AUTHORITY_SCHEMA,
+    };
+    let sha = |c: &str| format!("sha256:{}", c.repeat(64));
+    let a: HostedProductionRollbackAuthority = serde_json::from_value(json!({
+        "schema_version": ROLLBACK_AUTHORITY_SCHEMA,
+        "execution_id": "prollback_fixture",
+        "delivery_execution_id": "pexec_fixture",
+        "delivery_authority_hash": sha("7"),
+        "proposal": {
+            "schema_version": PROPOSAL_SCHEMA, "work_item_id": "witem_fixture",
+            "operation_id": "workflowop_fixture", "pipeline_intent_id": "pipeline_fixture",
+            "deployment_intent_id": "deployment_fixture", "workflow_policy_hash": sha("a"),
+            "application_repository": "https://github.com/lward27/yfinance_wrapper.git",
+            "source_commit_sha": "b".repeat(40), "build_evidence_hash": sha("c"),
+            "image_digest": sha("d"), "staging_evidence_artifact_id": "artifact_staging",
+            "staging_evidence_hash": sha("e"), "baseline_evidence_artifact_id": "artifact_baseline",
+            "baseline_evidence_hash": sha("f"), "previous_image_digest": sha("1"),
+            "production_configuration_hash": sha("2"), "rollback_compatibility_hash": sha("3"),
+            "rollback": "one_previous_verified_deployment", "created_at_ms": 1000
+        },
+        "admitted_gitops_commit_sha": "8".repeat(40),
+        "trigger": "release",
+        "failed_result_artifact_id": "production_runtime_result_pexec_fixture",
+        "failed_result_sha256": sha("9"),
+        "created_at_ms": 400_000,
+        "expires_at_ms": 4_000_000
+    }))
+    .unwrap();
+    let released = format!(
+        "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - deployment.yaml\nimages:\n  - name: registry.lucas.engineering/yfinance_wrapper\n    digest: {}\n",
+        sha("d")
+    );
+    let p = ProductionRollbackPlan::from_observed(&a, "a".repeat(40), "b".repeat(40), released)
+        .unwrap();
+    let value = json!({
+        "admitted": true,
+        "authority_hash": a.material_hash().unwrap(),
+        "plan_hash": p.material_hash().unwrap(),
+        "failed_result_artifact_id": "production_runtime_result_pexec_fixture",
+        "failed_result_sha256": sha("9"),
+        "reverses_gitops_commit_sha": "8".repeat(40),
+        "admission_expires_at_ms": 460_000
+    });
+    a.validate_admission(&value, &p, 450_000).unwrap();
+    for (pointer, bad) in [
+        ("/admitted", json!(false)),
+        ("/authority_hash", json!("changed")),
+        ("/plan_hash", json!("changed")),
+        ("/failed_result_artifact_id", json!("another-window")),
+        ("/failed_result_sha256", json!(sha("0"))),
+        ("/reverses_gitops_commit_sha", json!("9".repeat(40))),
+        ("/admission_expires_at_ms", json!(450_000)),
+        ("/admission_expires_at_ms", json!(510_001)),
+        ("/admission_expires_at_ms", json!(4_000_001)),
+    ] {
+        let mut changed = value.clone();
+        *changed.pointer_mut(pointer).unwrap() = bad;
+        assert!(
+            a.validate_admission(&changed, &p, 450_000).is_err(),
+            "{pointer}"
+        );
+    }
+    assert!(a.validate_admission(&value, &p, 460_000).is_err());
+}

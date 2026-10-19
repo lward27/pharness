@@ -1,12 +1,15 @@
 //! Production promotion after verified staging: one read-only preview, one
 //! human decision bound to the exact diff, one admitted GitOps write, a ten
 //! minute production window sealing `release`, and a second window sealing
-//! `observe` before the WorkItem completes. Every step is a recorded operation
-//! with its own clocks; nothing here repeats source, build or staging work.
+//! `observe` before the WorkItem completes. A window that fails rolls
+//! production back to the recorded previous image automatically. Every step
+//! is a recorded operation with its own clocks; nothing here repeats source,
+//! build or staging work.
 use super::staging::{self, evidence, required, runtime};
 use super::state::{condition, now, Condition, Snapshot};
 use crate::app::hashing::canonical_material_hash as hash;
 use crate::app::{ApiError, AppState, CONTROLLER_WAIT_INTERVAL_MS, CONTROLLER_WAIT_MAX_CHECKS};
+use pharness_core::hosted_sdlc::production::RollbackTrigger;
 use pharness_core::hosted_sdlc::{HostedAutomaticAction, ProductionApprovalBoundary};
 use pharness_store::{
     BeginWorkflowOperation, StoredWorkflowOperation, StoredWorkflowReconciliation,
@@ -18,6 +21,7 @@ mod delivery;
 mod gate;
 mod observe;
 mod proposal;
+mod rollback;
 mod seal;
 #[cfg(test)]
 mod test_support;
@@ -26,6 +30,10 @@ pub(in crate::app) use callbacks::{
     internal_production_preview, internal_production_preview_context,
 };
 pub(in crate::app) use gate::{decide as decide_gate, GATE_KIND};
+pub(in crate::app) use rollback::{
+    internal_production_rollback_attempt, internal_production_rollback_context,
+    internal_production_rollback_outcome, internal_production_rollback_plan,
+};
 #[cfg(test)]
 pub(in crate::app) use test_support::{seed_observe_window, seed_production_window};
 
@@ -128,7 +136,7 @@ pub(super) async fn next(state: &AppState, snapshot: &Snapshot) -> Result<Option
     let promote = match promote.as_ref().map(|o| o.status.as_str()) {
         Some("succeeded") => promote.unwrap(),
         Some("blocked") => {
-            return Ok(Some(Step::Wait(condition("blocked", "Production promotion did not verify. Its commit, deployment and runtime evidence are retained; no further production change is started."))));
+            return Ok(Some(Step::Wait(condition("blocked", "Production promotion did not verify. Its commit, deployment, runtime and rollback evidence are retained; no further production change is started."))));
         }
         None if now() >= approval.approval.expires_at_ms => {
             return Ok(Some(Step::Wait(condition("blocked", "The production approval expired before promotion started. A new proposal and decision are required; production is unchanged."))));
@@ -150,15 +158,17 @@ pub(super) async fn next(state: &AppState, snapshot: &Snapshot) -> Result<Option
     let observed = match observed.as_ref().map(|o| o.status.as_str()) {
         Some("succeeded") => observed.unwrap(),
         Some("blocked") => {
-            return Ok(Some(Step::Wait(condition("blocked", "Post-release production observation did not verify. Its evidence is retained; the WorkItem stays open for operator review."))));
+            return Ok(Some(Step::Wait(condition("blocked", "Post-release production observation did not verify. Its evidence and any rollback are retained; no further production change is started."))));
         }
         _ => {
+            // Observation writes nothing itself, but a failed window rolls
+            // production back, so the GitOps lock is held for the whole step.
             return Ok(Some(Step::Start(Start {
                 action: OBSERVE_ACTION,
                 input_hash: observe_input,
                 resource: recorded.deployment.id.clone(),
                 effect: "observation",
-                keys: vec![production],
+                keys: vec![production, GITOPS_LOCK.into()],
             })));
         }
     };
@@ -177,6 +187,7 @@ pub(super) async fn reconcile(
     expired: bool,
 ) -> Result<Condition, ApiError> {
     if operation.status == "blocked" {
+        rollback::settle_blocked(state, operation).await?;
         return Ok(condition(
             "blocked",
             operation.resource_refs["blocked"]["reason"]
@@ -262,14 +273,35 @@ pub(super) async fn reconcile(
             _ => observe::prepare(state, claim, snapshot, &operation).await?,
         };
     }
+    // A window that fails rolls production back inside the operation that
+    // owns it, so the rollback phase follows the window for both writers.
     match operation.action.as_str() {
         PROPOSE_ACTION => {
             proposal::reconcile(state, claim, snapshot, &operation, expired, timed_out).await
         }
         PROMOTE_ACTION => {
-            delivery::reconcile(state, claim, snapshot, &operation, expired, timed_out).await
+            let outcome =
+                delivery::reconcile(state, claim, snapshot, &operation, expired, timed_out).await?;
+            rollback::after_window(
+                state,
+                claim,
+                &operation.id,
+                RollbackTrigger::Release,
+                outcome,
+            )
+            .await
         }
-        _ => observe::reconcile(state, claim, snapshot, &operation, timed_out).await,
+        _ => {
+            let outcome = observe::reconcile(state, claim, snapshot, &operation, timed_out).await?;
+            rollback::after_window(
+                state,
+                claim,
+                &operation.id,
+                RollbackTrigger::Observe,
+                outcome,
+            )
+            .await
+        }
     }
 }
 
