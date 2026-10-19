@@ -551,3 +551,47 @@ flow is proven by the 26 staging and controller tests, not by a live run.
 `release` and `observe` sealing with production approval (#366), notifications
 (FB-09), the hard-coded Finance application mapping, and an Alertmanager
 receiver remain open.
+
+## FB-01 production promotion release 6789ac9 — 2026-10-19
+
+PR #447 (`codex/fb01-production-promotion-20261018`) completes the hosted
+SDLC after a verified staging window. The controller now proposes one
+production diff per WorkItem (`propose_production_release`: read-only preview
+Job on `charts/yfinance-wrapper/kustomization.yaml`, one native production
+baseline, a `ProductionProposal` artifact and an approval gate of kind
+`hosted_production_deployment` bound to the proposal hash, base commit, blob
+and both digests); accepts exactly one decision from an identified operator
+with a reason through the gate endpoint (waive, batch, anonymous and paused
+decisions are refused; approval writes a `hosted_production_approval` with a
+30-minute admission window, rejection blocks the WorkItem); promotes with a
+single atomic `expectedHeadOid` commit on `lucas_engineering` `main` under a
+`HostedProductionAuthority` that copies proposal and decision verbatim
+(`promote_approved_release`, writer and observer Jobs, Argo identity, one
+600-second production window, `release` sealed from the pinned result);
+then observes a second 600-second window (`observe_production_release`),
+seals `observe` and completes the WorkItem. The isolated worker's GitHub
+transport, admission check and observation were generalised behind
+`GitOpsAuthority`/`GitOpsPlan` so staging and production share one code path
+(`hosted_production_gitops` execution kind with `preview`/`deliver`/`observe`
+phases), and the staging runtime-window records now serve production and
+post-release observation through a bound `runtime::Context`. Changed evidence
+between any two steps blocks rather than re-proposes. Tests advance a
+test-only clock and seed synthetic 600-second windows instead of waiting;
+four production tests join the staging suite (API 334, core 214). Merged as
+`6789ac9`.
+
+Eight Tekton PipelineRuns built the images from `6789ac9` in a clean
+worktree; runtime, UI, codex-host and model-gateway carry the source SHA as
+their OCI revision label. `lucas-ops` remains absent, so there is still no
+SBOM or signature evidence. Pin #448 merged as `45d43ce` at 02:36:40Z; Argo
+synced it by 02:37:08Z and the five Deployments rolled to the pinned digests
+with zero restarts. `/health` returned 200 and Prometheus scrapes
+`pharness_build_info{revision="6789ac9…"}` from the new pod. No values or
+RBAC change was needed: the writer and observer ServiceAccounts, tokens and
+the `apps-prod` observer RBAC from the M08 release already cover production.
+Runtime digest: `sha256:1b470464014a3ab6ae86ce7371f782857ab6f75578e0eb99a30f81cbafd71fbf`.
+
+No hosted WorkItem has yet exercised staging or production on a live build.
+Automatic `rollback_production` after a failed production window is the next
+PR; notifications (FB-09), the hard-coded Finance application mapping and an
+Alertmanager receiver remain open.
