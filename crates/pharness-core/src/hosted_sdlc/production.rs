@@ -9,10 +9,15 @@ use serde_json::{json, Value};
 
 mod approval;
 mod authority;
+mod rollback;
 pub use approval::HumanProductionApproval;
 pub use authority::{
     HostedProductionAuthority, ProductionPreview, ProductionPreviewAuthority, AUTHORITY_SCHEMA,
     MAX_DELIVERY_MS, PREVIEW_AUTHORITY_SCHEMA, PREVIEW_SCHEMA,
+};
+pub use rollback::{
+    HostedProductionRollbackAuthority, ProductionRollbackPlan, RollbackTrigger, MAX_ROLLBACK_MS,
+    ROLLBACK_AUTHORITY_SCHEMA, ROLLBACK_PLAN_SCHEMA,
 };
 #[cfg(test)]
 mod tests;

@@ -3,7 +3,10 @@
 //! can never reach the GitHub mutation.
 use anyhow::Result;
 use pharness_core::hosted_sdlc::gitops_delivery::GitOpsPlan;
-use pharness_core::hosted_sdlc::production::{HostedProductionAuthority, ProductionGitOpsPlan};
+use pharness_core::hosted_sdlc::production::{
+    HostedProductionAuthority, HostedProductionRollbackAuthority, ProductionGitOpsPlan,
+    ProductionRollbackPlan,
+};
 use pharness_core::hosted_sdlc::staging::{HostedStagingAuthority, StagingGitOpsPlan};
 use serde_json::Value;
 #[cfg(test)]
@@ -92,6 +95,38 @@ impl Admission<ProductionGitOpsPlan> for HostedProductionAuthority {
                 && expiry <= now_ms.saturating_add(60_000)
                 && expiry <= self.expires_at_ms,
             "production_approval_admission_missing_changed_or_expired"
+        );
+        Ok(())
+    }
+}
+
+impl Admission<ProductionRollbackPlan> for HostedProductionRollbackAuthority {
+    /// No human decision backs a rollback; the controller instead echoes the
+    /// failed window and the admitted commit the writer was dispatched to
+    /// reverse, so a grant for any other regression cannot be reused.
+    fn validate_admission(
+        &self,
+        value: &Value,
+        plan: &ProductionRollbackPlan,
+        now_ms: i64,
+    ) -> Result<()> {
+        plan.validate(self).map_err(anyhow::Error::msg)?;
+        self.validate_for_dispatch(now_ms)
+            .map_err(anyhow::Error::msg)?;
+        let expiry = value["admission_expires_at_ms"]
+            .as_i64()
+            .unwrap_or_default();
+        anyhow::ensure!(
+            value["admitted"] == true
+                && value["authority_hash"] == self.material_hash().map_err(anyhow::Error::msg)?
+                && value["plan_hash"] == plan.material_hash().map_err(anyhow::Error::msg)?
+                && value["failed_result_artifact_id"] == self.failed_result_artifact_id
+                && value["failed_result_sha256"] == self.failed_result_sha256
+                && value["reverses_gitops_commit_sha"] == self.admitted_gitops_commit_sha
+                && now_ms < expiry
+                && expiry <= now_ms.saturating_add(60_000)
+                && expiry <= self.expires_at_ms,
+            "production_rollback_admission_missing_changed_or_expired"
         );
         Ok(())
     }

@@ -16,17 +16,22 @@ pub(super) async fn committed(
     HostedStagingAuthority,
     StagingGitOpsPlan,
 ) {
-    committed_with_clock(suffix, fake, None).await
+    let (f, a, p, _) = committed_with_clock(suffix, fake, None).await;
+    (f, a, p)
 }
 
+/// `future_ms` places the recorded worker clock that far ahead of the moment
+/// the outcome is posted, so slow fixture setup cannot eat into the skew that
+/// the callback allows. Returns the recorded clock as the fourth element.
 async fn committed_with_clock(
     suffix: &str,
     fake: &KubectlFixture,
-    checked_at: Option<i64>,
+    future_ms: Option<i64>,
 ) -> (
     RepoDeliveryFixture,
     HostedStagingAuthority,
     StagingGitOpsPlan,
+    i64,
 ) {
     let (f, _, a) = start(suffix, fake).await;
     let p = plan(&a);
@@ -40,9 +45,10 @@ async fn committed_with_clock(
     )
     .await;
     let mut body = observed(&a, &p);
-    body["checked_at_ms"] = json!(checked_at.unwrap_or(admitted + 1_000));
+    let checked_at = future_ms.map_or(admitted + 1_000, |ahead| now() + ahead);
+    body["checked_at_ms"] = json!(checked_at);
     let _ = outcome(&f, &a, body).await.unwrap();
-    (f, a, p)
+    (f, a, p, checked_at)
 }
 
 pub(super) async fn candidate(
@@ -300,8 +306,7 @@ async fn verified_candidate_closes_only_staging_and_does_not_repeat_work_after_r
 #[tokio::test]
 async fn candidate_waits_for_a_bounded_future_worker_clock_before_reading() {
     let fake = KubectlFixture::new(false);
-    let checked = now() + 25_000;
-    let (f, a, _) = committed_with_clock("runtime_clock", &fake, Some(checked)).await;
+    let (f, a, _, checked) = committed_with_clock("runtime_clock", &fake, Some(25_000)).await;
     let _ = candidate(&f, &fake, &a, 0).await;
     let reads = native::reads(&fake);
     assert!(now() < checked);

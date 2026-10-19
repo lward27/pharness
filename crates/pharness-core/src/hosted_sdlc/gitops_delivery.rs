@@ -2,7 +2,10 @@
 //! GitHub transport are written once. Each environment keeps its own authority
 //! and plan types; the trait only exposes what the transport needs to read one
 //! file, commit once on the expected head and prove the result afterwards.
-use super::production::{HostedProductionAuthority, ProductionGitOpsPlan};
+use super::production::{
+    HostedProductionAuthority, HostedProductionRollbackAuthority, ProductionGitOpsPlan,
+    ProductionRollbackPlan,
+};
 use super::staging::{HostedStagingAuthority, StagingGitOpsPlan};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
@@ -208,5 +211,85 @@ impl GitOpsPlan for ProductionGitOpsPlan {
     }
     fn commit_request(&self, authority: &Self::Authority, now_ms: i64) -> Result<Value, String> {
         ProductionGitOpsPlan::commit_request(self, authority, now_ms)
+    }
+}
+
+impl GitOpsAuthority for HostedProductionRollbackAuthority {
+    const ENVIRONMENT: &'static str = "production_rollback";
+    fn coordinates(&self) -> Result<(&'static str, &'static str), String> {
+        HostedProductionRollbackAuthority::coordinates(self)
+    }
+    fn execution_id(&self) -> &str {
+        &self.execution_id
+    }
+    fn deployment_intent_id(&self) -> &str {
+        &self.proposal.deployment_intent_id
+    }
+    fn created_at_ms(&self) -> i64 {
+        self.created_at_ms
+    }
+    fn expires_at_ms(&self) -> i64 {
+        self.expires_at_ms
+    }
+    fn validate_identity(&self) -> Result<(), String> {
+        HostedProductionRollbackAuthority::validate_identity(self)
+    }
+    fn material_hash(&self) -> Result<String, String> {
+        HostedProductionRollbackAuthority::material_hash(self)
+    }
+    fn image_ref(&self) -> Result<String, String> {
+        HostedProductionRollbackAuthority::image_ref(self)
+    }
+}
+
+impl GitOpsPlan for ProductionRollbackPlan {
+    type Authority = HostedProductionRollbackAuthority;
+    fn from_observed(
+        authority: &Self::Authority,
+        base_commit_sha: String,
+        original_blob_sha: String,
+        original_content: String,
+    ) -> Result<Self, String> {
+        ProductionRollbackPlan::from_observed(
+            authority,
+            base_commit_sha,
+            original_blob_sha,
+            original_content,
+        )
+    }
+    fn base_commit_sha(&self) -> &str {
+        &self.base_commit_sha
+    }
+    fn original_blob_sha(&self) -> &str {
+        &self.original_blob_sha
+    }
+    fn updated_content(&self) -> &str {
+        &self.updated_content
+    }
+    fn binding_hash(&self) -> &str {
+        &self.authority_hash
+    }
+    fn validate(&self, authority: &Self::Authority) -> Result<(), String> {
+        ProductionRollbackPlan::validate(self, authority)
+    }
+    fn validate_for_dispatch(
+        &self,
+        authority: &Self::Authority,
+        now_ms: i64,
+    ) -> Result<(), String> {
+        ProductionRollbackPlan::validate(self, authority)?;
+        authority.validate_for_dispatch(now_ms)
+    }
+    fn material_hash(&self) -> Result<String, String> {
+        ProductionRollbackPlan::material_hash(self)
+    }
+    fn commit_headline(&self, authority: &Self::Authority) -> String {
+        ProductionRollbackPlan::commit_headline(self, authority)
+    }
+    fn commit_body(&self, authority: &Self::Authority) -> Result<String, String> {
+        ProductionRollbackPlan::commit_body(self, authority)
+    }
+    fn commit_request(&self, authority: &Self::Authority, now_ms: i64) -> Result<Value, String> {
+        ProductionRollbackPlan::commit_request(self, authority, now_ms)
     }
 }

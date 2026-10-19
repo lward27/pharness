@@ -96,13 +96,19 @@ pub(in crate::app) async fn seed_runtime(
     change: Option<(&str, Value)>,
 ) {
     let context = staging_context(state, deployment, execution).await;
+    if completed {
+        let assessment = evidence.assess(evidence.window.end_unix_seconds * 1000 + 12_000);
+        assert_eq!(assessment["runtime_verification"], "passed", "{assessment}");
+    }
     seed_window(state, &context, evidence, completed, change).await;
 }
 
 /// Persist one original candidate window for any bound runtime context
 /// (staging, production or post-release observation) as if the controller
 /// had collected it: the identity marker on the operation, the window record,
-/// the native receipts and, when `completed`, the assessed result.
+/// the native receipts and, when `completed`, the assessed result. The
+/// assessment is whatever the evidence yields, so failed and inconclusive
+/// windows can be seeded as well as verified ones.
 pub(in crate::app::hosted_controller) async fn seed_window(
     state: &AppState,
     context: &Context,
@@ -188,7 +194,6 @@ pub(in crate::app::hosted_controller) async fn seed_window(
             .unwrap();
         let time = evidence.window.end_unix_seconds * 1000 + 12_000;
         let assessment = evidence.assess(time);
-        assert_eq!(assessment["runtime_verification"], "passed", "{assessment}");
         let mut result =
             json!({"completed_at_ms":time,"runtime_evidence":evidence,"assessment":assessment});
         if let Some((pointer, value)) = change {

@@ -16,6 +16,8 @@ use super::hosted_controller::build::{internal_build_attempt, internal_build_out
 use super::hosted_controller::production::{
     internal_production_attempt, internal_production_context, internal_production_outcome,
     internal_production_preview, internal_production_preview_context,
+    internal_production_rollback_attempt, internal_production_rollback_context,
+    internal_production_rollback_outcome, internal_production_rollback_plan,
 };
 use super::hosted_controller::source_merge::{
     internal_source_merge_attempt, internal_source_merge_context, internal_source_merge_outcome,
@@ -205,6 +207,22 @@ pub(super) fn router(state: AppState) -> Router<AppState> {
         .route(
             "/api/internal/deployment-intents/:deployment_intent_id/production/outcome",
             post(internal_production_outcome),
+        )
+        .route(
+            "/api/internal/deployment-intents/:deployment_intent_id/production/rollback/context",
+            get(internal_production_rollback_context),
+        )
+        .route(
+            "/api/internal/deployment-intents/:deployment_intent_id/production/rollback/plan",
+            post(internal_production_rollback_plan),
+        )
+        .route(
+            "/api/internal/deployment-intents/:deployment_intent_id/production/rollback/attempt",
+            post(internal_production_rollback_attempt),
+        )
+        .route(
+            "/api/internal/deployment-intents/:deployment_intent_id/production/rollback/outcome",
+            post(internal_production_rollback_outcome),
         )
         .route(
             "/api/internal/deployment-intents/:deployment_intent_id/argo-sync-context",

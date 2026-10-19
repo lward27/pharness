@@ -1,10 +1,12 @@
 //! Production GitOps phases. `preview` reads the production Kustomization at the
 //! current head with the reader identity so a human can approve the exact diff;
 //! `deliver` performs the one admitted write after that decision; `observe`
-//! recovers a lost acknowledgement without writing again.
+//! recovers a lost acknowledgement without writing again; `rollback` restores
+//! the recorded previous image once a production window has failed.
 use anyhow::{Context as _, Result};
 use pharness_core::hosted_sdlc::production::{
-    ProductionGitOpsPlan, ProductionPreview, ProductionPreviewAuthority, PREVIEW_SCHEMA,
+    ProductionGitOpsPlan, ProductionPreview, ProductionPreviewAuthority, ProductionRollbackPlan,
+    PREVIEW_SCHEMA,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -55,6 +57,21 @@ pub(super) async fn execute() -> Result<()> {
                 observe_only,
             };
             staging_gitops::execute_delivery::<ProductionGitOpsPlan>(transport, git).await
+        }
+        "rollback" => {
+            let git = github::GitHub::new(
+                super::required_env("PHARNESS_GIT_WRITER_TOKEN")?,
+                "production_rollback",
+            )?;
+            let transport = Transport {
+                client: git.client.clone(),
+                url: format!("{url}/rollback"),
+                token,
+                execution,
+                deployment,
+                observe_only: false,
+            };
+            staging_gitops::execute_delivery::<ProductionRollbackPlan>(transport, git).await
         }
         _ => anyhow::bail!("production_phase_unsupported"),
     }

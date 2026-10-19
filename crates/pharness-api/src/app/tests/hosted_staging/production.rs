@@ -1,7 +1,8 @@
 //! Production promotion after verified staging: one reviewable proposal, one
 //! identified human decision, one admitted GitOps write, two bounded runtime
-//! windows and the sealed WorkItem. Native evidence is synthetic (`native.rs`);
-//! the controller clock is advanced instead of waiting for real windows.
+//! windows and the sealed WorkItem, or one automatic rollback when a window
+//! fails. Native evidence is synthetic (`native.rs`); the controller clock is
+//! advanced instead of waiting for real windows.
 use super::runtime::{candidate, committed};
 use super::{
     control, creates, native, now, operation, request, staging, tick, KubectlFixture,
@@ -17,8 +18,8 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 use pharness_core::hosted_sdlc::production::{
-    HostedProductionAuthority, ProductionGitOpsPlan, ProductionPreview, ProductionPreviewAuthority,
-    PREVIEW_SCHEMA,
+    HostedProductionAuthority, HostedProductionRollbackAuthority, ProductionGitOpsPlan,
+    ProductionPreview, ProductionPreviewAuthority, ProductionRollbackPlan, PREVIEW_SCHEMA,
 };
 use pharness_core::hosted_sdlc::staging::HostedStagingAuthority;
 use pharness_core::tools::{
@@ -882,10 +883,13 @@ async fn an_approved_release_is_written_once_then_verified_over_two_windows_and_
     let observe = operation(&f).await;
     assert_eq!(observe.action, OBSERVE);
     assert_eq!(observe.effect, "observation");
-    assert!(!observe
-        .resource_keys
-        .iter()
-        .any(|k| k == "gitops:lucas_engineering:main"));
+    assert!(
+        observe
+            .resource_keys
+            .iter()
+            .any(|k| k == "gitops:lucas_engineering:main"),
+        "observation holds the GitOps lock so a failed window can roll back"
+    );
     assert_eq!(
         observe.resource_refs["observe_dispatch"]["release_outcome_id"],
         release.id
@@ -1074,6 +1078,607 @@ async fn a_closed_approval_window_or_changed_evidence_admits_no_production_write
         .state
         .store
         .get_gitops_change_set_by_deployment_intent(&pa.deployment_intent_id)
+        .await
+        .unwrap()
+        .is_none());
+}
+
+// ---------------------------------------------------------------------------
+// Automatic rollback after a failed production window.
+
+const ROLLBACK_SHA: &str = "9999999999999999999999999999999999999999";
+
+fn rollback_authority(
+    op: &pharness_store::StoredWorkflowOperation,
+) -> HostedProductionRollbackAuthority {
+    serde_json::from_value(op.resource_refs["rollback_dispatch"]["authority"].clone()).unwrap()
+}
+
+fn rollback_plan(ra: &HostedProductionRollbackAuthority) -> ProductionRollbackPlan {
+    ProductionRollbackPlan::from_observed(
+        ra,
+        "e".repeat(40),
+        "f".repeat(40),
+        KUSTOMIZATION.replace(PREVIOUS, &ra.proposal.image_digest),
+    )
+    .unwrap()
+}
+
+fn rollback_observation(
+    ra: &HostedProductionRollbackAuthority,
+    plan: &ProductionRollbackPlan,
+) -> Value {
+    json!({"execution_id":ra.execution_id,"authority_hash":ra.material_hash().unwrap(),"status":"committed","checked_at_ms":now(),"observe_only":false,"observation":{"gitops_commit_sha":ROLLBACK_SHA,"base_commit_sha":plan.base_commit_sha,"current_gitops_revision":ROLLBACK_SHA,"file_blob_sha":"8".repeat(40),"path":ra.coordinates().unwrap().0,"image_ref":ra.image_ref().unwrap(),"authority_hash":plan.authority_hash,"plan_hash":plan.material_hash().unwrap(),"parent_count":1,"changed_file_count":1,"current_file_matches":true,"observation_attempts":1}})
+}
+
+async fn rollback_context(
+    f: &RepoDeliveryFixture,
+    ra: &HostedProductionRollbackAuthority,
+) -> Result<Json<Value>, ApiError> {
+    production::internal_production_rollback_context(
+        State(f.state.clone()),
+        Path(ra.proposal.deployment_intent_id.clone()),
+        Query(
+            serde_json::from_value(json!({"execution_id":ra.execution_id,"observe_only":false}))
+                .unwrap(),
+        ),
+    )
+    .await
+}
+
+async fn rollback_plan_post(
+    f: &RepoDeliveryFixture,
+    ra: &HostedProductionRollbackAuthority,
+    plan: &ProductionRollbackPlan,
+) -> Result<Json<Value>, ApiError> {
+    production::internal_production_rollback_plan(State(f.state.clone()), Path(ra.proposal.deployment_intent_id.clone()), request(json!({"execution_id":ra.execution_id,"authority_hash":ra.material_hash().unwrap(),"plan":plan}))).await
+}
+
+async fn rollback_attempt(
+    f: &RepoDeliveryFixture,
+    ra: &HostedProductionRollbackAuthority,
+    plan: &ProductionRollbackPlan,
+) -> Result<Json<Value>, ApiError> {
+    production::internal_production_rollback_attempt(State(f.state.clone()), Path(ra.proposal.deployment_intent_id.clone()), request(json!({"execution_id":ra.execution_id,"authority_hash":ra.material_hash().unwrap(),"plan_hash":plan.material_hash().unwrap()}))).await
+}
+
+async fn rollback_outcome(
+    f: &RepoDeliveryFixture,
+    ra: &HostedProductionRollbackAuthority,
+    body: Value,
+) -> Result<Json<Value>, ApiError> {
+    production::internal_production_rollback_outcome(
+        State(f.state.clone()),
+        Path(ra.proposal.deployment_intent_id.clone()),
+        request(body),
+    )
+    .await
+}
+
+async fn work_item_closed(f: &RepoDeliveryFixture) -> (String, bool) {
+    let item = f
+        .state
+        .store
+        .get_work_item(&f.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let metadata = f
+        .state
+        .store
+        .get_repo_work_item_metadata(&f.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    (item.status, metadata.closed_at.is_some())
+}
+
+/// The approved candidate is committed and observed in production; its ten
+/// minute window has not started.
+async fn committed_to_production(
+    suffix: &str,
+    fake: &KubectlFixture,
+) -> (
+    RepoDeliveryFixture,
+    HostedProductionAuthority,
+    ProductionGitOpsPlan,
+) {
+    let (f, a, plan) = promoted(suffix, fake).await;
+    let _ = attempt(&f, &a, &plan).await.unwrap();
+    let _ = outcome(&f, &a, observation(&a, &plan)).await.unwrap();
+    tick(&f).await;
+    assert_eq!(
+        operation(&f).await.resource_refs["production_result"]["status"],
+        "gitops_committed"
+    );
+    (f, a, plan)
+}
+
+/// Evidence for the released candidate's production window, failed by an
+/// application signal anomaly.
+async fn failed_window(
+    f: &RepoDeliveryFixture,
+    fake: &KubectlFixture,
+    a: &HostedProductionAuthority,
+) -> pharness_core::tools::FinanceRuntimeEvidence {
+    let mut evidence = native::evidence_for(
+        f,
+        fake,
+        expectation(&"e".repeat(40), &a.proposal.image_digest),
+        FinanceVerificationPhase::Production,
+        90_000,
+    )
+    .await;
+    evidence.signals["queries"][0]["summary"]["anomaly_observed"] = json!(true);
+    assert_eq!(
+        evidence.assess(evidence.window.end_unix_seconds * 1000 + 12_000)["runtime_verification"],
+        "failed"
+    );
+    evidence
+}
+
+/// Drive the recorded rollback through its writer callbacks and Argo
+/// verification; returns the rollback authority.
+async fn roll_back(
+    f: &RepoDeliveryFixture,
+    fake: &KubectlFixture,
+    op: &pharness_store::StoredWorkflowOperation,
+    result_key: &str,
+    trigger: &str,
+    creates_before: usize,
+) -> HostedProductionRollbackAuthority {
+    let result = &op.resource_refs[result_key];
+    assert_eq!(op.status, "running", "{}", op.resource_refs);
+    assert_eq!(result["status"], "blocked");
+    assert_eq!(result["runtime_verification"], "failed");
+    let dispatch = &op.resource_refs["rollback_dispatch"];
+    assert_eq!(dispatch["trigger"], trigger);
+    let ra = rollback_authority(op);
+    assert_eq!(
+        ra.execution_id,
+        format!("prollback_{}", op.id.trim_start_matches("workflowop_"))
+    );
+    assert_eq!(ra.admitted_gitops_commit_sha, "e".repeat(40));
+    assert_eq!(ra.failed_result_artifact_id, result["artifact_id"]);
+    assert_eq!(ra.failed_result_sha256, result["artifact_sha256"]);
+    assert_eq!(
+        ra.image_ref().unwrap(),
+        format!("registry.lucas.engineering/yfinance_wrapper@{PREVIOUS}")
+    );
+    assert_eq!(ra.expires_at_ms - ra.created_at_ms, 30 * 60 * 1000);
+    let writer = &dispatch["writer_job_manifest"];
+    assert_eq!(
+        writer["spec"]["template"]["spec"]["serviceAccountName"],
+        "pharness-gitops-writer"
+    );
+    assert!(env(writer)
+        .iter()
+        .any(|v| v["name"] == "PHARNESS_PRODUCTION_PHASE" && v["value"] == "rollback"));
+    assert!(env(writer)
+        .iter()
+        .any(|v| v["name"] == "PHARNESS_EXECUTION_ID" && v["value"] == ra.execution_id));
+    assert_eq!(
+        creates(fake),
+        creates_before + 1,
+        "exactly one rollback writer"
+    );
+    let deployment = f
+        .state
+        .store
+        .get_deployment_intent(&ra.proposal.deployment_intent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        deployment.intent_json["hosted_production"]["rollback"]["execution_id"],
+        ra.execution_id
+    );
+    assert_eq!(
+        deployment.intent_json["hosted_production"]["rollback"]["operation_id"],
+        op.id
+    );
+
+    let ctx = rollback_context(f, &ra).await.unwrap();
+    assert_eq!(ctx.0["may_advance"], true);
+    assert_eq!(ctx.0["plan"], Value::Null);
+    assert_eq!(ctx.0["admission_recorded"], false);
+    let plan = rollback_plan(&ra);
+    assert_eq!(plan.updated_content, KUSTOMIZATION);
+    assert!(
+        rollback_attempt(f, &ra, &plan).await.is_err(),
+        "no admission before the plan is recorded"
+    );
+    let mut drifted = plan.clone();
+    drifted.original_content =
+        KUSTOMIZATION.replace(PREVIOUS, &format!("sha256:{}", "6".repeat(64)));
+    assert!(
+        rollback_plan_post(f, &ra, &drifted).await.is_err(),
+        "a production file that no longer pins the failed candidate is never rolled back automatically"
+    );
+    let mut still_previous = plan.clone();
+    still_previous.original_content = KUSTOMIZATION.into();
+    assert!(rollback_plan_post(f, &ra, &still_previous).await.is_err());
+    assert_eq!(
+        rollback_plan_post(f, &ra, &plan).await.unwrap().0["plan_hash"],
+        plan.material_hash().unwrap()
+    );
+    let ctx = rollback_context(f, &ra).await.unwrap();
+    assert_eq!(ctx.0["plan"], json!(plan));
+    assert_eq!(ctx.0["may_advance"], true);
+    assert!(
+        rollback_outcome(f, &ra, rollback_observation(&ra, &plan))
+            .await
+            .is_err(),
+        "a rollback commit cannot be reported before admission"
+    );
+    let admitted = rollback_attempt(f, &ra, &plan).await.unwrap();
+    assert_eq!(admitted.0["admitted"], true);
+    assert_eq!(admitted.0["reverses_gitops_commit_sha"], "e".repeat(40));
+    assert_eq!(
+        admitted.0["failed_result_artifact_id"],
+        result["artifact_id"]
+    );
+    assert!(rollback_attempt(f, &ra, &plan).await.is_err());
+    assert_eq!(
+        rollback_context(f, &ra).await.unwrap().0["may_advance"],
+        false
+    );
+    assert!(rollback_plan_post(f, &ra, &plan).await.is_err());
+    let body = rollback_observation(&ra, &plan);
+    assert_eq!(
+        rollback_outcome(f, &ra, body.clone()).await.unwrap().0["status"],
+        "rollback_committed"
+    );
+    let _ = rollback_outcome(f, &ra, body.clone()).await.unwrap();
+    let mut other = body.clone();
+    other["observation"]["gitops_commit_sha"] = json!("7".repeat(40));
+    assert!(rollback_outcome(f, &ra, other).await.is_err());
+    let mut wrong_image = body.clone();
+    wrong_image["observation"]["image_ref"] = json!(ra.proposal.image_ref().unwrap());
+    assert!(rollback_outcome(f, &ra, wrong_image).await.is_err());
+
+    // Argo still runs the failed candidate: the rollback is committed but unverified.
+    let reads = native::reads(fake);
+    tick(f).await;
+    let op = f
+        .state
+        .store
+        .get_workflow_operation(&op.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(op.status, "running", "{}", op.resource_refs);
+    assert_eq!(
+        op.resource_refs["rollback_commit"]["gitops_commit_sha"],
+        ROLLBACK_SHA
+    );
+    assert!(op.resource_refs.get("rollback_identity_1").is_some());
+    assert!(op.resource_refs.get("rollback_result").is_none());
+    assert!(native::reads(fake) > reads);
+    assert_eq!(reconciliation(f).await.condition, "waiting");
+    assert!(!work_item_closed(f).await.1);
+
+    let _ = native::evidence_for(
+        f,
+        fake,
+        expectation(ROLLBACK_SHA, PREVIOUS),
+        FinanceVerificationPhase::Production,
+        0,
+    )
+    .await;
+    tick(f).await;
+    let op = f
+        .state
+        .store
+        .get_workflow_operation(&op.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(op.status, "blocked", "{}", op.resource_refs);
+    let rolled = &op.resource_refs["rollback_result"];
+    assert_eq!(rolled["status"], "verified");
+    assert_eq!(rolled["reason"], "production_rollback_verified");
+    assert_eq!(rolled["trigger"], trigger);
+    assert_eq!(rolled["gitops_commit_sha"], ROLLBACK_SHA);
+    assert_eq!(rolled["image_ref"], ra.image_ref().unwrap());
+    assert_eq!(
+        rolled["identity_artifact_id"],
+        format!("production_rollback_identity_2_{}", ra.execution_id)
+    );
+    assert_eq!(op.resource_refs["blocked"]["key"], "rollback_result");
+    assert_eq!(work_item_closed(f).await, ("failed".into(), true));
+    let deployment = f
+        .state
+        .store
+        .get_deployment_intent(&ra.proposal.deployment_intent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        deployment.intent_json["hosted_production"]["rollback_result"],
+        *rolled
+    );
+    let state = reconciliation(f).await;
+    assert_eq!(state.condition, "blocked", "{}", state.condition_reason);
+    assert!(state.condition_reason.contains("rolled back"));
+    assert_eq!(creates(fake), creates_before + 1, "no second writer");
+    // The blocked operation keeps the closed WorkItem observable; a later
+    // tick repeats no read, starts nothing and changes no record.
+    let reads = native::reads(fake);
+    tick(f).await;
+    assert_eq!(reconciliation(f).await.condition, "blocked");
+    assert_eq!(native::reads(fake), reads);
+    assert_eq!(creates(fake), creates_before + 1);
+    assert_eq!(work_item_closed(f).await, ("failed".into(), true));
+    assert_eq!(
+        f.state
+            .store
+            .get_workflow_operation(&op.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .resource_refs,
+        op.resource_refs
+    );
+    ra
+}
+
+#[tokio::test]
+async fn a_failed_release_window_rolls_production_back_once_and_fails_the_work_item() {
+    let fake = KubectlFixture::new(false);
+    let (f, a, _) = committed_to_production("production_rollback_release", &fake).await;
+    let promote = operation(&f).await;
+    crate::app::clock::advance_for_test(15 * 60 * 1000);
+    let evidence = failed_window(&f, &fake, &a).await;
+    production::seed_production_window(
+        &f.state,
+        &a.proposal.deployment_intent_id,
+        &a.execution_id,
+        evidence,
+        true,
+    )
+    .await;
+    tick(&f).await;
+    let op = f
+        .state
+        .store
+        .get_workflow_operation(&promote.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let ra = roll_back(&f, &fake, &op, "production_runtime_result", "release", 4).await;
+    assert_eq!(ra.delivery_execution_id, a.execution_id);
+    assert_eq!(ra.delivery_authority_hash, a.material_hash().unwrap());
+    assert!(stage_outcome(&f, "release").await.is_none());
+    assert!(f
+        .state
+        .store
+        .active_workflow_operation(&f.work_item_id)
+        .await
+        .unwrap()
+        .is_some_and(|o| o.id == promote.id && o.status == "blocked"));
+    let change = f
+        .state
+        .store
+        .get_gitops_change_set_by_deployment_intent(&a.proposal.deployment_intent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        change.id, a.gitops_change_set_id,
+        "one ChangeSet per deployment"
+    );
+    assert_eq!(
+        f.state
+            .store
+            .get_deployment_intent(&a.proposal.deployment_intent_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .intent_json["hosted_production"]["runtime_observation"]["runtime_verification"],
+        "failed"
+    );
+}
+
+#[tokio::test]
+async fn a_failed_observe_window_rolls_back_while_an_inconclusive_window_blocks_without_writing() {
+    let fake = KubectlFixture::new(false);
+    let (f, a, _) = committed_to_production("production_inconclusive", &fake).await;
+    let promote = operation(&f).await;
+    crate::app::clock::advance_for_test(15 * 60 * 1000);
+    let mut evidence = native::evidence_for(
+        &f,
+        &fake,
+        expectation(&"e".repeat(40), &a.proposal.image_digest),
+        FinanceVerificationPhase::Production,
+        90_000,
+    )
+    .await;
+    evidence.signals["reasons"] = json!(["log_delivery_gap"]);
+    assert_eq!(
+        evidence.assess(evidence.window.end_unix_seconds * 1000 + 12_000)["runtime_verification"],
+        "inconclusive"
+    );
+    production::seed_production_window(
+        &f.state,
+        &a.proposal.deployment_intent_id,
+        &a.execution_id,
+        evidence,
+        true,
+    )
+    .await;
+    tick(&f).await;
+    let op = f
+        .state
+        .store
+        .get_workflow_operation(&promote.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(op.status, "blocked", "{}", op.resource_refs);
+    assert_eq!(
+        op.resource_refs["production_runtime_result"]["runtime_verification"],
+        "inconclusive"
+    );
+    assert_eq!(
+        op.resource_refs["rollback_result"]["reason"],
+        "production_release_inconclusive_no_rollback"
+    );
+    assert!(op.resource_refs.get("rollback_dispatch").is_none());
+    assert_eq!(creates(&fake), 4, "an inconclusive window starts no writer");
+    assert!(!work_item_closed(&f).await.1, "operator review stays open");
+    tick(&f).await;
+    assert_eq!(reconciliation(&f).await.condition, "blocked");
+    assert_eq!(creates(&fake), 4);
+    assert!(f
+        .state
+        .store
+        .get_deployment_intent(&a.proposal.deployment_intent_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .intent_json["hosted_production"]
+        .get("rollback")
+        .is_none());
+
+    let second = KubectlFixture::new(false);
+    let (f, a, _) = committed_to_production("production_rollback_observe", &second).await;
+    let promote = operation(&f).await;
+    crate::app::clock::advance_for_test(15 * 60 * 1000);
+    let released = expectation(&"e".repeat(40), &a.proposal.image_digest);
+    let evidence = native::evidence_for(
+        &f,
+        &second,
+        released.clone(),
+        FinanceVerificationPhase::Production,
+        90_000,
+    )
+    .await;
+    production::seed_production_window(
+        &f.state,
+        &a.proposal.deployment_intent_id,
+        &a.execution_id,
+        evidence,
+        true,
+    )
+    .await;
+    tick(&f).await;
+    tick(&f).await;
+    let release = stage_outcome(&f, "release").await.unwrap();
+    let observe = operation(&f).await;
+    assert_eq!(observe.action, OBSERVE);
+    assert!(
+        observe
+            .resource_keys
+            .iter()
+            .any(|k| k == "gitops:lucas_engineering:main"),
+        "observation holds the GitOps lock so its rollback can write"
+    );
+    assert_eq!(creates(&second), 4);
+    crate::app::clock::advance_for_test(15 * 60 * 1000);
+    let evidence = failed_window(&f, &second, &a).await;
+    production::seed_observe_window(&f.state, &f.work_item_id, evidence, true).await;
+    tick(&f).await;
+    let op = f
+        .state
+        .store
+        .get_workflow_operation(&observe.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let ra = roll_back(&f, &second, &op, "observe_runtime_result", "observe", 4).await;
+    assert_eq!(ra.delivery_execution_id, a.execution_id);
+    assert!(stage_outcome(&f, "observe").await.is_none());
+    assert_eq!(
+        stage_outcome(&f, "release").await.unwrap().id,
+        release.id,
+        "the sealed release outcome is not rewritten"
+    );
+    let promote = f
+        .state
+        .store
+        .get_workflow_operation(&promote.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(promote.status, "succeeded");
+    assert!(promote.resource_refs.get("rollback_dispatch").is_none());
+}
+
+#[tokio::test]
+async fn a_rollback_not_admitted_inside_its_window_blocks_and_leaves_the_work_item_open() {
+    let fake = KubectlFixture::new(false);
+    let (f, a, _) = committed_to_production("production_rollback_expired", &fake).await;
+    let promote = operation(&f).await;
+    crate::app::clock::advance_for_test(15 * 60 * 1000);
+    let evidence = failed_window(&f, &fake, &a).await;
+    production::seed_production_window(
+        &f.state,
+        &a.proposal.deployment_intent_id,
+        &a.execution_id,
+        evidence,
+        true,
+    )
+    .await;
+    control(&f, "paused").await;
+    tick(&f).await;
+    let op = f
+        .state
+        .store
+        .get_workflow_operation(&promote.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(op.status, "running");
+    assert!(
+        op.resource_refs.get("rollback_dispatch").is_none(),
+        "a paused workflow starts no rollback writer"
+    );
+    assert_eq!(reconciliation(&f).await.condition, "paused");
+    assert_eq!(creates(&fake), 4);
+    control(&f, "active").await;
+    tick(&f).await;
+    let op = f
+        .state
+        .store
+        .get_workflow_operation(&promote.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let ra = rollback_authority(&op);
+    assert_eq!(creates(&fake), 5);
+    let plan = rollback_plan(&ra);
+    let _ = rollback_plan_post(&f, &ra, &plan).await.unwrap();
+    crate::app::clock::advance_for_test(31 * 60 * 1000);
+    assert!(
+        rollback_attempt(&f, &ra, &plan).await.is_err(),
+        "an expired rollback window admits nothing"
+    );
+    assert_eq!(
+        rollback_context(&f, &ra).await.unwrap().0["may_advance"],
+        false
+    );
+    tick(&f).await;
+    let op = f
+        .state
+        .store
+        .get_workflow_operation(&promote.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(op.status, "blocked", "{}", op.resource_refs);
+    assert_eq!(
+        op.resource_refs["rollback_result"]["reason"],
+        "production_rollback_window_closed_before_admission"
+    );
+    assert!(!work_item_closed(&f).await.1);
+    tick(&f).await;
+    assert_eq!(reconciliation(&f).await.condition, "blocked");
+    assert_eq!(creates(&fake), 5, "no replacement writer");
+    assert!(f
+        .state
+        .store
+        .get_artifact(&format!("production_rollback_attempt_{}", ra.execution_id))
         .await
         .unwrap()
         .is_none());
