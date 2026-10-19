@@ -34,14 +34,27 @@ print(json.dumps(json.loads((root/'native-resources.json').read_text())[sys.argv
 }
 
 fn rebound(text: &str, expected: &FinanceDeploymentExpectation) -> String {
-    text.replace(
-        "04a98931af43b6ea1d189369442f6a1b76dda589",
-        &expected.gitops_commit_sha,
-    )
-    .replace(
-        "sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca",
-        &expected.image_digest,
-    )
+    let text = text
+        .replace(
+            "04a98931af43b6ea1d189369442f6a1b76dda589",
+            &expected.gitops_commit_sha,
+        )
+        .replace(
+            "sha256:33f1a08b74c82fb5dc01ef0ebef8a1fa5e2fc0ac78be17dadd1f74bbf1e319ca",
+            &expected.image_digest,
+        );
+    if expected.environment != pharness_core::tools::FinanceEnvironment::Production {
+        return text;
+    }
+    // The retained receipt was taken in staging; production differs only in
+    // the Argo Application, namespace and GitOps path the reader expects.
+    text.replace("charts/finance-staging/yfinance", expected.gitops_path())
+        .replace("yfinance-staging", expected.argo_application())
+        .replace("apps-staging", expected.namespace())
+        .replace(
+            "\"environment\": \"staging\"",
+            "\"environment\": \"production\"",
+        )
 }
 
 fn shift(value: &mut Value, seconds: i64) {
@@ -101,6 +114,50 @@ pub(super) async fn evidence(
     .await
 }
 
+/// The retained receipt covers a five-minute staging window. Production
+/// windows last ten minutes: move the window start and every query bound or
+/// range that names it, keeping the probes, signals and trace inside.
+fn widen(value: &mut Value, end: i64) {
+    let start = end - 300;
+    let wide = end - 600;
+    let mapped = |n: i64| {
+        for scale in [1_i64, 1_000, 1_000_000_000] {
+            if n == start * scale {
+                return wide * scale;
+            }
+            if n == (start + 60) * scale {
+                return (wide + 60) * scale;
+            }
+        }
+        n
+    };
+    match value {
+        Value::Number(n) => {
+            if let Some(n) = n.as_i64() {
+                *value = json!(mapped(n));
+            }
+        }
+        Value::String(s) => {
+            if let Ok(n) = s.parse::<i64>() {
+                *s = mapped(n).to_string();
+            } else if s.contains("[300s]") {
+                *s = s.replace("[300s]", "[600s]");
+            }
+        }
+        Value::Array(rows) => {
+            for row in rows {
+                widen(row, end);
+            }
+        }
+        Value::Object(map) => {
+            for row in map.values_mut() {
+                widen(row, end);
+            }
+        }
+        _ => {}
+    }
+}
+
 pub(super) async fn evidence_for(
     f: &RepoDeliveryFixture,
     fake: &KubectlFixture,
@@ -128,12 +185,24 @@ pub(super) async fn evidence_for(
     ))
     .unwrap();
     shift(&mut fixture, end - 1_788_653_340);
+    let duration = match phase {
+        pharness_core::tools::FinanceVerificationPhase::Production => 600,
+        _ => 300,
+    };
+    if duration == 600 {
+        widen(&mut fixture, end);
+    }
     let mut e: FinanceRuntimeEvidence = serde_json::from_value(fixture).unwrap();
+    assert_eq!(
+        e.window.end_unix_seconds as i64 - e.window.start_unix_seconds as i64,
+        duration
+    );
     e.phase = phase;
+    e.expected = expected.clone();
     e.identity_before = identity.clone();
     e.identity_after = identity;
-    e.identity_before["started_at_unix_ms"] = json!((end - 300) * 1000 - 2000);
-    e.identity_before["completed_at_unix_ms"] = json!((end - 300) * 1000 - 1000);
+    e.identity_before["started_at_unix_ms"] = json!((end - duration) * 1000 - 2000);
+    e.identity_before["completed_at_unix_ms"] = json!((end - duration) * 1000 - 1000);
     e.identity_after["started_at_unix_ms"] = json!(end * 1000);
     e.identity_after["completed_at_unix_ms"] = json!(end * 1000 + 100);
     let correlation = format!(

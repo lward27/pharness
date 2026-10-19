@@ -43,6 +43,7 @@ const DEFAULT_TEKTON_EXECUTOR_POLL_SECONDS: u64 = 5;
 const DEFAULT_ARGO_EXECUTOR_POLL_SECONDS: u64 = 5;
 
 mod hosted_build;
+mod production_gitops;
 mod source_merge;
 mod staging_gitops;
 
@@ -50,8 +51,10 @@ mod staging_gitops;
 async fn main() -> anyhow::Result<()> {
     init_tracing()?;
 
-    if std::env::var("PHARNESS_EXECUTION_KIND").as_deref() == Ok("hosted_staging_gitops") {
-        return staging_gitops::execute().await;
+    match std::env::var("PHARNESS_EXECUTION_KIND").as_deref() {
+        Ok("hosted_staging_gitops") => return staging_gitops::execute().await,
+        Ok("hosted_production_gitops") => return production_gitops::execute().await,
+        _ => {}
     }
 
     if std::env::var("PHARNESS_EXECUTION_KIND").ok().as_deref() == Some("egress_proxy") {

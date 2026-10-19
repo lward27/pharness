@@ -19,7 +19,9 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 mod hosted_build;
+mod hosted_production;
 mod hosted_staging;
+pub use hosted_production::HostedProductionJob;
 mod recovery;
 mod source_delivery;
 #[cfg(test)]

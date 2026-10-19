@@ -73,6 +73,11 @@ POST	/api/internal/gitops-change-sets/:gitops_change_set_id/delivery-outcome	wor
 POST	/api/internal/pipeline-intents/:pipeline_intent_id/execution-outcome	worker
 POST	/api/internal/pipeline-intents/:pipeline_intent_id/execution-attempt	worker
 POST	/api/internal/pipeline-intents/:pipeline_intent_id/hosted-execution-outcome	worker
+GET	/api/internal/deployment-intents/:deployment_intent_id/production/context	worker
+GET	/api/internal/deployment-intents/:deployment_intent_id/production/preview-context	worker
+POST	/api/internal/deployment-intents/:deployment_intent_id/production/attempt	worker
+POST	/api/internal/deployment-intents/:deployment_intent_id/production/outcome	worker
+POST	/api/internal/deployment-intents/:deployment_intent_id/production/preview	worker
 GET	/api/internal/deployment-intents/:deployment_intent_id/staging/context	worker
 POST	/api/internal/deployment-intents/:deployment_intent_id/staging/plan	worker
 POST	/api/internal/deployment-intents/:deployment_intent_id/staging/attempt	worker

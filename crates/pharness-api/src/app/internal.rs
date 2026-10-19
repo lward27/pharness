@@ -13,6 +13,10 @@ use super::gitops::delivery::{
     InternalGitOpsDeliveryQuery,
 };
 use super::hosted_controller::build::{internal_build_attempt, internal_build_outcome};
+use super::hosted_controller::production::{
+    internal_production_attempt, internal_production_context, internal_production_outcome,
+    internal_production_preview, internal_production_preview_context,
+};
 use super::hosted_controller::source_merge::{
     internal_source_merge_attempt, internal_source_merge_context, internal_source_merge_outcome,
 };
@@ -181,6 +185,26 @@ pub(super) fn router(state: AppState) -> Router<AppState> {
         .route(
             "/api/internal/deployment-intents/:deployment_intent_id/staging/outcome",
             post(internal_staging_outcome),
+        )
+        .route(
+            "/api/internal/deployment-intents/:deployment_intent_id/production/preview-context",
+            get(internal_production_preview_context),
+        )
+        .route(
+            "/api/internal/deployment-intents/:deployment_intent_id/production/preview",
+            post(internal_production_preview),
+        )
+        .route(
+            "/api/internal/deployment-intents/:deployment_intent_id/production/context",
+            get(internal_production_context),
+        )
+        .route(
+            "/api/internal/deployment-intents/:deployment_intent_id/production/attempt",
+            post(internal_production_attempt),
+        )
+        .route(
+            "/api/internal/deployment-intents/:deployment_intent_id/production/outcome",
+            post(internal_production_outcome),
         )
         .route(
             "/api/internal/deployment-intents/:deployment_intent_id/argo-sync-context",

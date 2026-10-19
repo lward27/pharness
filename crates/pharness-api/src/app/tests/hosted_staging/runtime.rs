@@ -8,7 +8,7 @@ use pharness_core::tools::{
 };
 use serde_json::{json, Value};
 
-async fn committed(
+pub(super) async fn committed(
     suffix: &str,
     fake: &KubectlFixture,
 ) -> (
@@ -45,7 +45,7 @@ async fn committed_with_clock(
     (f, a, p)
 }
 
-async fn candidate(
+pub(super) async fn candidate(
     f: &RepoDeliveryFixture,
     fake: &KubectlFixture,
     a: &HostedStagingAuthority,
@@ -213,7 +213,22 @@ async fn verified_candidate_closes_only_staging_and_does_not_repeat_work_after_r
     tick(&f).await;
     tick(&f).await;
     assert_eq!(native::reads(&fake), reads);
-    assert_eq!(creates(&fake), 2);
+    assert_eq!(
+        creates(&fake),
+        3,
+        "verified staging starts exactly one production preview reader and nothing else"
+    );
+    let production = f
+        .state
+        .store
+        .get_deployment_intent_for_stage(
+            &a.pipeline_intent_id,
+            pharness_store::DeliveryStage::Production,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(production.status, "proposed");
     let state = f
         .state
         .store
@@ -222,7 +237,11 @@ async fn verified_candidate_closes_only_staging_and_does_not_repeat_work_after_r
         .unwrap()
         .unwrap();
     assert_eq!(state.condition, "waiting", "{}", state.condition_reason);
-    assert!(state.condition_reason.contains("Production"));
+    assert!(
+        state.condition_reason.contains("production Kustomization"),
+        "{}",
+        state.condition_reason
+    );
     let before = f
         .state
         .store
@@ -274,7 +293,7 @@ async fn verified_candidate_closes_only_staging_and_does_not_repeat_work_after_r
         .unwrap();
     assert_eq!(state.condition, "blocked", "{}", state.condition_reason);
     assert_eq!(record(&f, &a, "result").await.unwrap(), original_result);
-    assert_eq!(creates(&fake), 2);
+    assert_eq!(creates(&fake), 3);
     assert_eq!(native::reads(&fake), reads);
 }
 

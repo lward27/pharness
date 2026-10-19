@@ -35,6 +35,9 @@ pub(super) async fn execute_operation(
     if operation.action == super::staging::ACTION {
         return super::staging::reconcile(state, claim, snapshot, &operation, false).await;
     }
+    if super::production::ACTIONS.contains(&operation.action.as_str()) {
+        return super::production::reconcile(state, claim, snapshot, &operation, false).await;
+    }
     if matches!(
         operation.action.as_str(),
         "approve_work_plan" | "approve_change_set" | "authorize_stage_chain"
@@ -152,6 +155,9 @@ pub(super) async fn reconcile_operation(
     }
     if operation.action == super::staging::ACTION {
         return super::staging::reconcile(state, claim, snapshot, &operation, expired).await;
+    }
+    if super::production::ACTIONS.contains(&operation.action.as_str()) {
+        return super::production::reconcile(state, claim, snapshot, &operation, expired).await;
     }
     if operation.status == "pending" {
         if claim.control != "active" || expired {
