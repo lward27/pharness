@@ -8,13 +8,7 @@ use pharness_core::tools::FinanceRuntimeEvidence;
 use pharness_store::FinishWorkflowReconciliation;
 use serde_json::{json, Value};
 
-pub(in crate::app) async fn seed_runtime_step(
-    state: &AppState,
-    deployment: &str,
-    execution: &str,
-    step: &str,
-    body: Value,
-) {
+async fn staging_context(state: &AppState, deployment: &str, execution: &str) -> Context {
     let saved = preparation::saved(state, deployment, execution)
         .await
         .unwrap();
@@ -24,9 +18,18 @@ pub(in crate::app) async fn seed_runtime_step(
         .await
         .unwrap()
         .unwrap();
-    Context::new(state, &saved, &receipt)
+    Context::new(state, &saved, &receipt).await.unwrap()
+}
+
+pub(in crate::app) async fn seed_runtime_step(
+    state: &AppState,
+    deployment: &str,
+    execution: &str,
+    step: &str,
+    body: Value,
+) {
+    staging_context(state, deployment, execution)
         .await
-        .unwrap()
         .write(state, step, body)
         .await
         .unwrap();
@@ -38,16 +41,7 @@ pub(in crate::app) async fn seed_runtime_identity_attempts(
     execution: &str,
     count: u32,
 ) {
-    let saved = preparation::saved(state, deployment, execution)
-        .await
-        .unwrap();
-    let receipt = state
-        .store
-        .get_artifact(&artifact_id("commit", execution))
-        .await
-        .unwrap()
-        .unwrap();
-    let context = Context::new(state, &saved, &receipt).await.unwrap();
+    let context = staging_context(state, deployment, execution).await;
     state
         .store
         .wake_workflow(&context.work_item_id, now())
@@ -59,17 +53,17 @@ pub(in crate::app) async fn seed_runtime_identity_attempts(
         .await
         .unwrap()
         .unwrap();
-    let mut refs = saved.operation.resource_refs.clone();
+    let mut refs = context.operation.resource_refs.clone();
     for index in 1..=count {
         let step = format!("identity_{index}");
-        refs[format!("staging_runtime_{step}")] =
+        refs[context.ref_key(&step)] =
             json!({"started_at_ms":now()-1,"artifact_id":context.id(&step)});
     }
     state
         .store
         .record_workflow_operation(
             &claim,
-            &saved.operation.id,
+            &context.operation.id,
             "running",
             &refs,
             "Synthetic interrupted observation attempts",
@@ -101,27 +95,45 @@ pub(in crate::app) async fn seed_runtime(
     completed: bool,
     change: Option<(&str, Value)>,
 ) {
-    let saved = preparation::saved(state, deployment, execution)
-        .await
-        .unwrap();
-    let receipt = state
-        .store
-        .get_artifact(&artifact_id("commit", execution))
-        .await
-        .unwrap()
-        .unwrap();
-    let context = Context::new(state, &saved, &receipt).await.unwrap();
+    let context = staging_context(state, deployment, execution).await;
+    seed_window(state, &context, evidence, completed, change).await;
+}
+
+/// Persist one original candidate window for any bound runtime context
+/// (staging, production or post-release observation) as if the controller
+/// had collected it: the identity marker on the operation, the window record,
+/// the native receipts and, when `completed`, the assessed result.
+pub(in crate::app::hosted_controller) async fn seed_window(
+    state: &AppState,
+    context: &Context,
+    evidence: FinanceRuntimeEvidence,
+    completed: bool,
+    change: Option<(&str, Value)>,
+) {
     assert_eq!(evidence.expected, context.expected);
+    assert_eq!(evidence.phase, context.phase);
+    // Identity attempts the controller already recorded stay bound; the
+    // synthetic window starts at the next free step.
+    let step = (1..=crate::app::CONTROLLER_WAIT_MAX_CHECKS)
+        .map(|n| format!("identity_{n}"))
+        .find(|step| {
+            context
+                .operation
+                .resource_refs
+                .get(context.ref_key(step))
+                .is_none()
+        })
+        .unwrap();
     let window = Window::new(
-        &context,
+        context,
         evidence.window.start_unix_seconds as i64 * 1000 - 30_001,
-        "identity_1".into(),
+        step.clone(),
     )
     .unwrap();
     assert_eq!(window.window, evidence.window);
     state
         .store
-        .wake_workflow(&saved.authority.work_item_id, now())
+        .wake_workflow(&context.work_item_id, now())
         .await
         .unwrap();
     let claim = state
@@ -130,14 +142,14 @@ pub(in crate::app) async fn seed_runtime(
         .await
         .unwrap()
         .unwrap();
-    let mut refs = saved.operation.resource_refs.clone();
-    refs["staging_runtime_identity_1"] =
-        json!({"started_at_ms":window.created_at_ms,"artifact_id":context.id("identity_1")});
+    let mut refs = context.operation.resource_refs.clone();
+    refs[context.ref_key(&step)] =
+        json!({"started_at_ms":window.created_at_ms,"artifact_id":context.id(&step)});
     state
         .store
         .record_workflow_operation(
             &claim,
-            &saved.operation.id,
+            &context.operation.id,
             "running",
             &refs,
             "Synthetic original candidate observation",
@@ -148,7 +160,7 @@ pub(in crate::app) async fn seed_runtime(
     context
         .write(
             state,
-            "identity_1",
+            &step,
             json!({"observation":evidence.identity_before}),
         )
         .await

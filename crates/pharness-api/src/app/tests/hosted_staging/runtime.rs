@@ -8,7 +8,7 @@ use pharness_core::tools::{
 };
 use serde_json::{json, Value};
 
-async fn committed(
+pub(super) async fn committed(
     suffix: &str,
     fake: &KubectlFixture,
 ) -> (
@@ -45,7 +45,7 @@ async fn committed_with_clock(
     (f, a, p)
 }
 
-async fn candidate(
+pub(super) async fn candidate(
     f: &RepoDeliveryFixture,
     fake: &KubectlFixture,
     a: &HostedStagingAuthority,

@@ -65,7 +65,7 @@ pub(super) async fn prepare(
         .map_err(Into::into)
 }
 
-async fn context(
+pub(super) async fn context(
     state: &AppState,
     operation: &StoredWorkflowOperation,
 ) -> Result<runtime::Context, ApiError> {

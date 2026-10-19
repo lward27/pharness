@@ -25,7 +25,7 @@ pub(super) struct Approved {
 pub(super) enum Decision {
     Pending,
     Rejected,
-    Approved(Approved),
+    Approved(Box<Approved>),
 }
 
 fn gate_json(
@@ -141,7 +141,7 @@ pub(super) async fn state(state_: &AppState, recorded: &Recorded) -> Result<Deci
         "pending" => Ok(Decision::Pending),
         "satisfied" => approved(state_, recorded, &gate)
             .await
-            .map(Decision::Approved),
+            .map(|approved| Decision::Approved(Box::new(approved))),
         _ => Ok(Decision::Rejected),
     }
 }

@@ -19,11 +19,15 @@ mod gate;
 mod observe;
 mod proposal;
 mod seal;
+#[cfg(test)]
+mod test_support;
 pub(in crate::app) use callbacks::{
     internal_production_attempt, internal_production_context, internal_production_outcome,
     internal_production_preview, internal_production_preview_context,
 };
 pub(in crate::app) use gate::{decide as decide_gate, GATE_KIND};
+#[cfg(test)]
+pub(in crate::app) use test_support::{seed_observe_window, seed_production_window};
 
 pub(super) const PROPOSE_ACTION: &str = "propose_production_release";
 pub(super) const PROMOTE_ACTION: &str = "promote_approved_release";

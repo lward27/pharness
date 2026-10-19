@@ -9,7 +9,7 @@ mod collection;
 pub(in crate::app::hosted_controller) mod records;
 mod result;
 #[cfg(test)]
-pub(super) mod test_support;
+pub(in crate::app::hosted_controller) mod test_support;
 pub(in crate::app::hosted_controller) use records::Context;
 
 pub(super) async fn verified(state: &AppState, context: &Context) -> Result<bool, ApiError> {
@@ -25,6 +25,13 @@ pub(in crate::app::hosted_controller) async fn reconcile(
     context: &Context,
     timed_out: bool,
 ) -> Result<Condition, ApiError> {
+    if claim.work_item_id != context.work_item_id
+        || context.operation.work_item_id != context.work_item_id
+    {
+        return Err(ApiError::conflict(
+            "runtime window context belongs to a different WorkItem",
+        ));
+    }
     if let Some(record) = context.read(state, "result").await? {
         return result::record(state, claim, context, &record).await;
     }

@@ -10,6 +10,7 @@ use pharness_store::{DeliveryStage, StoredWorkflowOperation};
 use serde_json::{json, Value};
 mod baseline;
 mod native;
+mod production;
 mod runtime;
 
 fn request<T: serde::de::DeserializeOwned>(value: Value) -> Json<T> {

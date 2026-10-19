@@ -4,8 +4,8 @@
 //! earlier of the operation deadline and the approval grant.
 use super::super::state::{condition, workflow_policy, Condition, Snapshot};
 use super::{
-    artifact_id, callbacks, deadline, evidence, gate, hash, now, operation_id, proposal, required,
-    runtime, staging, suffix, ApiError, AppState, PROMOTE_ACTION, PROPOSE_ACTION,
+    artifact_id, deadline, evidence, gate, hash, now, operation_id, proposal, required, runtime,
+    staging, suffix, ApiError, AppState, PROMOTE_ACTION, PROPOSE_ACTION,
 };
 use pharness_core::hosted_sdlc::production::{
     HostedProductionAuthority, ProductionGitOpsPlan, AUTHORITY_SCHEMA,
@@ -465,6 +465,70 @@ pub(super) fn runtime_context(
     })
 }
 
+/// Project an observed, authority-bound commit receipt onto the deployment
+/// intent. Called by the writer callback and by every later reconciliation,
+/// so a lost acknowledgment never leaves the intent behind the artifact.
+pub(super) async fn settle(
+    state: &AppState,
+    saved: &Saved,
+    receipt: &StoredArtifact,
+) -> Result<(), ApiError> {
+    let body = receipt
+        .content_json
+        .as_ref()
+        .ok_or_else(|| ApiError::conflict("production commit receipt has no content"))?;
+    if receipt.kind != "hosted_production_commit"
+        || receipt.session_id != saved.pipeline.session_id
+        || receipt.run_id != saved.pipeline.run_id
+        || body["authority_hash"] != saved.authority_hash
+        || body["identity"]
+            != evidence::validate_observation(
+                &saved.authority,
+                &saved.plan,
+                &body["observation"],
+                body["checked_at_ms"].as_i64().unwrap_or_default(),
+            )?
+    {
+        return Err(ApiError::conflict(
+            "persisted production commit receipt is inconsistent",
+        ));
+    }
+    // Do not recreate missing delivery records after an admitted write.
+    let change = state
+        .store
+        .get_gitops_change_set_by_deployment_intent(&saved.deployment.id)
+        .await?
+        .ok_or_else(|| {
+            ApiError::conflict("observed production change has no saved GitOps ChangeSet")
+        })?;
+    if change.id != saved.authority.gitops_change_set_id
+        || change.gitops_update_plan_artifact_id
+            != artifact_id("plan", &saved.authority.execution_id)
+    {
+        return Err(ApiError::conflict(
+            "observed production ChangeSet identity changed",
+        ));
+    }
+    let mut value = saved.deployment.intent_json.clone();
+    value["hosted_production"]["gitops_observation"] = json!({"artifact_id":receipt.id,"gitops_commit_sha":body["identity"]["gitops_commit_sha"],"image_ref":body["identity"]["image_ref"],"status":"committed","deployment_verification":"pending","runtime_verification":"pending"});
+    if value != saved.deployment.intent_json {
+        state
+            .store
+            .update_deployment_intent_evidence(
+                &saved.deployment.id,
+                UpdateDeploymentIntentEvidence {
+                    intent_json: value,
+                    actor: Some("observer:hosted-production".into()),
+                    reason: Some(
+                        "Record the approved GitOps commit independently from actual deployment"
+                            .into(),
+                    ),
+                },
+            )
+            .await?;
+    }
+    Ok(())
+}
 pub(super) async fn reconcile(
     state: &AppState,
     claim: &StoredWorkflowReconciliation,
@@ -482,7 +546,7 @@ pub(super) async fn reconcile(
         .get_artifact(&artifact_id("commit", execution))
         .await?
     {
-        callbacks::settle(state, &saved, &receipt).await?;
+        settle(state, &saved, &receipt).await?;
         validate_current(state, &saved, false).await?;
         // The commit is one boundary; the operation and its locks stay until
         // Argo, image identity and the production window are verified.

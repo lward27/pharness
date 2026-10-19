@@ -5,7 +5,6 @@ use super::{artifact_id, delivery, evidence, now, proposal, ApiError, AppState};
 use axum::extract::{Path, Query, State};
 use axum::Json;
 use pharness_core::hosted_sdlc::production::ProductionPreview;
-use pharness_store::{StoredArtifact, UpdateDeploymentIntentEvidence};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
@@ -350,7 +349,7 @@ pub(in crate::app) async fn internal_production_outcome(
         )
         .await?
     };
-    settle(&state, &saved, &receipt).await?;
+    delivery::settle(&state, &saved, &receipt).await?;
     state
         .store
         .wake_workflow(&saved.authority.proposal.work_item_id, now())
@@ -358,66 +357,4 @@ pub(in crate::app) async fn internal_production_outcome(
     Ok(Json(
         json!({"recorded":true,"artifact_id":receipt.id,"status":"gitops_committed","deployment_verification":"pending","runtime_verification":"pending"}),
     ))
-}
-
-pub(super) async fn settle(
-    state: &AppState,
-    saved: &delivery::Saved,
-    receipt: &StoredArtifact,
-) -> Result<(), ApiError> {
-    let body = receipt
-        .content_json
-        .as_ref()
-        .ok_or_else(|| ApiError::conflict("production commit receipt has no content"))?;
-    if receipt.kind != "hosted_production_commit"
-        || receipt.session_id != saved.pipeline.session_id
-        || receipt.run_id != saved.pipeline.run_id
-        || body["authority_hash"] != saved.authority_hash
-        || body["identity"]
-            != evidence::validate_observation(
-                &saved.authority,
-                &saved.plan,
-                &body["observation"],
-                body["checked_at_ms"].as_i64().unwrap_or_default(),
-            )?
-    {
-        return Err(ApiError::conflict(
-            "persisted production commit receipt is inconsistent",
-        ));
-    }
-    // Do not recreate missing delivery records after an admitted write.
-    let change = state
-        .store
-        .get_gitops_change_set_by_deployment_intent(&saved.deployment.id)
-        .await?
-        .ok_or_else(|| {
-            ApiError::conflict("observed production change has no saved GitOps ChangeSet")
-        })?;
-    if change.id != saved.authority.gitops_change_set_id
-        || change.gitops_update_plan_artifact_id
-            != artifact_id("plan", &saved.authority.execution_id)
-    {
-        return Err(ApiError::conflict(
-            "observed production ChangeSet identity changed",
-        ));
-    }
-    let mut value = saved.deployment.intent_json.clone();
-    value["hosted_production"]["gitops_observation"] = json!({"artifact_id":receipt.id,"gitops_commit_sha":body["identity"]["gitops_commit_sha"],"image_ref":body["identity"]["image_ref"],"status":"committed","deployment_verification":"pending","runtime_verification":"pending"});
-    if value != saved.deployment.intent_json {
-        state
-            .store
-            .update_deployment_intent_evidence(
-                &saved.deployment.id,
-                UpdateDeploymentIntentEvidence {
-                    intent_json: value,
-                    actor: Some("observer:hosted-production".into()),
-                    reason: Some(
-                        "Record the approved GitOps commit independently from actual deployment"
-                            .into(),
-                    ),
-                },
-            )
-            .await?;
-    }
-    Ok(())
 }
