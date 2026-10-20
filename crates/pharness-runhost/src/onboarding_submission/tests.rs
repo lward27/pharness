@@ -473,8 +473,19 @@ fn submission_tool_states_the_command_name_and_root_bound_scope_rules_up_front()
         .unwrap()
         .contains("Manifests, lockfiles, toolchain files and other paths outside the roots are never writable"));
 
+    assert!(contract["dependency_lock"]["description"]
+        .as_str()
+        .unwrap()
+        .contains("report the blocker mutable_dependency_input"));
+
     let prompt = current_prompt();
-    assert_eq!(prompt.revision, "2026-10-19.1");
+    assert_eq!(prompt.revision, "2026-10-20.1");
+    assert!(prompt
+        .content
+        .contains("even when its directory is tracked in this revision"));
+    assert!(prompt
+        .content
+        .contains("classify it as the blocker mutable_dependency_input"));
     assert!(prompt
         .content
         .contains("Every writable_paths expression must lie inside one of the proposed roots"));
