@@ -237,10 +237,12 @@ pub(super) async fn reconcile_operation(
                 .get_work_item(&claim.work_item_id)
                 .await?
                 .ok_or_else(|| ApiError::not_found("work_item", &claim.work_item_id))?;
-            let workspace_missing = if run
-                .as_ref()
-                .is_some_and(|run| run.execution_target_json["workspace_source"].is_object())
-            {
+            // Only an agent-host Planner owns a Workspace record; an
+            // inference Planner's typed source is materialized by its Job
+            // init container and never has a row to go missing.
+            let workspace_missing = if run.as_ref().is_some_and(|run| {
+                run.execution_target_json["run_scope"]["workspace_id"].is_string()
+            }) {
                 state
                     .store
                     .get_workspace(&startup.workspace_id)
