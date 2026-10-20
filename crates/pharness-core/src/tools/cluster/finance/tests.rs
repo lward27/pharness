@@ -322,7 +322,11 @@ async fn native_reads_are_bounded_and_do_not_export_process_errors() {
 async fn native_transport_keeps_only_identity_and_six_content_hashes() {
     let e = expectation();
     let r = resources(&e);
-    let mut script = String::from("test \"$1\" = get || exit 4\ncase \"$2\" in\n");
+    // In-cluster kubectl ignores the service-account configuration when any
+    // kubeconfig override such as --request-timeout is passed; refuse them.
+    let mut script = String::from(
+        "for arg in \"$@\"; do case \"$arg\" in --request-timeout*|--server*|--kubeconfig*) exit 4;; esac; done\ntest \"$1\" = get || exit 4\ncase \"$2\" in\n",
+    );
     for (kind, value) in [
         ("applications.argoproj.io", r.argo),
         ("deployments.apps", r.deployment),

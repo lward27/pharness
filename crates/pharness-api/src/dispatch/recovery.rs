@@ -23,6 +23,11 @@ pub(super) fn bind_manifest(mut manifest: Value) -> Value {
     manifest
 }
 
+// kubectl only falls back to the in-cluster service-account configuration
+// when no flag overrides the default kubeconfig. `--request-timeout` is such
+// an override and silently redirects the client to localhost:8080 inside a
+// Pod, so every call is bounded by the surrounding tokio timeout instead.
+
 /// Read the exact deterministic name. A matching name alone is insufficient:
 /// require the recorded dispatch hash and the requested immutable manifest.
 pub(super) async fn find_exact_job(
@@ -45,7 +50,6 @@ pub(super) async fn find_exact_job(
             "--ignore-not-found=true",
             "-o",
             "json",
-            "--request-timeout=10s",
         ])
         .kill_on_drop(true);
     let output = tokio::time::timeout(Duration::from_secs(12), command.output()).await??;
@@ -117,14 +121,7 @@ pub(super) async fn create_or_reconcile_job(
     let payload = serde_json::to_vec(manifest)?;
     let result = tokio::time::timeout(Duration::from_secs(12), async {
         let mut child = tokio::process::Command::new(kubectl)
-            .args([
-                "create",
-                "-n",
-                namespace,
-                "-f",
-                "-",
-                "--request-timeout=10s",
-            ])
+            .args(["create", "-n", namespace, "-f", "-"])
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
