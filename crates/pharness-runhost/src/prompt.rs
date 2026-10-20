@@ -579,6 +579,7 @@ fn onboarding_proposal_submission_schema() -> serde_json::Value {
                             "api_version":{"type":"string","enum":["pharness.dev/v1alpha1"]},
                             "environment_profile":{"type":"string","minLength":1},
                             "dependency_lock":{
+                                "description":"Discovered lock whose every entry resolves to an immutable registry artifact. A lock containing file:, link:, path, git or URL dependencies cannot back a contract: report the blocker mutable_dependency_input with candidate_contract null.",
                                 "type":"object",
                                 "additionalProperties":false,
                                 "required":["kind","path","sha256"],
