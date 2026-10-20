@@ -305,17 +305,21 @@ spec:
         - { protocol: TCP, port: 8080 }
 {{- end }}
 ---
+# Coding Jobs whose read-only source is materialized by an init container
+# (onboarding proposer, inference Planner) need the preparation CONNECT proxy
+# for that one depth-1 fetch; the model worker itself still exits only
+# through the coding proxy policy above.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: pharness-onboarding-proposer-source-egress
+  name: pharness-source-checkout-egress
   namespace: {{ .Release.Namespace }}
 spec:
   podSelector:
     matchLabels:
       app: pharness-runner
       agentic.lucas.engineering/phase: coding
-      agentic.lucas.engineering/onboarding-proposer: "true"
+      agentic.lucas.engineering/source-checkout: "true"
   policyTypes: ["Egress"]
   egress:
     - to:

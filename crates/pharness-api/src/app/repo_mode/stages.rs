@@ -376,17 +376,43 @@ pub(in crate::app) async fn start_repo_planner_with_identity(
     } else {
         None
     };
-    let workspace_source =
-        planner_workspace
-            .as_ref()
-            .map(|workspace| pharness_runhost::WorkspaceSourceSpec {
-                workspace_id: workspace.id.clone(),
-                source_repo: workspace.source_repo.clone(),
-                source_ref: workspace.source_ref.clone(),
-                source_commit: work_item.source_commit.clone(),
-                branch: workspace.branch.clone().unwrap_or_default(),
-                resolved_commit: None,
-            });
+    // An inference-hosted Planner has no agent-host workspace record. Its
+    // read-only checkout is materialized by a dispatch init container pinned
+    // to the WorkItem source commit, so the typed source already carries the
+    // resolved commit and the worker verifies that checkout instead of
+    // cloning into the claim.
+    let planner_source_checkout = if planned_execution.is_none() {
+        let source_commit = work_item
+            .source_commit
+            .clone()
+            .ok_or_else(|| ApiError::conflict("Repo Mode Planner requires source_commit"))?;
+        let source = pharness_runhost::WorkspaceSourceSpec {
+            workspace_id: format!("planner-{stage_execution_id}"),
+            source_repo: work_item.source_repo.clone(),
+            source_ref: work_item.source_ref.clone(),
+            source_commit: Some(source_commit.clone()),
+            branch: format!("pharness/{work_item_id}/planner-{plan_sequence}"),
+            resolved_commit: Some(source_commit),
+        };
+        state
+            .workspace
+            .remote_source_allowed(&source)
+            .map_err(|error| ApiError::conflict(error.to_string()))?;
+        Some(source)
+    } else {
+        None
+    };
+    let workspace_source = planner_workspace
+        .as_ref()
+        .map(|workspace| pharness_runhost::WorkspaceSourceSpec {
+            workspace_id: workspace.id.clone(),
+            source_repo: workspace.source_repo.clone(),
+            source_ref: workspace.source_ref.clone(),
+            source_commit: work_item.source_commit.clone(),
+            branch: workspace.branch.clone().unwrap_or_default(),
+            resolved_commit: None,
+        })
+        .or(planner_source_checkout);
     let expected_agent_evidence_payloads = Value::Array(evidence.payloads.clone());
     let agent_evidence_payloads = existing_run
         .as_ref()
@@ -409,7 +435,7 @@ pub(in crate::app) async fn start_repo_planner_with_identity(
         "kind":if planned_execution.is_some() {"agent_host_workspace"} else {state.worker.execution_target_kind()},
         "agent_execution":agent_execution_marker,
         "inference":inference_marker,
-        "repo_mode":{"stage_execution_id":stage_execution_id,"stage":"plan","context_pack_id":context_pack_id,"workspace_access":"read_only"},
+        "repo_mode":{"stage_execution_id":stage_execution_id,"stage":"plan","context_pack_id":context_pack_id,"workspace_access":"read_only","source_checkout":if planned_execution.is_some() {"agent_host"} else {"init_container"}},
         "planner_submission_contract":planner_submission_contract,
         "agent_profile":profile,
         "agent_context":context,

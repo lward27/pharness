@@ -943,11 +943,12 @@ async fn hosted_planner_recovers_a_pre_dispatch_session_with_the_same_operation_
         workflow_policy.agent_profiles.push(profile);
         workflow_policy.stage_inference[key] = selection;
     }
-    let fixture = super::repo_mode_v1::repo_fixture_with_policy(
+    let fixture = super::repo_mode_v1::repo_fixture_for_source(
         "hosted_planner_pre_dispatch_recovery",
         false,
         state,
         Some(workflow_policy),
+        Some(source_repo),
     )
     .await;
     let metadata = fixture
@@ -1205,6 +1206,39 @@ async fn hosted_planner_recovers_a_pre_dispatch_session_with_the_same_operation_
         run.execution_target_json["hosted_planner_startup_identity"],
         json!(startup)
     );
+    // The inference Planner owns no Workspace record; its Job materializes
+    // the pinned source itself, and the worker must only verify it.
+    assert_eq!(
+        run.execution_target_json["repo_mode"]["source_checkout"],
+        json!("init_container")
+    );
+    assert_eq!(
+        run.execution_target_json["repo_mode"]["workspace_access"],
+        json!("read_only")
+    );
+    assert!(run.execution_target_json["run_scope"]["workspace_id"].is_null());
+    let source_sha = work_item.source_commit.clone().unwrap();
+    let source: pharness_runhost::WorkspaceSourceSpec =
+        serde_json::from_value(run.execution_target_json["workspace_source"].clone()).unwrap();
+    source.validate().unwrap();
+    assert_eq!(
+        source.workspace_id,
+        format!("planner-{}", startup.stage_execution_id)
+    );
+    assert_eq!(source.source_repo, source_repo);
+    assert_eq!(source.source_commit.as_deref(), Some(source_sha.as_str()));
+    assert_eq!(source.resolved_commit.as_deref(), Some(source_sha.as_str()));
+    assert_eq!(
+        source.branch,
+        format!("pharness/{}/planner-1", fixture.work_item_id)
+    );
+    assert!(fixture
+        .state
+        .store
+        .get_workspace(&startup.workspace_id)
+        .await
+        .unwrap()
+        .is_none());
     let executions = fixture
         .state
         .store

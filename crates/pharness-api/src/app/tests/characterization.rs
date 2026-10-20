@@ -759,7 +759,7 @@ async fn test_state_with_delivery_namespaces(
             source_reader_enabled: true,
             source_reader_service_account: "pharness-source-reader".to_string(),
             source_reader_token_secret_name: None,
-            source_reader_allowed_repos: vec![allowed_repo],
+            source_reader_allowed_repos: vec![allowed_repo.clone()],
             source_reader_active_deadline_seconds: 600,
             source_reader_ttl_seconds_after_finished: 3600,
             api_url: "http://pharness-api:4777".to_string(),
@@ -786,7 +786,13 @@ async fn test_state_with_delivery_namespaces(
         policy: SafetyPolicy::default(),
         worker_token: None,
         operator_tokens: Arc::new(Vec::new()),
-        workspace: WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
+        // Kubernetes coding workspaces (Planner checkout, Builder claims)
+        // share the same exact-repository transport boundary as the reader.
+        workspace: WorkspaceProvisioner::with_remote_repos(
+            std::env::temp_dir(),
+            Vec::new(),
+            vec![allowed_repo],
+        ),
         build: BuildMetadata::from_env(),
         protected_target: ProtectedTargetConfiguration::from_env(),
         environment_profiles: Arc::new(Vec::new()),

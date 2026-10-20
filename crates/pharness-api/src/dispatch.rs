@@ -2406,12 +2406,18 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             .pointer("/agent_profile/id")
             .and_then(serde_json::Value::as_str);
         let onboarding_proposer = agent_profile_id == Some("repository-onboarding-proposer");
+        let planner_source_checkout = run
+            .execution_target_json
+            .pointer("/repo_mode/source_checkout")
+            .and_then(serde_json::Value::as_str)
+            == Some("init_container");
+        let source_checkout = onboarding_proposer || planner_source_checkout;
         let runner_profile = run.execution_target_json.get("runner_profile");
         let runner_image = runner_profile
             .and_then(|profile| profile.get("image"))
             .and_then(serde_json::Value::as_str)
             .unwrap_or(&self.config.image);
-        let service_account = if onboarding_proposer {
+        let service_account = if source_checkout {
             self.config.source_reader_service_account.as_str()
         } else {
             runner_profile
@@ -2585,6 +2591,16 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 runner_image,
                 &self.config.workspace_dir,
             );
+        } else if planner_source_checkout {
+            bind_source_checkout_workspace(
+                &mut manifest,
+                run,
+                self.config.source_reader_token_secret_name.as_deref(),
+                &self.config.namespace,
+                runner_image,
+                &self.config.workspace_dir,
+                "prepare-planner-source",
+            );
         }
         match run
             .execution_target_json
@@ -2624,8 +2640,12 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
             Some("read_only") => {
                 manifest["spec"]["template"]["spec"]["containers"][0]["volumeMounts"][0]
                     ["readOnly"] = serde_json::json!(true);
-                manifest["spec"]["template"]["spec"]["volumes"][0]["persistentVolumeClaim"]
-                    ["readOnly"] = serde_json::json!(true);
+                // A source-checkout init container must still write the
+                // fresh claim before the worker's read-only mount applies.
+                if !planner_source_checkout {
+                    manifest["spec"]["template"]["spec"]["volumes"][0]["persistentVolumeClaim"]
+                        ["readOnly"] = serde_json::json!(true);
+                }
             }
             _ => {}
         }
@@ -3952,6 +3972,8 @@ fn bind_source_delivery_manifest(
     Ok(())
 }
 
+const SOURCE_CHECKOUT_LABEL: &str = "agentic.lucas.engineering/source-checkout";
+
 fn bind_onboarding_proposer_workspace(
     manifest: &mut serde_json::Value,
     run: &StoredRun,
@@ -3959,6 +3981,46 @@ fn bind_onboarding_proposer_workspace(
     namespace: &str,
     image: &str,
     workspace_dir: &str,
+) {
+    for pointer in ["/metadata/labels", "/spec/template/metadata/labels"] {
+        if let Some(labels) = manifest
+            .pointer_mut(pointer)
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            labels.insert(
+                "agentic.lucas.engineering/onboarding-proposer".into(),
+                serde_json::Value::String("true".into()),
+            );
+        }
+    }
+    bind_source_checkout_workspace(
+        manifest,
+        run,
+        source_reader_secret,
+        namespace,
+        image,
+        workspace_dir,
+        "prepare-onboarding-source",
+    );
+}
+
+/// Materialize a read-only inference workspace from the Run's typed source
+/// before the model worker starts. The checkout is a depth-1 fetch of the
+/// exact pinned commit on the issued branch, performed by an init container
+/// that is the only container holding the optional source-reader credential;
+/// the worker container then verifies HEAD and branch instead of cloning. A
+/// re-dispatch of the same Run (budget extension, approval resume) finds the
+/// claim already populated and only re-verifies the pinned commit.
+/// Pods bound this way carry `SOURCE_CHECKOUT_LABEL` so the Helm network
+/// policy can admit the init container to the preparation egress proxy.
+fn bind_source_checkout_workspace(
+    manifest: &mut serde_json::Value,
+    run: &StoredRun,
+    source_reader_secret: Option<&str>,
+    namespace: &str,
+    image: &str,
+    workspace_dir: &str,
+    init_container_name: &str,
 ) {
     let source = run
         .execution_target_json
@@ -3971,21 +4033,22 @@ fn bind_onboarding_proposer_workspace(
             .and_then(serde_json::Value::as_object_mut)
         {
             labels.insert(
-                "agentic.lucas.engineering/onboarding-proposer".into(),
+                SOURCE_CHECKOUT_LABEL.into(),
                 serde_json::Value::String("true".into()),
             );
         }
     }
     manifest["spec"]["template"]["spec"]["automountServiceAccountToken"] = serde_json::json!(false);
     let mut env = vec![
-        serde_json::json!({"name":"PHARNESS_ONBOARDING_REPOSITORY","value":source.get("source_repo").and_then(serde_json::Value::as_str).unwrap_or("")}),
-        serde_json::json!({"name":"PHARNESS_ONBOARDING_SOURCE_COMMIT","value":source.get("source_commit").and_then(serde_json::Value::as_str).unwrap_or("")}),
-        serde_json::json!({"name":"PHARNESS_ONBOARDING_BRANCH","value":source.get("branch").and_then(serde_json::Value::as_str).unwrap_or("")}),
+        serde_json::json!({"name":"PHARNESS_SOURCE_REPOSITORY","value":source.get("source_repo").and_then(serde_json::Value::as_str).unwrap_or("")}),
+        serde_json::json!({"name":"PHARNESS_SOURCE_COMMIT","value":source.get("source_commit").and_then(serde_json::Value::as_str).unwrap_or("")}),
+        serde_json::json!({"name":"PHARNESS_SOURCE_BRANCH","value":source.get("branch").and_then(serde_json::Value::as_str).unwrap_or("")}),
         serde_json::json!({"name":"HTTPS_PROXY","value":format!("http://pharness-preparation-egress-proxy.{namespace}.svc.cluster.local:8080")}),
         serde_json::json!({"name":"https_proxy","value":format!("http://pharness-preparation-egress-proxy.{namespace}.svc.cluster.local:8080")}),
         serde_json::json!({"name":"NO_PROXY","value":".svc,.cluster.local,127.0.0.1,localhost"}),
         serde_json::json!({"name":"no_proxy","value":".svc,.cluster.local,127.0.0.1,localhost"}),
         serde_json::json!({"name":"HOME","value":"/tmp"}),
+        serde_json::json!({"name":"PHARNESS_WORKSPACE_DIR","value":workspace_dir}),
     ];
     if let Some(secret) = source_reader_secret {
         env.push(serde_json::json!({"name":"PHARNESS_SOURCE_READER_TOKEN","valueFrom":{"secretKeyRef":{"name":secret,"key":"token"}}}));
@@ -3993,14 +4056,14 @@ fn bind_onboarding_proposer_workspace(
     manifest["spec"]["template"]["spec"]["initContainers"] = serde_json::json!([
         network_policy_stabilization_container(image),
         {
-            "name":"prepare-onboarding-source",
+            "name":init_container_name,
             "image":image,
             "imagePullPolicy":"IfNotPresent",
             "command":["/bin/sh","-ec"],
             "args":[r#"
-test -n "$PHARNESS_ONBOARDING_REPOSITORY"
-test -n "$PHARNESS_ONBOARDING_SOURCE_COMMIT"
-test -n "$PHARNESS_ONBOARDING_BRANCH"
+test -n "$PHARNESS_SOURCE_REPOSITORY"
+test -n "$PHARNESS_SOURCE_COMMIT"
+test -n "$PHARNESS_SOURCE_BRANCH"
 cat > /tmp/askpass <<'EOF'
 #!/bin/sh
 case "$1" in
@@ -4009,11 +4072,16 @@ case "$1" in
 esac
 EOF
 chmod 700 /tmp/askpass
+if [ -e "$PHARNESS_WORKSPACE_DIR/.git" ]; then
+  test "$(git -c safe.directory="$PHARNESS_WORKSPACE_DIR" -C "$PHARNESS_WORKSPACE_DIR" rev-parse HEAD)" = "$PHARNESS_SOURCE_COMMIT"
+  exit 0
+fi
+test -z "$(find "$PHARNESS_WORKSPACE_DIR" -mindepth 1 -maxdepth 1 ! -name 'lost+found' -print -quit)"
 git init -q "$PHARNESS_WORKSPACE_DIR"
-git -c safe.directory="$PHARNESS_WORKSPACE_DIR" -C "$PHARNESS_WORKSPACE_DIR" remote add origin "$PHARNESS_ONBOARDING_REPOSITORY"
-GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass git -c safe.directory="$PHARNESS_WORKSPACE_DIR" -C "$PHARNESS_WORKSPACE_DIR" fetch --depth=1 origin "$PHARNESS_ONBOARDING_SOURCE_COMMIT"
-git -c safe.directory="$PHARNESS_WORKSPACE_DIR" -C "$PHARNESS_WORKSPACE_DIR" checkout -q -b "$PHARNESS_ONBOARDING_BRANCH" FETCH_HEAD
-test "$(git -c safe.directory="$PHARNESS_WORKSPACE_DIR" -C "$PHARNESS_WORKSPACE_DIR" rev-parse HEAD)" = "$PHARNESS_ONBOARDING_SOURCE_COMMIT"
+git -c safe.directory="$PHARNESS_WORKSPACE_DIR" -C "$PHARNESS_WORKSPACE_DIR" remote add origin "$PHARNESS_SOURCE_REPOSITORY"
+GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass git -c safe.directory="$PHARNESS_WORKSPACE_DIR" -C "$PHARNESS_WORKSPACE_DIR" fetch --depth=1 origin "$PHARNESS_SOURCE_COMMIT"
+git -c safe.directory="$PHARNESS_WORKSPACE_DIR" -C "$PHARNESS_WORKSPACE_DIR" checkout -q -b "$PHARNESS_SOURCE_BRANCH" FETCH_HEAD
+test "$(git -c safe.directory="$PHARNESS_WORKSPACE_DIR" -C "$PHARNESS_WORKSPACE_DIR" rev-parse HEAD)" = "$PHARNESS_SOURCE_COMMIT"
 "#],
             "env":env,
             "volumeMounts":[
@@ -4024,10 +4092,6 @@ test "$(git -c safe.directory="$PHARNESS_WORKSPACE_DIR" -C "$PHARNESS_WORKSPACE_
             "resources":{"requests":{"cpu":"50m","memory":"128Mi","ephemeral-storage":"256Mi"},"limits":{"cpu":"500m","memory":"512Mi","ephemeral-storage":"1Gi"}},
         }
     ]);
-    manifest["spec"]["template"]["spec"]["initContainers"][1]["env"]
-        .as_array_mut()
-        .expect("onboarding proposer env is an array")
-        .push(serde_json::json!({"name":"PHARNESS_WORKSPACE_DIR","value":workspace_dir}));
 }
 
 fn run_label_to_run_id(label: &str) -> String {
@@ -4620,6 +4684,147 @@ mod tests {
                 "/spec/template/metadata/labels/agentic.lucas.engineering~1onboarding-proposer"
             ),
             Some(&json!("true"))
+        );
+        assert_eq!(
+            manifest.pointer(
+                "/spec/template/metadata/labels/agentic.lucas.engineering~1source-checkout"
+            ),
+            Some(&json!("true"))
+        );
+    }
+
+    #[tokio::test]
+    async fn inference_planner_materializes_pinned_checkout_before_its_read_only_worker() {
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.source_reader_token_secret_name =
+            Some("pharness-source-reader-token".into());
+        let mut run = test_run();
+        run.execution_target_json = json!({
+            "kind":"kubernetes_job",
+            "agent_profile":{"id":"repo-planner"},
+            "repo_mode":{
+                "stage":"plan",
+                "workspace_access":"read_only",
+                "source_checkout":"init_container"
+            },
+            "workspace_source":{
+                "workspace_id":"planner-stageexec-test",
+                "source_repo":"https://github.com/example/test.git",
+                "source_ref":"main",
+                "source_commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "branch":"pharness/witem-test/planner-1",
+                "resolved_commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+        });
+        let manifest = dispatcher.job_manifest(&run, None);
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!("pharness-source-reader"))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/automountServiceAccountToken"),
+            Some(&json!(false))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/initContainers/1/name"),
+            Some(&json!("prepare-planner-source"))
+        );
+        let init_env = manifest
+            .pointer("/spec/template/spec/initContainers/1/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        let env_value = |name: &str| {
+            init_env
+                .iter()
+                .find(|entry| entry["name"] == name)
+                .map(|entry| entry["value"].clone())
+        };
+        assert_eq!(
+            env_value("PHARNESS_SOURCE_REPOSITORY"),
+            Some(json!("https://github.com/example/test.git"))
+        );
+        assert_eq!(
+            env_value("PHARNESS_SOURCE_COMMIT"),
+            Some(json!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+        );
+        assert_eq!(
+            env_value("PHARNESS_SOURCE_BRANCH"),
+            Some(json!("pharness/witem-test/planner-1"))
+        );
+        assert!(init_env
+            .iter()
+            .any(|entry| entry["name"] == "PHARNESS_SOURCE_READER_TOKEN"));
+        assert!(init_env.iter().any(|entry| {
+            entry["name"] == "HTTPS_PROXY"
+                && entry["value"]
+                    .as_str()
+                    .is_some_and(|value| value.contains("pharness-preparation-egress-proxy"))
+        }));
+        let init_script = manifest
+            .pointer("/spec/template/spec/initContainers/1/args/0")
+            .and_then(serde_json::Value::as_str)
+            .unwrap();
+        assert!(init_script.contains("fetch --depth=1 origin \"$PHARNESS_SOURCE_COMMIT\""));
+        assert!(init_script.contains("rev-parse HEAD)\" = \"$PHARNESS_SOURCE_COMMIT\""));
+        // Re-dispatch onto the populated claim must verify, not re-clone.
+        assert!(init_script.contains("if [ -e \"$PHARNESS_WORKSPACE_DIR/.git\" ]; then"));
+        assert!(init_script.contains("! -name 'lost+found' -print -quit"));
+        let worker_env = manifest
+            .pointer("/spec/template/spec/containers/0/env")
+            .and_then(serde_json::Value::as_array)
+            .unwrap();
+        assert!(worker_env
+            .iter()
+            .all(|entry| entry["name"] != "PHARNESS_SOURCE_READER_TOKEN"));
+        // The worker sees a read-only checkout, but the claim itself stays
+        // writable so the init container can populate it first.
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/initContainers/1/volumeMounts/0/readOnly"),
+            None
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/containers/0/volumeMounts/0/readOnly"),
+            Some(&json!(true))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/volumes/0/persistentVolumeClaim/readOnly"),
+            None
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/volumes/0/persistentVolumeClaim/claimName"),
+            Some(&json!(workspace_claim_name("run_123")))
+        );
+        assert_eq!(
+            manifest.pointer(
+                "/spec/template/metadata/labels/agentic.lucas.engineering~1source-checkout"
+            ),
+            Some(&json!("true"))
+        );
+        assert!(manifest
+            .pointer(
+                "/spec/template/metadata/labels/agentic.lucas.engineering~1onboarding-proposer"
+            )
+            .is_none());
+
+        // A read-only stage without the marker (Verifier on a Builder claim)
+        // keeps the claim itself read-only and gets no checkout container.
+        let mut verifier = test_run();
+        verifier.execution_target_json = json!({
+            "repo_mode":{"stage":"verify","workspace_access":"read_only","chain_authorization_id":"chain_test"},
+            "workspace_source":run.execution_target_json["workspace_source"].clone(),
+        });
+        let manifest = dispatcher.job_manifest(&verifier, None);
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/volumes/0/persistentVolumeClaim/readOnly"),
+            Some(&json!(true))
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/initContainers/1"),
+            None
+        );
+        assert_eq!(
+            manifest.pointer("/spec/template/spec/serviceAccountName"),
+            Some(&json!("pharness-worker"))
         );
     }
 
