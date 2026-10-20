@@ -251,11 +251,18 @@ pub(super) async fn reconcile_operation(
             } else {
                 false
             };
-            let incomplete = run.is_none()
-                || execution.is_none()
-                || pack.is_none()
-                || workspace_missing
-                || work_item.status != "executing";
+            // A terminal Run proves startup finished and the worker ran; a
+            // failed Planner moves the WorkItem out of "executing", which must
+            // not read as a partial startup or its locks are never released.
+            let run_terminal = run.as_ref().is_some_and(|run| {
+                matches!(run.status.as_str(), "completed" | "failed" | "cancelled")
+            });
+            let incomplete = !run_terminal
+                && (run.is_none()
+                    || execution.is_none()
+                    || pack.is_none()
+                    || workspace_missing
+                    || work_item.status != "executing");
             if incomplete {
                 if claim.control != "active" || expired {
                     return Ok(condition(

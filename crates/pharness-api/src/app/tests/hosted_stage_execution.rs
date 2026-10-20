@@ -911,8 +911,17 @@ async fn planner_submission_readiness_follows_saved_prompt_not_current_defaults(
     );
 }
 
-#[tokio::test]
-async fn hosted_planner_recovers_a_pre_dispatch_session_with_the_same_operation_identity() {
+struct RecoveredHostedPlanner {
+    fixture: super::repo_mode_v1::RepoDeliveryFixture,
+    operation_id: String,
+    startup: crate::app::repo_mode::PlannerStartupIdentity,
+    source_repo: &'static str,
+}
+
+/// Interrupt a hosted Planner startup after its session exists, then let a
+/// replacement controller recover the same operation identity while paused and
+/// resumed. Returns once the recovered Run is durable and still queued.
+async fn recover_pre_dispatch_hosted_planner(suffix: &str) -> RecoveredHostedPlanner {
     let source_repo = "https://github.com/example/hosted-planner-startup.git";
     let mut state = super::characterization::test_state_with_hosted_build(
         "/bin/false".into(),
@@ -944,7 +953,7 @@ async fn hosted_planner_recovers_a_pre_dispatch_session_with_the_same_operation_
         workflow_policy.stage_inference[key] = selection;
     }
     let fixture = super::repo_mode_v1::repo_fixture_for_source(
-        "hosted_planner_pre_dispatch_recovery",
+        suffix,
         false,
         state,
         Some(workflow_policy),
@@ -1172,6 +1181,29 @@ async fn hosted_planner_recovers_a_pre_dispatch_session_with_the_same_operation_
             .await
             .unwrap()
     );
+    RecoveredHostedPlanner {
+        fixture,
+        operation_id,
+        startup,
+        source_repo,
+    }
+}
+
+#[tokio::test]
+async fn hosted_planner_recovers_a_pre_dispatch_session_with_the_same_operation_identity() {
+    let RecoveredHostedPlanner {
+        fixture,
+        operation_id,
+        startup,
+        source_repo,
+    } = recover_pre_dispatch_hosted_planner("hosted_planner_pre_dispatch_recovery").await;
+    let work_item = fixture
+        .state
+        .store
+        .get_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
     let runs = fixture
         .state
         .store
@@ -1260,4 +1292,123 @@ async fn hosted_planner_recovers_a_pre_dispatch_session_with_the_same_operation_
         .unwrap();
     assert_eq!(operation.status, "running");
     assert_eq!(operation.resource_refs["run_id"], startup.run_id);
+}
+
+#[tokio::test]
+async fn hosted_planner_failure_releases_its_locks_even_after_the_workflow_is_cancelled() {
+    let RecoveredHostedPlanner {
+        fixture,
+        operation_id,
+        startup,
+        ..
+    } = recover_pre_dispatch_hosted_planner("hosted_planner_failed_then_cancelled").await;
+    let store = &fixture.state.store;
+    let run = store
+        .get_run(&RunId::new(startup.run_id.clone()))
+        .await
+        .unwrap()
+        .unwrap();
+    // The worker fails the Run before any model turn, the way a Job whose
+    // workspace never materialized does, and the WorkItem leaves "executing".
+    crate::worker::finish_run_from_attempt(
+        store,
+        &run,
+        pharness_runhost::AttemptOutcome::failed("failed to resolve repository map source SHA"),
+    )
+    .await
+    .unwrap();
+    let failed = store.get_run(&run.id).await.unwrap().unwrap();
+    assert_eq!(failed.status, "failed");
+    assert_eq!(failed.budget_consumption.turns_used, 0);
+    let work_item = store
+        .get_work_item(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_ne!(work_item.status, "executing");
+    let reconciliation = store
+        .get_workflow_reconciliation(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    store
+        .set_workflow_control(
+            &fixture.work_item_id,
+            reconciliation.control_version,
+            "cancelled",
+            "operator",
+            "abandon the failed Planner and recreate the WorkItem",
+            crate::app::clock::current_millis() as i64,
+        )
+        .await
+        .unwrap();
+    store
+        .wake_workflow(
+            &fixture.work_item_id,
+            crate::app::clock::current_millis() as i64,
+        )
+        .await
+        .unwrap();
+    assert!(
+        crate::app::hosted_controller::reconcile_once(&fixture.state, "replacement-api")
+            .await
+            .unwrap()
+    );
+    let operation = store
+        .get_workflow_operation(&operation_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        operation.status,
+        "succeeded",
+        "{:?}",
+        store
+            .get_workflow_reconciliation(&fixture.work_item_id)
+            .await
+            .unwrap()
+    );
+    assert_eq!(operation.resource_refs["run_id"], startup.run_id);
+    assert_eq!(operation.resource_refs["terminal_run_status"], "failed");
+    assert!(store
+        .active_workflow_operation(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .is_none());
+    assert_eq!(store.get_run(&run.id).await.unwrap().unwrap(), failed);
+    // The "coding" and repository locks are free again: another operation with
+    // the same keys can be recorded, so a replacement WorkItem is not blocked.
+    let metadata = store
+        .get_repo_work_item_metadata(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let repository_lock = format!("repository:{}", metadata.repository_id);
+    store
+        .wake_workflow(
+            &fixture.work_item_id,
+            crate::app::clock::current_millis() as i64,
+        )
+        .await
+        .unwrap();
+    let now = crate::app::clock::current_millis() as i64;
+    let claim = store
+        .claim_due_workflow("lock-probe", now, 60_000)
+        .await
+        .unwrap()
+        .unwrap();
+    store
+        .begin_workflow_operation(
+            &claim,
+            BeginWorkflowOperation {
+                id: "workflowop_lock_probe",
+                action: "observe_probe",
+                input_hash: "sha256:probe",
+                effect: "observation",
+                resource_keys: &["coding", repository_lock.as_str()],
+            },
+            now,
+        )
+        .await
+        .expect("released planner locks must be reacquirable");
 }
