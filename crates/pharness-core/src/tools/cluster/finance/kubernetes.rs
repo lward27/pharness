@@ -73,6 +73,8 @@ async fn get(
     let limit = tools.max_output_bytes.clamp(1, 512 * 1024);
     let timeout_ms = tools.timeout_ms.clamp(1, 15_000);
     let mut command = Command::new(&tools.kubectl_bin);
+    // No `--request-timeout`: a kubectl flag override disables the in-cluster
+    // configuration fallback. The tokio timeout below bounds the read.
     command.args([
         "get",
         resource,
@@ -80,7 +82,6 @@ async fn get(
         namespace,
         "-o",
         "json",
-        "--request-timeout=10s",
         "--chunk-size=50",
     ]);
     if let Some(name) = name {

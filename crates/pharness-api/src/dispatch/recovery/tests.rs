@@ -28,8 +28,16 @@ impl KubectlFixture {
         let command = dir.join("kubectl");
         // These are owned UUID paths without shell metacharacters. The fixture
         // has no Kubernetes credentials and cannot contact an external API.
+        // Like in-cluster kubectl, it refuses per-request kubeconfig overrides
+        // (for example --request-timeout), which skip the service-account
+        // configuration and dial localhost:8080.
         let script = format!(
             r#"#!/bin/sh
+for arg in "$@"; do
+  case "$arg" in
+  --request-timeout*|--server*|--kubeconfig*|--context*) exit 9;;
+  esac
+done
 case "$1" in
 get)
   if [ "{unavailable}" = "true" ]; then exit 9; fi

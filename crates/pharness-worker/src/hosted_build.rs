@@ -162,6 +162,8 @@ fn now() -> u128 {
         .unwrap_or_default()
         .as_millis()
 }
+// No `--request-timeout`: any kubectl flag override disables the in-cluster
+// configuration fallback, so the tokio timeouts bound these calls instead.
 async fn read_run(expected: &Value) -> Result<Option<Value>> {
     let mut command = tokio::process::Command::new("kubectl");
     command
@@ -174,7 +176,6 @@ async fn read_run(expected: &Value) -> Result<Option<Value>> {
             "--ignore-not-found=true",
             "-o",
             "json",
-            "--request-timeout=10s",
         ])
         .kill_on_drop(true);
     let output = tokio::time::timeout(Duration::from_secs(12), command.output()).await??;
@@ -192,7 +193,7 @@ async fn read_run(expected: &Value) -> Result<Option<Value>> {
 async fn create_once(manifest: &Value) {
     let attempt = async {
         let mut child = tokio::process::Command::new("kubectl")
-            .args(["create", "-f", "-", "--request-timeout=10s"])
+            .args(["create", "-f", "-"])
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
