@@ -1917,10 +1917,10 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
         serde_json::json!({
             "apiVersion":"batch/v1", "kind":"Job",
             "metadata":{"name":job_name,"namespace":self.config.namespace,
-                "labels":{JOB_NAME_LABEL:GIT_OBSERVER_JOB_NAME_VALUE,GITOPS_CHANGE_SET_LABEL:job_label_value(&request.gitops_change_set_id)},
+                "labels":{JOB_NAME_LABEL:GIT_OBSERVER_JOB_NAME_VALUE,GITOPS_CHANGE_SET_LABEL:bounded_label_value(&request.gitops_change_set_id)},
                 "annotations":{EXECUTION_ID_ANNOTATION:request.execution_id}},
             "spec":{"backoffLimit":0,"activeDeadlineSeconds":self.config.gitops_observer_active_deadline_seconds + NETWORK_POLICY_STABILIZATION_SECONDS,"ttlSecondsAfterFinished":self.config.gitops_observer_ttl_seconds_after_finished,
-                "template":{"metadata":{"labels":{JOB_NAME_LABEL:GIT_OBSERVER_JOB_NAME_VALUE,GITOPS_CHANGE_SET_LABEL:job_label_value(&request.gitops_change_set_id)}},
+                "template":{"metadata":{"labels":{JOB_NAME_LABEL:GIT_OBSERVER_JOB_NAME_VALUE,GITOPS_CHANGE_SET_LABEL:bounded_label_value(&request.gitops_change_set_id)}},
                     "spec":{"serviceAccountName":self.config.gitops_observer_service_account,"restartPolicy":"Never","initContainers":[network_policy_stabilization_container(&self.config.image)],
                         "securityContext":{"runAsNonRoot":true,"runAsUser":65532,"runAsGroup":65532,"seccompProfile":{"type":"RuntimeDefault"}},
                         "containers":[{"name":"gitops-observer","image":self.config.image,"imagePullPolicy":"Always","command":["pharness-worker"],
@@ -1956,7 +1956,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 "namespace": self.config.namespace,
                 "labels": {
                     JOB_NAME_LABEL: GITOPS_WRITER_JOB_NAME_VALUE,
-                    GITOPS_CHANGE_SET_LABEL: job_label_value(&request.gitops_change_set_id),
+                    GITOPS_CHANGE_SET_LABEL: bounded_label_value(&request.gitops_change_set_id),
                 },
                 "annotations": { EXECUTION_ID_ANNOTATION: request.execution_id },
             },
@@ -1967,7 +1967,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 "template": {
                     "metadata": { "labels": {
                         JOB_NAME_LABEL: GITOPS_WRITER_JOB_NAME_VALUE,
-                        GITOPS_CHANGE_SET_LABEL: job_label_value(&request.gitops_change_set_id),
+                        GITOPS_CHANGE_SET_LABEL: bounded_label_value(&request.gitops_change_set_id),
                     }},
                     "spec": {
                         "serviceAccountName": self.config.gitops_writer_service_account,
@@ -2035,7 +2035,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 "namespace": self.config.namespace,
                 "labels": {
                     JOB_NAME_LABEL: GIT_WRITER_JOB_NAME_VALUE,
-                    CHANGE_SET_LABEL: job_label_value(&request.change_set_id),
+                    CHANGE_SET_LABEL: bounded_label_value(&request.change_set_id),
                 },
                 "annotations": { EXECUTION_ID_ANNOTATION: request.execution_id },
             },
@@ -2046,7 +2046,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 "template": {
                     "metadata": { "labels": {
                         JOB_NAME_LABEL: GIT_WRITER_JOB_NAME_VALUE,
-                        CHANGE_SET_LABEL: job_label_value(&request.change_set_id),
+                        CHANGE_SET_LABEL: bounded_label_value(&request.change_set_id),
                     }},
                     "spec": {
                         "serviceAccountName": self.config.git_writer_service_account,
@@ -2109,7 +2109,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 "namespace": self.config.namespace,
                 "labels": {
                     JOB_NAME_LABEL: ARGO_EXECUTOR_JOB_NAME_VALUE,
-                    DEPLOYMENT_INTENT_LABEL: job_label_value(&request.deployment_intent_id),
+                    DEPLOYMENT_INTENT_LABEL: bounded_label_value(&request.deployment_intent_id),
                 },
                 "annotations": { EXECUTION_ID_ANNOTATION: request.execution_id },
             },
@@ -2120,7 +2120,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 "template": {
                     "metadata": { "labels": {
                         JOB_NAME_LABEL: ARGO_EXECUTOR_JOB_NAME_VALUE,
-                        DEPLOYMENT_INTENT_LABEL: job_label_value(&request.deployment_intent_id),
+                        DEPLOYMENT_INTENT_LABEL: bounded_label_value(&request.deployment_intent_id),
                     }},
                     "spec": {
                         "serviceAccountName": self.config.argo_executor_service_account,
@@ -2188,7 +2188,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 "namespace": self.config.namespace,
                 "labels": {
                     JOB_NAME_LABEL: GIT_OBSERVER_JOB_NAME_VALUE,
-                    CHANGE_SET_LABEL: job_label_value(&request.change_set_id),
+                    CHANGE_SET_LABEL: bounded_label_value(&request.change_set_id),
                 },
                 "annotations": { EXECUTION_ID_ANNOTATION: request.execution_id },
             },
@@ -2199,7 +2199,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 "template": {
                     "metadata": { "labels": {
                         JOB_NAME_LABEL: GIT_OBSERVER_JOB_NAME_VALUE,
-                        CHANGE_SET_LABEL: job_label_value(&request.change_set_id),
+                        CHANGE_SET_LABEL: bounded_label_value(&request.change_set_id),
                     }},
                     "spec": {
                         "serviceAccountName": self.config.git_observer_service_account,
@@ -2262,7 +2262,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 "namespace": self.config.namespace,
                 "labels": {
                     JOB_NAME_LABEL: GITOPS_REVISION_RESOLVER_JOB_NAME_VALUE,
-                    GITOPS_CHANGE_SET_LABEL: job_label_value(&request.gitops_change_set_id),
+                    GITOPS_CHANGE_SET_LABEL: bounded_label_value(&request.gitops_change_set_id),
                 },
                 "annotations": { EXECUTION_ID_ANNOTATION: request.execution_id },
             },
@@ -2273,7 +2273,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 "template": {
                     "metadata": { "labels": {
                         JOB_NAME_LABEL: GITOPS_REVISION_RESOLVER_JOB_NAME_VALUE,
-                        GITOPS_CHANGE_SET_LABEL: job_label_value(&request.gitops_change_set_id),
+                        GITOPS_CHANGE_SET_LABEL: bounded_label_value(&request.gitops_change_set_id),
                     }},
                     "spec": {
                         "serviceAccountName": self.config.gitops_observer_service_account,
@@ -2331,7 +2331,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 "namespace": self.config.namespace,
                 "labels": {
                     JOB_NAME_LABEL: TEKTON_EXECUTOR_JOB_NAME_VALUE,
-                    PIPELINE_INTENT_LABEL: job_label_value(&request.pipeline_intent_id),
+                    PIPELINE_INTENT_LABEL: bounded_label_value(&request.pipeline_intent_id),
                 },
                 "annotations": {
                     PIPELINE_INTENT_ID_ANNOTATION: request.pipeline_intent_id,
@@ -2345,7 +2345,7 @@ GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/tmp/askpass GIT_CONFIG_NOSYSTEM=1 git -C /tmp
                 "template": {
                     "metadata": { "labels": {
                         JOB_NAME_LABEL: TEKTON_EXECUTOR_JOB_NAME_VALUE,
-                        PIPELINE_INTENT_LABEL: job_label_value(&request.pipeline_intent_id),
+                        PIPELINE_INTENT_LABEL: bounded_label_value(&request.pipeline_intent_id),
                     }},
                     "spec": {
                         "serviceAccountName": self.config.tekton_executor_service_account,
@@ -3945,6 +3945,32 @@ fn job_label_value(run_id: &str) -> String {
     run_id.replace('_', "-")
 }
 
+/// Kubernetes rejects label values longer than 63 characters. Intent and
+/// change-set ids embed a whole SHA-256 and exceed that, so keep the readable
+/// prefix and bind the remainder through a digest. Nothing selects on or
+/// reverses these labels, unlike `RUN_ID_LABEL`, so the mapping is one-way.
+fn bounded_label_value(id: &str) -> String {
+    const MAX_LABEL_CHARS: usize = 63;
+    const DIGEST_CHARS: usize = 16;
+    let value = job_label_value(id);
+    if value.len() <= MAX_LABEL_CHARS {
+        return value;
+    }
+    let suffix = Sha256::digest(id.as_bytes())
+        .iter()
+        .take(DIGEST_CHARS / 2)
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let prefix = value
+        .chars()
+        .take(MAX_LABEL_CHARS - DIGEST_CHARS - 1)
+        .collect::<String>();
+    format!(
+        "{}-{suffix}",
+        prefix.trim_end_matches(|c: char| !c.is_ascii_alphanumeric())
+    )
+}
+
 fn bind_source_delivery_manifest(
     manifest: &mut serde_json::Value,
     intent_id: &str,
@@ -3958,7 +3984,7 @@ fn bind_source_delivery_manifest(
         labels.remove(CHANGE_SET_LABEL);
         labels.insert(
             SOURCE_DELIVERY_INTENT_LABEL.into(),
-            serde_json::Value::String(job_label_value(intent_id)),
+            serde_json::Value::String(bounded_label_value(intent_id)),
         );
     }
     let env = manifest
@@ -4280,7 +4306,7 @@ async fn create_job_from_manifest(
 #[cfg(test)]
 mod tests {
     use super::{
-        active_run_job_count, argo_executor_job_name, chained_run_capacity,
+        active_run_job_count, argo_executor_job_name, bounded_label_value, chained_run_capacity,
         enforce_run_job_capacity, executor_job_terminal_state, git_observer_job_name,
         git_writer_job_name, gitops_observer_job_name, gitops_writer_job_name, job_label_value,
         job_name, onboarding_proposer_id, run_label_to_run_id, workspace_claim_name,
@@ -4305,6 +4331,25 @@ mod tests {
         let label = job_label_value(run_id);
         assert_eq!(label, "run-1781521948426738000");
         assert_eq!(run_label_to_run_id(&label), run_id);
+    }
+
+    #[test]
+    fn bounded_label_values_fit_kubernetes_limits_and_stay_deterministic() {
+        assert_eq!(bounded_label_value("gset_123"), "gset-123");
+        let staging = format!("gcs_staging_{}", "a".repeat(64));
+        let production = format!("dintent_production_{}", "b".repeat(64));
+        let other = format!("gcs_staging_{}", "c".repeat(64));
+        for id in [&staging, &production, &other] {
+            let value = bounded_label_value(id);
+            assert_eq!(value.len(), 63, "{value}");
+            assert_eq!(value, bounded_label_value(id));
+            assert!(value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'));
+            assert!(value.ends_with(|c: char| c.is_ascii_alphanumeric()));
+        }
+        assert!(bounded_label_value(&staging).starts_with("gcs-staging-aaaa"));
+        assert_ne!(bounded_label_value(&staging), bounded_label_value(&other));
+        assert_eq!(bounded_label_value(&"a".repeat(63)).len(), 63);
+        assert_eq!(bounded_label_value(&"a".repeat(64)).len(), 63);
     }
 
     #[tokio::test]
@@ -5414,6 +5459,56 @@ mod tests {
             Some(&json!("pharness-gitops-writer"))
         );
         assert_eq!(manifest.pointer("/spec/backoffLimit"), Some(&json!(0)));
+    }
+
+    #[tokio::test]
+    async fn hosted_gitops_manifests_keep_every_label_within_kubernetes_limits() {
+        let mut dispatcher = test_dispatcher(None).await;
+        dispatcher.config.gitops_writer_enabled = true;
+        dispatcher.config.gitops_writer_token_secret_name =
+            Some("pharness-gitops-writer-token".to_string());
+        dispatcher.config.gitops_observer_enabled = true;
+        dispatcher.config.gitops_observer_token_secret_name =
+            Some("pharness-gitops-observer-token".to_string());
+        let suffix = "f".repeat(64);
+        let request = GitOpsDeliveryExecutionRequest {
+            gitops_change_set_id: format!("gcs_staging_{suffix}"),
+            execution_id: format!("sexec_{suffix}"),
+        };
+        let writer = dispatcher
+            .gitops_writer_job_manifest(&request, &gitops_writer_job_name(&request.execution_id));
+        let observation = GitOpsDeliveryObservationRequest {
+            gitops_change_set_id: format!("gcs_production_{suffix}"),
+            execution_id: format!("pexec_{suffix}"),
+        };
+        let observer = dispatcher.gitops_observer_job_manifest(
+            &observation,
+            &gitops_observer_job_name(&observation.execution_id),
+        );
+        let argo = dispatcher.argo_executor_job_manifest(
+            &ArgoSyncExecutionRequest {
+                deployment_intent_id: format!("dintent_production_{suffix}"),
+                execution_id: format!("aexec_{suffix}"),
+            },
+            &argo_executor_job_name(&format!("aexec_{suffix}")),
+        );
+        for manifest in [&writer, &observer, &argo] {
+            super::recovery::validate_manifest_labels(manifest).unwrap();
+            for pointer in ["/metadata/labels", "/spec/template/metadata/labels"] {
+                let labels = manifest
+                    .pointer(pointer)
+                    .and_then(serde_json::Value::as_object)
+                    .unwrap();
+                assert!(labels
+                    .values()
+                    .all(|value| value.as_str().is_some_and(|value| value.len() <= 63)));
+            }
+        }
+        assert!(writer
+            .pointer("/metadata/labels/pharness.lucas.engineering~1gitops-change-set")
+            .and_then(serde_json::Value::as_str)
+            .unwrap()
+            .starts_with("gcs-staging-ffff"));
     }
 
     #[tokio::test]

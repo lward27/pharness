@@ -1,4 +1,7 @@
-use super::{bind_manifest, create_or_reconcile_job, find_exact_job, validate_observed_job};
+use super::{
+    bind_manifest, create_or_reconcile_job, find_exact_job, validate_manifest_labels,
+    validate_observed_job,
+};
 use serde_json::{json, Value};
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
@@ -125,6 +128,47 @@ async fn lost_create_acknowledgment_and_repeated_dispatch_reuse_one_job() {
         .await
         .unwrap();
     assert_eq!(fixture.creates(), 1);
+}
+
+#[tokio::test]
+async fn invalid_label_values_are_rejected_before_any_create_is_attempted() {
+    validate_manifest_labels(&manifest()).unwrap();
+    let too_long = json!(format!("gcs-staging-{}", "a".repeat(64)));
+    type Mutate = fn(&mut Value, Value);
+    let cases: [(&str, Mutate); 6] = [
+        ("long job label", |m, v| {
+            m["metadata"]["labels"]["change-set"] = v
+        }),
+        ("long template label", |m, v| {
+            m["spec"]["template"]["metadata"]["labels"]["change-set"] = v
+        }),
+        ("leading dash", |m, _| {
+            m["metadata"]["labels"]["run"] = json!("-leading-dash")
+        }),
+        ("slash", |m, _| {
+            m["metadata"]["labels"]["run"] = json!("under_score/slash")
+        }),
+        ("non-string", |m, _| {
+            m["metadata"]["labels"]["run"] = json!(7)
+        }),
+        ("long name", |m, _| {
+            m["metadata"]["name"] = json!("p".repeat(64))
+        }),
+    ];
+    for (case, mutate) in cases {
+        let fixture = KubectlFixture::new(false);
+        let mut invalid = manifest();
+        mutate(&mut invalid, too_long.clone());
+        let error = create_or_reconcile_job(&fixture.command, "fixture", &invalid)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("63"), "{case}: {error}");
+        assert_eq!(fixture.creates(), 0, "{case}");
+    }
+    let mut valid = manifest();
+    valid["metadata"]["labels"]["change-set"] = json!(format!("gcs-staging-{}", "a".repeat(51)));
+    valid["metadata"]["labels"]["empty"] = json!("");
+    validate_manifest_labels(&valid).unwrap();
 }
 
 #[tokio::test]
