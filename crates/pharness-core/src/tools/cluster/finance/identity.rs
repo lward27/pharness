@@ -166,6 +166,7 @@ pub(super) fn verify(e: &FinanceDeploymentExpectation, r: &Resources) -> Check<V
         return Err("current_replicaset_unproven");
     }
     let mut pods = BTreeMap::new();
+    let mut terminated_pods_excluded = 0;
     for pod in items(&r.pods)? {
         if !current_replicasets
             .iter()
@@ -173,6 +174,19 @@ pub(super) fn verify(e: &FinanceDeploymentExpectation, r: &Resources) -> Check<V
         {
             // Retained Jobs can share an application label. They prove nothing
             // about the rollout; a ready service endpoint to one is rejected below.
+            continue;
+        }
+        if matches!(
+            pod["status"]["phase"].as_str(),
+            Some("Succeeded" | "Failed")
+        ) {
+            // The ReplicaSet controller stops counting a pod once its phase is
+            // terminal (for example after the kubelet ended it during a node
+            // disruption) and leaves it to pod garbage collection, which can take
+            // weeks. It proves nothing about the rollout either way: the replica
+            // count below still demands every desired replica as a verified
+            // running pod, and a ready endpoint to it is rejected below.
+            terminated_pods_excluded += 1;
             continue;
         }
         resource(pod, "Pod", ns, None)?;
@@ -291,6 +305,6 @@ pub(super) fn verify(e: &FinanceDeploymentExpectation, r: &Resources) -> Check<V
         return Err("ready_endpoints_incomplete");
     }
     Ok(
-        json!({"argo":references(a),"gitops_revision":e.gitops_commit_sha,"deployment":references(d),"generation":generation,"deployment_revision":revision,"template_hash":crate::canonical_json_sha256(&d["spec"]["template"]).map_err(|_|"template_hash_failed")?,"replicas":replicas,"image_ref":image,"pods":pods.values().map(|(_,v)|v).collect::<Vec<_>>(),"service":references(service),"endpoint_slices":slices,"not_ready_endpoints_excluded":not_ready_endpoints,"observation_is_atomic":false,"runtime_verification":"not_evaluated"}),
+        json!({"argo":references(a),"gitops_revision":e.gitops_commit_sha,"deployment":references(d),"generation":generation,"deployment_revision":revision,"template_hash":crate::canonical_json_sha256(&d["spec"]["template"]).map_err(|_|"template_hash_failed")?,"replicas":replicas,"image_ref":image,"pods":pods.values().map(|(_,v)|v).collect::<Vec<_>>(),"service":references(service),"endpoint_slices":slices,"not_ready_endpoints_excluded":not_ready_endpoints,"terminated_pods_excluded":terminated_pods_excluded,"observation_is_atomic":false,"runtime_verification":"not_evaluated"}),
     )
 }

@@ -217,6 +217,55 @@ fn retained_unready_probe_does_not_count_as_a_rollout_pod_or_endpoint() {
 }
 
 #[test]
+fn terminated_pod_of_the_current_replicaset_is_excluded_but_never_counts_as_a_replica() {
+    let e = expectation();
+    for phase in ["Succeeded", "Failed"] {
+        let mut r = resources(&e);
+        let mut stale = r.pods["items"][0].clone();
+        stale["metadata"]["uid"] = json!("stale-uid");
+        stale["metadata"]["name"] = json!("yfinance-wrapper-abc-stale");
+        stale["status"]["phase"] = json!(phase);
+        stale["status"]["podIP"] = Value::Null;
+        stale["status"]["conditions"] =
+            json!([{"type":"Ready","status":"False","reason":"PodCompleted"}]);
+        stale["status"]["containerStatuses"][0]["ready"] = json!(false);
+        stale["status"]["containerStatuses"][0]["state"] =
+            json!({"terminated":{"reason":"Completed","finishedAt":"2026-09-27T14:33:18Z"}});
+        r.pods["items"].as_array_mut().unwrap().push(stale);
+        let result = verify(&e, &r).unwrap();
+        assert_eq!(result["pods"].as_array().unwrap().len(), 1, "{phase}");
+        assert_eq!(result["terminated_pods_excluded"], 1, "{phase}");
+        assert_eq!(result["not_ready_endpoints_excluded"], 0, "{phase}");
+        let mut endpoint = r.endpoints["items"][0]["endpoints"][0].clone();
+        endpoint["targetRef"]["uid"] = json!("stale-uid");
+        endpoint["targetRef"]["name"] = json!("yfinance-wrapper-abc-stale");
+        r.endpoints["items"][0]["endpoints"]
+            .as_array_mut()
+            .unwrap()
+            .push(endpoint);
+        assert_eq!(
+            verify(&e, &r).unwrap_err(),
+            "endpoint_targets_other_pod",
+            "{phase}"
+        );
+        // A terminated pod is excluded, never substituted for the missing replica.
+        let mut r = resources(&e);
+        r.pods["items"][0]["status"]["phase"] = json!(phase);
+        assert_eq!(
+            verify(&e, &r).unwrap_err(),
+            "pod_count_does_not_match_deployment",
+            "{phase}"
+        );
+    }
+    let mut r = resources(&e);
+    r.pods["items"][0]["status"]["phase"] = json!("Pending");
+    assert_eq!(
+        verify(&e, &r).unwrap_err(),
+        "pod_image_or_readiness_unproven"
+    );
+}
+
+#[test]
 fn missing_truncated_duplicate_and_malformed_resources_are_inconclusive() {
     let e = expectation();
     let mut r = resources(&e);
