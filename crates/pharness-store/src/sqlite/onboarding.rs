@@ -2,6 +2,7 @@ mod proposal_state;
 
 use super::{now_string, SqliteStore, StoreError};
 use crate::{
+    AdvanceRepositoryRegisteredCommit, AdvancedRepositoryRegisteredCommit,
     ApproveRepositoryOnboardingProposal, CreateRepositoryContractVersion,
     CreateRepositoryOnboarding, CreateRepositoryOnboardingProposal,
     CreateRepositoryReadinessAssessment, StoredRepositoryContractVersion,
@@ -1228,6 +1229,138 @@ impl SqliteStore {
         row.map(row_to_contract_version).transpose()
     }
 
+    pub async fn advance_repository_registered_commit(
+        &self,
+        advance: AdvanceRepositoryRegisteredCommit,
+    ) -> Result<AdvancedRepositoryRegisteredCommit, StoreError> {
+        if advance.base_commit == advance.merge_commit {
+            return Err(StoreError::Conflict(
+                "registered revision advance needs a merge commit distinct from its base".into(),
+            ));
+        }
+        let now = now_string();
+        let mut tx = self.pool.begin().await?;
+        let registered: String =
+            sqlx::query_scalar("SELECT registered_commit FROM repositories WHERE id = ?1")
+                .bind(&advance.repository_id)
+                .fetch_optional(&mut *tx)
+                .await?
+                .ok_or_else(|| StoreError::NotFound {
+                    entity: "repository".into(),
+                    id: advance.repository_id.clone(),
+                })?;
+        let version_select = r#"
+            SELECT id, repository_id, onboarding_id, source_commit, contract_path, api_version,
+                   contract_json, content_hash, merge_provenance_json, status, created_at
+            FROM repository_contract_versions
+            WHERE repository_id = ?1 AND source_commit = ?2 AND status = 'active'
+            ORDER BY created_at DESC, id DESC LIMIT 1
+            "#;
+        if registered == advance.merge_commit {
+            // Already advanced: the carried contract must exist, nothing else changes.
+            let carried = sqlx::query(version_select)
+                .bind(&advance.repository_id)
+                .bind(&advance.merge_commit)
+                .fetch_optional(&mut *tx)
+                .await?
+                .map(row_to_contract_version)
+                .transpose()?
+                .ok_or_else(|| {
+                    StoreError::Conflict(
+                        "registered revision already matches the merge commit without an active RepositoryContract".into(),
+                    )
+                })?;
+            tx.commit().await?;
+            let repository = self
+                .get_repository(&advance.repository_id)
+                .await?
+                .ok_or_else(|| StoreError::NotFound {
+                    entity: "repository".into(),
+                    id: advance.repository_id.clone(),
+                })?;
+            return Ok(AdvancedRepositoryRegisteredCommit {
+                repository,
+                contract_version: carried,
+                advanced: false,
+            });
+        }
+        if registered != advance.base_commit {
+            return Err(StoreError::Conflict(format!(
+                "registered revision {registered} is not the merge base {}",
+                advance.base_commit
+            )));
+        }
+        let base = sqlx::query(version_select)
+            .bind(&advance.repository_id)
+            .bind(&advance.base_commit)
+            .fetch_optional(&mut *tx)
+            .await?
+            .map(row_to_contract_version)
+            .transpose()?
+            .ok_or_else(|| {
+                StoreError::Conflict(
+                    "no active RepositoryContract exists at the merge base revision".into(),
+                )
+            })?;
+        sqlx::query(
+            r#"
+            INSERT INTO repository_contract_versions (
+              id, repository_id, onboarding_id, source_commit, contract_path, api_version,
+              contract_json, content_hash, merge_provenance_json, status, created_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'active', ?10)
+            "#,
+        )
+        .bind(&advance.contract_version_id)
+        .bind(&advance.repository_id)
+        .bind(&base.onboarding_id)
+        .bind(&advance.merge_commit)
+        .bind(&base.contract_path)
+        .bind(&base.api_version)
+        .bind(serde_json::to_string(&base.contract)?)
+        .bind(&base.content_hash)
+        .bind(serde_json::to_string(&advance.merge_provenance)?)
+        .bind(&now)
+        .execute(&mut *tx)
+        .await?;
+        let updated = sqlx::query(
+            r#"
+            UPDATE repositories
+            SET registered_commit = ?2, state_version = state_version + 1, updated_at = ?3
+            WHERE id = ?1 AND registered_commit = ?4
+            "#,
+        )
+        .bind(&advance.repository_id)
+        .bind(&advance.merge_commit)
+        .bind(&now)
+        .bind(&advance.base_commit)
+        .execute(&mut *tx)
+        .await?;
+        if updated.rows_affected() != 1 {
+            return Err(StoreError::Conflict(
+                "registered revision changed while advancing it".into(),
+            ));
+        }
+        tx.commit().await?;
+        let repository = self
+            .get_repository(&advance.repository_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository".into(),
+                id: advance.repository_id.clone(),
+            })?;
+        let contract_version = self
+            .get_repository_contract_version(&advance.contract_version_id)
+            .await?
+            .ok_or_else(|| StoreError::NotFound {
+                entity: "repository_contract_version".into(),
+                id: advance.contract_version_id.clone(),
+            })?;
+        Ok(AdvancedRepositoryRegisteredCommit {
+            repository,
+            contract_version,
+            advanced: true,
+        })
+    }
     pub async fn create_repository_readiness_assessment(
         &self,
         assessment: CreateRepositoryReadinessAssessment,
@@ -1522,14 +1655,150 @@ fn row_to_readiness(
 #[cfg(test)]
 mod tests {
     use super::SqliteStore;
+    use crate::StoreError;
     use crate::{
-        ApproveRepositoryOnboardingProposal, ApprovedOnboardingProductModelChange,
-        ApprovedOnboardingService, CreateRepositoryContractVersion, CreateRepositoryOnboarding,
+        AdvanceRepositoryRegisteredCommit, ApproveRepositoryOnboardingProposal,
+        ApprovedOnboardingProductModelChange, ApprovedOnboardingService,
+        CreateRepositoryContractVersion, CreateRepositoryOnboarding,
         CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment, CreateRun,
         CreateSession,
     };
     use pharness_core::{RunId, SessionId};
     use serde_json::json;
+
+    #[tokio::test]
+    async fn confirmed_source_merge_advances_the_registered_revision_once_and_linearly() {
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        let now = "2026-10-21T00:00:00Z";
+        let base = "a".repeat(40);
+        let merge = "b".repeat(40);
+        sqlx::query("INSERT INTO organizations (id, organization_key, display_name, created_at, updated_at) VALUES ('org_advance', 'advance', 'Advance', ?1, ?1)")
+            .bind(now).execute(&store.pool).await.unwrap();
+        sqlx::query("INSERT INTO products (id, organization_id, product_key, display_name, description, owner_principal, state_version, created_at, updated_at) VALUES ('prod_advance', 'org_advance', 'product', 'Product', '', 'operator', 1, ?1, ?1)")
+            .bind(now).execute(&store.pool).await.unwrap();
+        sqlx::query("INSERT INTO repositories (id, provider, external_id, canonical_url, default_branch, registered_commit, created_at, updated_at) VALUES ('repo_advance', 'github', '5', 'https://github.com/example/advance.git', 'main', ?1, ?2, ?2)")
+            .bind(&base).bind(now).execute(&store.pool).await.unwrap();
+        sqlx::query("INSERT INTO repository_bindings (id, product_id, repository_id, status, created_at, updated_at) VALUES ('rbind_advance', 'prod_advance', 'repo_advance', 'active', ?1, ?1)")
+            .bind(now).execute(&store.pool).await.unwrap();
+        let onboarding = store
+            .create_repository_onboarding(CreateRepositoryOnboarding {
+                id: "ronb_advance".into(),
+                product_id: "prod_advance".into(),
+                repository_id: "repo_advance".into(),
+                binding_id: "rbind_advance".into(),
+                onboarding_kind: "refresh".into(),
+                registered_commit: base.clone(),
+                actor: "operator".into(),
+                reason: "validated contract".into(),
+            })
+            .await
+            .unwrap();
+        let advance = AdvanceRepositoryRegisteredCommit {
+            repository_id: "repo_advance".into(),
+            base_commit: base.clone(),
+            merge_commit: merge.clone(),
+            contract_version_id: "rcontract_advance".into(),
+            merge_provenance: json!({"kind":"work_item_source_merge","merge_commit_sha":merge}),
+        };
+
+        let missing = store
+            .advance_repository_registered_commit(advance.clone())
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(missing, StoreError::Conflict(ref m) if m.contains("no active RepositoryContract"))
+        );
+
+        store
+            .create_repository_contract_version(CreateRepositoryContractVersion {
+                id: "rcontract_base".into(),
+                repository_id: "repo_advance".into(),
+                onboarding_id: onboarding.id.clone(),
+                source_commit: base.clone(),
+                contract: json!({"api_version":"pharness.dev/v1alpha1","writable_paths":["src/**"]}),
+                content_hash: "sha256:contract".into(),
+                merge_provenance: json!({"merge_commit_sha":base}),
+            })
+            .await
+            .unwrap();
+
+        let advanced = store
+            .advance_repository_registered_commit(advance.clone())
+            .await
+            .unwrap();
+        assert!(advanced.advanced);
+        assert_eq!(advanced.repository.registered_commit, merge);
+        assert_eq!(advanced.repository.state_version, 2);
+        assert_eq!(advanced.contract_version.id, "rcontract_advance");
+        assert_eq!(advanced.contract_version.source_commit, merge);
+        assert_eq!(advanced.contract_version.content_hash, "sha256:contract");
+        assert_eq!(advanced.contract_version.onboarding_id, onboarding.id);
+        assert_eq!(
+            advanced.contract_version.contract,
+            json!({"api_version":"pharness.dev/v1alpha1","writable_paths":["src/**"]})
+        );
+        assert_eq!(
+            advanced.contract_version.merge_provenance["kind"],
+            "work_item_source_merge"
+        );
+        assert_eq!(
+            store
+                .latest_repository_contract_version("repo_advance", &merge)
+                .await
+                .unwrap()
+                .unwrap()
+                .id,
+            "rcontract_advance"
+        );
+
+        let again = store
+            .advance_repository_registered_commit(AdvanceRepositoryRegisteredCommit {
+                contract_version_id: "rcontract_duplicate".into(),
+                ..advance.clone()
+            })
+            .await
+            .unwrap();
+        assert!(!again.advanced);
+        assert_eq!(again.contract_version.id, "rcontract_advance");
+        assert_eq!(again.repository.state_version, 2);
+        assert!(store
+            .get_repository_contract_version("rcontract_duplicate")
+            .await
+            .unwrap()
+            .is_none());
+
+        let moved = store
+            .advance_repository_registered_commit(AdvanceRepositoryRegisteredCommit {
+                base_commit: "c".repeat(40),
+                merge_commit: "d".repeat(40),
+                contract_version_id: "rcontract_moved".into(),
+                ..advance.clone()
+            })
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(moved, StoreError::Conflict(ref m) if m.contains("is not the merge base"))
+        );
+        let same = store
+            .advance_repository_registered_commit(AdvanceRepositoryRegisteredCommit {
+                base_commit: merge.clone(),
+                merge_commit: merge.clone(),
+                contract_version_id: "rcontract_same".into(),
+                ..advance
+            })
+            .await
+            .unwrap_err();
+        assert!(matches!(same, StoreError::Conflict(_)));
+        assert_eq!(
+            store
+                .get_repository("repo_advance")
+                .await
+                .unwrap()
+                .unwrap()
+                .registered_commit,
+            merge
+        );
+    }
 
     #[tokio::test]
     async fn unchanged_onboarding_configuration_skips_source_delivery() {

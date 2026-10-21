@@ -154,6 +154,25 @@ pub struct StoredRepositoryContractVersion {
     pub created_at: String,
 }
 
+/// Moves a Repository's registered immutable revision from the exact base of a
+/// confirmed source merge to that merge commit, carrying the validated
+/// RepositoryContract forward unchanged.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdvanceRepositoryRegisteredCommit {
+    pub repository_id: String,
+    pub base_commit: String,
+    pub merge_commit: String,
+    pub contract_version_id: String,
+    pub merge_provenance: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdvancedRepositoryRegisteredCommit {
+    pub repository: crate::StoredRepository,
+    pub contract_version: StoredRepositoryContractVersion,
+    pub advanced: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreateRepositoryReadinessAssessment {
     pub id: String,

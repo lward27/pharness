@@ -156,6 +156,7 @@ GET	/api/repositories/:repository_id/overview	operator
 POST	/api/repositories/:repository_id/onboardings	operator
 GET	/api/repositories/:repository_id/readiness	operator
 POST	/api/repositories/:repository_id/readiness-assessments	operator
+POST	/api/repositories/:repository_id/registered-revision	operator
 GET	/api/repository-onboardings/:onboarding_id	operator
 POST	/api/repository-onboardings/:onboarding_id/actions/:action_id/execute	operator
 GET	/api/repository-onboardings/:onboarding_id/flow	operator

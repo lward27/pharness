@@ -175,6 +175,10 @@ Add read-only `GET /api/agent-profiles`; V1 ships five compiled, versioned and h
   - `GET /api/repositories/:repository_id`
   - `GET /api/repositories/:repository_id/readiness?source_commit=<sha>`
   - `POST /api/repositories/:repository_id/readiness-assessments`
+  - `POST /api/repositories/:repository_id/registered-revision` (operator recovery: register the
+    merge commit of an already-confirmed WorkItem source merge; the controller does this
+    automatically at the `merged` transition when the merge sits exactly on the registered base
+    and left `.pharness` untouched)
   - `POST /api/repositories/:repository_id/onboardings`
   - `GET /api/repository-onboardings/:onboarding_id`
   - `GET /api/repository-onboardings/:onboarding_id/flow`
