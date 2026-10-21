@@ -24,6 +24,9 @@ pub(in crate::app) use runtime::test_support::{
     seed_runtime, seed_runtime_identity_attempts, seed_runtime_step,
 };
 pub(in crate::app::hosted_controller) const ACTION: &str = "stage_verified_build";
+/// Terminal `staging_result.status` of an operation whose authority expired
+/// while its deterministic writer Job was never visible and nothing admitted.
+pub(in crate::app) const EXPIRED_BEFORE_DISPATCH: &str = "expired_before_dispatch";
 
 fn deadline(operation: &StoredWorkflowOperation) -> i64 {
     operation.created_at.saturating_add(
@@ -108,6 +111,9 @@ pub(super) async fn candidate(
         if previous.status == "succeeded" {
             if completed(state, snapshot).await? {
                 return Ok(None);
+            }
+            if previous.resource_refs["staging_result"]["status"] == EXPIRED_BEFORE_DISPATCH {
+                return Err(ApiError::conflict("The recorded staging operation expired before its writer Job existed; it cannot be replaced. Deploy this source through new work."));
             }
             return Err(ApiError::conflict("The recorded staging operation has no complete native runtime evidence; it cannot be replaced."));
         }
@@ -242,6 +248,26 @@ pub(super) async fn reconcile(
         .reconcile_hosted_build_job(&dispatch["executor_job_manifest"], recover)
         .await
         .map_err(|e| ApiError::conflict(e.to_string()))?;
+    if timed_out && !admitted && status == "missing" {
+        // Past its own deadline the authority admits no writer, the Job with
+        // its deterministic name is absent and no admission was recorded, so no
+        // external effect can still appear. Close the operation here rather
+        // than hold the repository and GitOps locks forever.
+        let mut refs = operation.resource_refs.clone();
+        refs["staging_result"] = json!({"status":EXPIRED_BEFORE_DISPATCH,"executor_job_name":dispatch["executor_job_manifest"]["metadata"]["name"],"deadline_ms":deadline(&operation),"recorded_at_ms":now()});
+        state
+            .store
+            .record_workflow_operation(
+                claim,
+                &operation.id,
+                "succeeded",
+                &refs,
+                "The staging window expired before its writer Job existed; no GitOps write was authorized and the operation's locks are released",
+                now(),
+            )
+            .await?;
+        return Ok(condition("blocked", "The staging window expired before its writer Job was created. No GitOps write occurred; the recorded operation is closed and cannot be replaced."));
+    }
     if matches!(status, "missing" | "failed" | "succeeded") && admitted {
         let dispatch_observer = !expired
             && operation

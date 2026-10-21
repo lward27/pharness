@@ -294,6 +294,112 @@ async fn expired_staging_preparation_cannot_renew_authority_and_cancelled_work_c
 }
 
 #[tokio::test]
+async fn staging_whose_writer_never_existed_closes_at_its_deadline_and_releases_its_locks() {
+    use pharness_store::BeginWorkflowOperation;
+    let fake = KubectlFixture::new(false);
+    let (f, op, a) = start("staging_never_dispatched", &fake).await;
+    let p = plan(&a);
+    let store = &f.state.store;
+    crate::app::clock::advance_for_test(61 * 60 * 1000);
+    // A visible Job is still observed after the deadline, never closed over.
+    tick(&f).await;
+    let control = store
+        .get_workflow_reconciliation(&f.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        control.condition, "wait_expired",
+        "{}",
+        control.condition_reason
+    );
+    assert_eq!(operation(&f).await.status, "running");
+    remove_job(
+        &fake,
+        &op.resource_refs["staging_dispatch"]["executor_job_manifest"],
+    );
+    tick(&f).await;
+    let control = store
+        .get_workflow_reconciliation(&f.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(control.condition, "blocked", "{}", control.condition_reason);
+    assert!(control.condition_reason.contains("expired before"));
+    assert_eq!(
+        creates(&fake),
+        2,
+        "no replacement writer after the deadline"
+    );
+    let closed = store.get_workflow_operation(&op.id).await.unwrap().unwrap();
+    assert_eq!(closed.status, "succeeded");
+    assert_eq!(
+        closed.resource_refs["staging_result"]["status"],
+        staging::EXPIRED_BEFORE_DISPATCH
+    );
+    assert_eq!(
+        closed.resource_refs["staging_dispatch"],
+        op.resource_refs["staging_dispatch"]
+    );
+    assert!(store
+        .active_workflow_operation(&f.work_item_id)
+        .await
+        .unwrap()
+        .is_none());
+    assert!(
+        save(&f, &a, &p).await.is_err(),
+        "late writer callbacks are refused"
+    );
+    assert!(admit(&f, &a, &p).await.is_err());
+    // The same identity is never re-prepared; the WorkItem stays blocked.
+    tick(&f).await;
+    let control = store
+        .get_workflow_reconciliation(&f.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(control.condition, "blocked", "{}", control.condition_reason);
+    assert!(control.condition_reason.contains("cannot be replaced"));
+    assert_eq!(creates(&fake), 2);
+    assert!(store
+        .get_deployment_intent_for_stage(&a.pipeline_intent_id, DeliveryStage::Production)
+        .await
+        .unwrap()
+        .is_none());
+    // The repository, staging and GitOps locks are free for other work.
+    let probe_time = now();
+    store
+        .wake_workflow(&f.work_item_id, probe_time)
+        .await
+        .unwrap();
+    let claim = store
+        .claim_due_workflow("lock-probe", probe_time, 60_000)
+        .await
+        .unwrap()
+        .unwrap();
+    let keys = op
+        .resource_keys
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    assert!(keys.iter().any(|key| key.starts_with("repository:")));
+    store
+        .begin_workflow_operation(
+            &claim,
+            BeginWorkflowOperation {
+                id: "workflowop_lock_probe",
+                action: "observe_probe",
+                input_hash: "sha256:probe",
+                effect: "observation",
+                resource_keys: &keys,
+            },
+            probe_time,
+        )
+        .await
+        .expect("released staging locks must be reacquirable");
+}
+
+#[tokio::test]
 async fn unconfirmed_staging_evidence_is_repeat_safe_and_never_counts_as_a_commit() {
     let fake = KubectlFixture::new(false);
     let (f, _, a) = start("staging_unconfirmed", &fake).await;

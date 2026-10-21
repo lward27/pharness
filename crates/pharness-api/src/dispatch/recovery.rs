@@ -6,6 +6,7 @@ use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 
 const DISPATCH_HASH: &str = "pharness.lucas.engineering/dispatch-hash";
+const MAX_NAME_OR_LABEL_CHARS: usize = 63;
 
 pub(super) fn is_hosted(run: &StoredRun) -> bool {
     run.execution_target_json
@@ -107,11 +108,52 @@ fn contains_requested_fields(expected: &Value, observed: &Value) -> bool {
     }
 }
 
+/// Reject what the API server would reject before any create is attempted.
+/// kubectl's stderr is discarded so credential-bearing client errors never
+/// reach durable records, which would otherwise make an invalid label look
+/// like a lost acknowledgement on every reconciliation.
+pub(super) fn validate_manifest_labels(manifest: &Value) -> anyhow::Result<()> {
+    let name = manifest
+        .pointer("/metadata/name")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    anyhow::ensure!(
+        !name.is_empty() && name.len() <= MAX_NAME_OR_LABEL_CHARS,
+        "hosted Job name must be 1 to {MAX_NAME_OR_LABEL_CHARS} characters"
+    );
+    for pointer in ["/metadata/labels", "/spec/template/metadata/labels"] {
+        let Some(labels) = manifest.pointer(pointer).and_then(Value::as_object) else {
+            continue;
+        };
+        for (key, value) in labels {
+            let valid = value.as_str().is_some_and(is_valid_label_value);
+            anyhow::ensure!(
+                valid,
+                "hosted Job label {key} at {pointer} is not a valid Kubernetes label value \
+                 (at most {MAX_NAME_OR_LABEL_CHARS} characters of [A-Za-z0-9._-] that start \
+                 and end alphanumerically)"
+            );
+        }
+    }
+    Ok(())
+}
+
+fn is_valid_label_value(value: &str) -> bool {
+    value.is_empty()
+        || (value.len() <= MAX_NAME_OR_LABEL_CHARS
+            && value
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+            && value.starts_with(|c: char| c.is_ascii_alphanumeric())
+            && value.ends_with(|c: char| c.is_ascii_alphanumeric()))
+}
+
 pub(super) async fn create_or_reconcile_job(
     kubectl: &str,
     namespace: &str,
     manifest: &Value,
 ) -> anyhow::Result<()> {
+    validate_manifest_labels(manifest)?;
     if find_exact_job(kubectl, namespace, manifest)
         .await?
         .is_some()

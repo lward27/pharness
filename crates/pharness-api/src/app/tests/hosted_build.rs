@@ -22,6 +22,11 @@ if sys.argv[1]=='get':
     sys.exit(0)
 if sys.argv[1]=='create':
     value=json.load(sys.stdin);name=value['metadata']['name'];target=root/(name+'.json')
+    # Mirror API-server validation: label values and names are at most 63 characters.
+    labels=list((value['metadata'].get('labels') or {{}}).values())
+    labels+=list(((value.get('spec') or {{}}).get('template',{{}}).get('metadata',{{}}).get('labels') or {{}}).values())
+    if len(name)>63 or any(len(str(v))>63 for v in labels):
+        sys.stderr.write('The Job "'+name+'" is invalid: metadata.labels: Invalid value: must be no more than 63 characters\n');sys.exit(1)
     try:
         with target.open('x') as f:json.dump(value,f)
         with (root/'build-creates').open('a') as f:f.write(name+'\n')
