@@ -1313,6 +1313,33 @@ pub(in crate::app) async fn internal_source_delivery_observation_outcome(
         )
         .await?;
     }
+    // A confirmed WorkItem merge is the only path that moves the Repository's
+    // default branch under PHarness control, so the registered revision must
+    // follow it or later work is stranded on a stale base. Recorded here, never
+    // fatal to the merge closure itself.
+    let registered_revision = match (&subject, merge_sha) {
+        (SourceDeliverySubject::WorkItem(_), Some(merge_commit_sha)) if delivery_succeeded => {
+            match super::registered_revision::advance_after_source_merge(
+                &state,
+                &intent,
+                super::registered_revision::ConfirmedSourceMerge {
+                    merge_commit_sha,
+                    merge_parent_shas: request.merge_parent_shas.as_deref(),
+                    actor: "controller:repo-mode",
+                    reason: "confirmed WorkItem source merge",
+                },
+            )
+            .await
+            {
+                Ok(outcome) => outcome,
+                Err(error) => {
+                    tracing::warn!(source_delivery_intent_id=%intent.id, error=%error.message, "registered revision was not advanced after the confirmed source merge");
+                    json!({"status":"withheld","reason":error.message})
+                }
+            }
+        }
+        _ => Value::Null,
+    };
     let provenance = json!({
         "pull_request":pull_request,
         "head_sha":head_sha,
@@ -1322,6 +1349,7 @@ pub(in crate::app) async fn internal_source_delivery_observation_outcome(
         "merge_observation_id":provider_observation.id,
         "status":terminal_status,
         "hosted_merge_proof":hosted_merge_proof,
+        "registered_revision":registered_revision,
     });
     let intent = state
         .store

@@ -24,6 +24,15 @@ pub(super) async fn fixture_with_policy(
     fake: &KubectlFixture,
     policy: Option<Value>,
 ) -> RepoDeliveryFixture {
+    fixture_with_changed_paths(suffix, fake, policy, &["src/yfinance_wrapper/api.py"]).await
+}
+
+pub(super) async fn fixture_with_changed_paths(
+    suffix: &str,
+    fake: &KubectlFixture,
+    policy: Option<Value>,
+    changed_paths: &[&str],
+) -> RepoDeliveryFixture {
     let state = if policy.is_some() {
         super::characterization::test_state_with_hosted_build(fake.command.clone(), REPO.into())
             .await
@@ -170,7 +179,7 @@ pub(super) async fn fixture_with_policy(
             json!({"id":sealed.id,"stage":key,"hash":sealed.content_hash,"status":"succeeded"}),
         );
     }
-    let material = json!({"effective_outcomes":bound,"verification_stage_execution_id":format!("stage_{suffix}_verify"),"patch":{"artifact_id":format!("patch_{suffix}"),"hash":format!("sha256:{}","d".repeat(64))}});
+    let material = json!({"effective_outcomes":bound,"verification_stage_execution_id":format!("stage_{suffix}_verify"),"patch":{"artifact_id":format!("patch_{suffix}"),"hash":format!("sha256:{}","d".repeat(64))},"git_status":{"artifact_id":format!("status_{suffix}"),"content":{"changed_paths":changed_paths}}});
     let material_hash = hash(&material).unwrap();
     let change = store
         .create_change_set(CreateChangeSet {
@@ -749,4 +758,322 @@ async fn change_set_approval_rechecks_exact_planner_revision_not_only_ready_clai
         error.message
     );
     assert_eq!(fake.creates(), before);
+}
+
+async fn registered(fixture: &RepoDeliveryFixture) -> pharness_store::StoredRepository {
+    let metadata = fixture
+        .state
+        .store
+        .get_repo_work_item_metadata(&fixture.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    fixture
+        .state
+        .store
+        .get_repository(&metadata.repository_id)
+        .await
+        .unwrap()
+        .unwrap()
+}
+
+async fn observe_merged(
+    fixture: &RepoDeliveryFixture,
+    a: &HostedSourceMergeAuthority,
+    parents: Value,
+) -> Value {
+    let store = &fixture.state.store;
+    let intent = store
+        .get_source_delivery_intent(&fixture.intent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    store
+        .update_source_delivery_intent(
+            &intent.id,
+            intent.state_version,
+            "observer_dispatched",
+            None,
+            Some("observer_registered"),
+            None,
+            None,
+            None,
+            "test-controller",
+            "Observe admitted merge",
+        )
+        .await
+        .unwrap();
+    let request = json!({"execution_id":"observer_registered","status":"observed","pull_request_state":"closed","merged":true,"merge_commit_sha":"c".repeat(40),"head_commit_sha":a.head_commit_sha,"head_branch":a.head_branch,"merge_parent_shas":parents,"merge_tree_sha":"d".repeat(40),"authoritative_rules_succeeded":true,"required_checks":[{"name":"Source integrity","app_id":15368,"status":"passing"}],"check_runs":[],"commit_statuses":[],"provider_check_status":"passing"});
+    let Json(result) = crate::app::repo_mode::internal_source_delivery_observation_outcome(
+        State(fixture.state.clone()),
+        Path(intent.id),
+        Json(serde_json::from_value(request).unwrap()),
+    )
+    .await
+    .unwrap();
+    result
+}
+
+async fn recover(
+    fixture: &RepoDeliveryFixture,
+    repository_id: &str,
+    intent_id: &str,
+) -> Result<Json<Value>, crate::app::ApiError> {
+    crate::app::repo_mode::advance_repository_registered_revision(
+        State(fixture.state.clone()),
+        Path(repository_id.to_string()),
+        Json(
+            serde_json::from_value(json!({"source_delivery_intent_id":intent_id,"actor":"lucas","reason":"Register the merged revision for follow-up work"}))
+                .unwrap(),
+        ),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn confirmed_source_merge_advances_the_registered_revision_and_carries_the_contract() {
+    let fake = KubectlFixture::new(false);
+    let fixture = fixture("merge_registers", &fake).await;
+    let a = authority(&fixture).await;
+    let _ = admit(&fixture, &a).await.unwrap();
+    let before = registered(&fixture).await;
+    assert_eq!(before.registered_commit, a.base_commit_sha);
+    let store = &fixture.state.store;
+    let base_contract = store
+        .latest_repository_contract_version(&before.id, &a.base_commit_sha)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let result = observe_merged(&fixture, &a, json!([a.base_commit_sha, a.head_commit_sha])).await;
+    assert_eq!(result["delivery_status"], "succeeded");
+    let merged = "c".repeat(40);
+    let after = registered(&fixture).await;
+    assert_eq!(after.registered_commit, merged);
+    assert_eq!(after.state_version, before.state_version + 1);
+    let carried = store
+        .latest_repository_contract_version(&after.id, &merged)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_ne!(carried.id, base_contract.id);
+    assert_eq!(carried.content_hash, base_contract.content_hash);
+    assert_eq!(carried.contract, base_contract.contract);
+    assert_eq!(carried.onboarding_id, base_contract.onboarding_id);
+    assert_eq!(carried.merge_provenance["kind"], "work_item_source_merge");
+    assert_eq!(
+        carried.merge_provenance["source_delivery_intent_id"],
+        fixture.intent_id
+    );
+    assert_eq!(
+        carried.merge_provenance["work_item_id"],
+        fixture.work_item_id
+    );
+    assert_eq!(
+        carried.merge_provenance["base_commit_sha"],
+        a.base_commit_sha
+    );
+    assert_eq!(
+        carried.merge_provenance["head_commit_sha"],
+        a.head_commit_sha
+    );
+    assert_eq!(carried.merge_provenance["merge_commit_sha"], merged);
+    assert_eq!(
+        carried.merge_provenance["changed_paths"],
+        json!(["src/yfinance_wrapper/api.py"])
+    );
+    let intent = store
+        .get_source_delivery_intent(&fixture.intent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(intent.status, "merged");
+    let recorded = &intent.merge_provenance.as_ref().unwrap()["registered_revision"];
+    assert_eq!(recorded["status"], "advanced");
+    assert_eq!(recorded["registered_commit"], merged);
+    assert_eq!(recorded["contract_version_id"], carried.id);
+    // The original revision keeps its own contract version and assessment.
+    assert_eq!(
+        store
+            .latest_repository_contract_version(&after.id, &a.base_commit_sha)
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        base_contract.id
+    );
+
+    // Explicit recovery on an already-advanced merge changes nothing.
+    let Json(again) = recover(&fixture, &after.id, &fixture.intent_id)
+        .await
+        .unwrap();
+    assert_eq!(again["registered_revision"]["status"], "already_current");
+    assert_eq!(
+        again["registered_revision"]["contract_version_id"],
+        carried.id
+    );
+    assert_eq!(
+        registered(&fixture).await.state_version,
+        after.state_version
+    );
+}
+
+#[tokio::test]
+async fn registered_revision_is_withheld_without_exact_parents_or_when_the_contract_changed() {
+    let fake = KubectlFixture::new(false);
+    let fixture = fixture("merge_bad_parents_registers", &fake).await;
+    let a = authority(&fixture).await;
+    let _ = admit(&fixture, &a).await.unwrap();
+    let before = registered(&fixture).await;
+    let result = observe_merged(&fixture, &a, json!(["f".repeat(40), a.head_commit_sha])).await;
+    assert_eq!(result["delivery_status"], "failed");
+    let after = registered(&fixture).await;
+    assert_eq!(after.registered_commit, before.registered_commit);
+    assert_eq!(after.state_version, before.state_version);
+    assert!(fixture
+        .state
+        .store
+        .latest_repository_contract_version(&after.id, &"c".repeat(40))
+        .await
+        .unwrap()
+        .is_none());
+
+    let fake = KubectlFixture::new(false);
+    let fixture = fixture_with_changed_paths(
+        "merge_contract_registers",
+        &fake,
+        None,
+        &[".pharness/repository.yaml", "src/app.py"],
+    )
+    .await;
+    let a = authority(&fixture).await;
+    let _ = admit(&fixture, &a).await.unwrap();
+    let before = registered(&fixture).await;
+    let result = observe_merged(&fixture, &a, json!([a.base_commit_sha, a.head_commit_sha])).await;
+    assert_eq!(result["delivery_status"], "succeeded");
+    let after = registered(&fixture).await;
+    assert_eq!(after.registered_commit, before.registered_commit);
+    assert_eq!(after.state_version, before.state_version);
+    let store = &fixture.state.store;
+    assert!(store
+        .latest_repository_contract_version(&after.id, &"c".repeat(40))
+        .await
+        .unwrap()
+        .is_none());
+    let intent = store
+        .get_source_delivery_intent(&fixture.intent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(intent.status, "merged");
+    let recorded = &intent.merge_provenance.as_ref().unwrap()["registered_revision"];
+    assert_eq!(recorded["status"], "withheld");
+    assert!(recorded["reason"].as_str().unwrap().contains(".pharness"));
+    let err = recover(&fixture, &after.id, &fixture.intent_id)
+        .await
+        .unwrap_err();
+    assert_eq!(err.status, axum::http::StatusCode::CONFLICT);
+    assert!(err.message.contains(".pharness"), "{}", err.message);
+}
+
+#[tokio::test]
+async fn operator_recovery_registers_a_merge_confirmed_before_automatic_advance() {
+    let fake = KubectlFixture::new(false);
+    let fixture = fixture("merge_recovery_registers", &fake).await;
+    let a = authority(&fixture).await;
+    let store = &fixture.state.store;
+    let before = registered(&fixture).await;
+    let intent = store
+        .get_source_delivery_intent(&fixture.intent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let merged = "c".repeat(40);
+    let provenance = |status: &str, parents: Value| {
+        json!({"head_sha":a.head_commit_sha,"merge_commit_sha":merged,"status":status,
+            "hosted_merge_proof":{"accepted":status == "succeeded","merge_parent_shas":parents}})
+    };
+
+    // Not merged yet: refused without touching the repository.
+    let err = recover(&fixture, &before.id, &intent.id).await.unwrap_err();
+    assert_eq!(err.status, axum::http::StatusCode::CONFLICT);
+    // Unknown intent or a different repository: not found.
+    let err = recover(&fixture, "repo_other", &intent.id)
+        .await
+        .unwrap_err();
+    assert_eq!(err.status, axum::http::StatusCode::NOT_FOUND);
+
+    let intent = store
+        .update_source_delivery_intent(
+            &intent.id,
+            intent.state_version,
+            "merged",
+            None,
+            None,
+            None,
+            Some(&provenance(
+                "succeeded",
+                json!([a.base_commit_sha, a.head_commit_sha]),
+            )),
+            None,
+            "test-controller",
+            "Merged before registered revisions followed merges",
+        )
+        .await
+        .unwrap();
+    let Json(result) = recover(&fixture, &before.id, &intent.id).await.unwrap();
+    assert_eq!(result["registered_revision"]["status"], "advanced");
+    assert_eq!(result["repository"]["registered_commit"], merged);
+    let after = registered(&fixture).await;
+    assert_eq!(after.registered_commit, merged);
+    let carried = store
+        .latest_repository_contract_version(&after.id, &merged)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(carried.merge_provenance["actor"], "lucas");
+    assert_eq!(
+        carried.merge_provenance["reason"],
+        "Register the merged revision for follow-up work"
+    );
+    assert_eq!(
+        result["registered_revision"]["contract_version_id"],
+        carried.id
+    );
+
+    // A merge without recorded exact parents cannot be registered by hand either.
+    let fake = KubectlFixture::new(false);
+    let unproven = self::fixture("merge_unproven_registers", &fake).await;
+    let a = authority(&unproven).await;
+    let store = &unproven.state.store;
+    let before = registered(&unproven).await;
+    let intent = store
+        .get_source_delivery_intent(&unproven.intent_id)
+        .await
+        .unwrap()
+        .unwrap();
+    store
+        .update_source_delivery_intent(
+            &intent.id,
+            intent.state_version,
+            "merged",
+            None,
+            None,
+            None,
+            Some(&json!({"head_sha":a.head_commit_sha,"merge_commit_sha":"c".repeat(40),"status":"succeeded"})),
+            None,
+            "test-controller",
+            "Merged without exact parent proof",
+        )
+        .await
+        .unwrap();
+    let err = recover(&unproven, &before.id, &intent.id)
+        .await
+        .unwrap_err();
+    assert_eq!(err.status, axum::http::StatusCode::CONFLICT);
+    assert!(err.message.contains("not proven"), "{}", err.message);
+    assert_eq!(
+        registered(&unproven).await.registered_commit,
+        before.registered_commit
+    );
 }

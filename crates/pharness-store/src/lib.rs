@@ -50,6 +50,7 @@ pub use models::{
     UpdateWorkspaceExecution, WorkItemListFilter, WorkPlanListFilter, WorkspaceListFilter,
 };
 pub use onboarding::{
+    AdvanceRepositoryRegisteredCommit, AdvancedRepositoryRegisteredCommit,
     ApproveRepositoryOnboardingProposal, ApprovedOnboardingProductModelChange,
     ApprovedOnboardingService, CreateRepositoryContractVersion, CreateRepositoryOnboarding,
     CreateRepositoryOnboardingProposal, CreateRepositoryReadinessAssessment,

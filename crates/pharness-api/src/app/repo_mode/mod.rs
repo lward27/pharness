@@ -2,6 +2,7 @@ mod actions;
 mod creation;
 mod evidence;
 mod projection;
+mod registered_revision;
 mod source_delivery;
 mod stage_authorization;
 mod stages;
@@ -41,6 +42,7 @@ use self::evidence::{
     create_annotation, get_evidence_validation, get_stage_context_pack, get_stage_execution,
     get_stage_outcome, list_annotations, list_stage_executions, list_work_item_evidence,
 };
+pub(in crate::app) use self::registered_revision::advance_repository_registered_revision;
 use crate::app::AppState;
 use axum::routing::{get, post};
 use axum::Router;
@@ -54,6 +56,10 @@ pub(super) fn router() -> Router<AppState> {
         .route(
             "/api/products/:product_id/work-items",
             post(create_repo_work_item),
+        )
+        .route(
+            "/api/repositories/:repository_id/registered-revision",
+            post(advance_repository_registered_revision),
         )
         .route(
             "/api/work-items/:work_item_id/stage-executions",
