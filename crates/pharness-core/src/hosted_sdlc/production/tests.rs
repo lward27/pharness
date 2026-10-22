@@ -318,6 +318,46 @@ fn rollback_plan_restores_exactly_the_recorded_previous_digest() {
     }
 }
 
+/// GitHub's `CommittableBranch` input accepts `branchName` (or `id`); a
+/// `refName` key is rejected before any commit is created, so every hosted
+/// GitOps write shares one exact branch shape.
+#[test]
+fn every_production_commit_request_names_the_gitops_branch_the_way_github_accepts() {
+    let p = proposal("yfinance_wrapper");
+    let plan = plan(&p);
+    let decision = approval(&p, &plan);
+    let delivery = HostedProductionAuthority {
+        schema_version: AUTHORITY_SCHEMA.into(),
+        execution_id: "pexec_finance".into(),
+        gitops_change_set_id: "gcs_production_finance".into(),
+        approval_artifact_id: "artifact_production_approval".into(),
+        proposal: p.clone(),
+        approval: decision.clone(),
+        created_at_ms: decision.approved_at_ms,
+        expires_at_ms: decision.expires_at_ms,
+    };
+    let rollback_authority = rollback_authority(&p);
+    let rollback = ProductionRollbackPlan::from_observed(
+        &rollback_authority,
+        "4".repeat(40),
+        "5".repeat(40),
+        released_file(&p),
+    )
+    .unwrap();
+    let expected =
+        json!({"repositoryNameWithOwner":"lward27/lucas_engineering","branchName":"main"});
+    for request in [
+        plan.commit_request(&delivery, decision.approved_at_ms + 1)
+            .unwrap(),
+        rollback
+            .commit_request(&rollback_authority, 3_000_001)
+            .unwrap(),
+    ] {
+        let branch = &request["variables"]["input"]["branch"];
+        assert_eq!(*branch, expected);
+        assert!(branch.get("refName").is_none());
+    }
+}
 #[test]
 fn rollback_refuses_a_drifted_file_or_one_that_no_longer_pins_the_candidate() {
     let p = proposal("yfinance_wrapper");

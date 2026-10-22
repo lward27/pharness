@@ -200,7 +200,7 @@ impl StagingGitOpsPlan {
         Ok(json!({
             "query":"mutation PharnessStaging($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { clientMutationId commit { oid } } }",
             "variables":{"input":{
-                "branch":{"repositoryNameWithOwner":"lward27/lucas_engineering","refName":"main"},
+                "branch":{"repositoryNameWithOwner":"lward27/lucas_engineering","branchName":"main"},
                 "expectedHeadOid":self.base_commit_sha,
                 "clientMutationId":authority.execution_id,
                 "message":{"headline":self.commit_headline(authority),"body":self.commit_body(authority)?},

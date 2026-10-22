@@ -541,6 +541,121 @@ async fn staging_whose_writer_ended_without_admission_closes_at_its_deadline_and
     }
 }
 #[tokio::test]
+async fn admitted_staging_whose_writer_and_observer_ended_unconfirmed_closes_at_its_deadline_and_releases_its_locks(
+) {
+    use pharness_store::BeginWorkflowOperation;
+    let fake = KubectlFixture::new(false);
+    let (f, op, a) = start("staging_unconfirmed_closed", &fake).await;
+    let p = plan(&a);
+    let store = &f.state.store;
+    let _ = save(&f, &a, &p).await.unwrap();
+    native::seed(&f, &fake, &a, &p).await;
+    let _ = admit(&f, &a, &p).await.unwrap();
+    let dispatch = &op.resource_refs["staging_dispatch"];
+    let unconfirmed = |observe_only: bool| json!({"execution_id":a.execution_id,"authority_hash":a.material_hash().unwrap(),"status":"unconfirmed","error_code":"staging_commit_not_established","checked_at_ms":now(),"observe_only":observe_only});
+    let _ = outcome(&f, &a, unconfirmed(false)).await.unwrap();
+    fail_job(&fake, &dispatch["executor_job_manifest"]);
+    tick(&f).await;
+    assert_eq!(
+        creates(&fake),
+        3,
+        "one bounded observer after the writer ended"
+    );
+    let _ = outcome(&f, &a, unconfirmed(true)).await.unwrap();
+    fail_job(&fake, &dispatch["observer_job_manifest"]);
+    tick(&f).await;
+    let control = store
+        .get_workflow_reconciliation(&f.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(control.condition, "blocked", "{}", control.condition_reason);
+    assert!(control.condition_reason.contains("observer"));
+    // Before the deadline the admitted write stays open for a late observation.
+    assert_eq!(operation(&f).await.status, "running");
+    crate::app::clock::advance_for_test(61 * 60 * 1000);
+    tick(&f).await;
+    let control = store
+        .get_workflow_reconciliation(&f.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(control.condition, "blocked", "{}", control.condition_reason);
+    assert!(control.condition_reason.contains("never confirmed"));
+    assert_eq!(creates(&fake), 3, "no replacement writer or observer");
+    let closed = store.get_workflow_operation(&op.id).await.unwrap().unwrap();
+    assert_eq!(closed.status, "succeeded");
+    let result = &closed.resource_refs["staging_result"];
+    assert_eq!(result["status"], staging::EXPIRED_UNCONFIRMED);
+    assert_eq!(result["executor_job_status"], "failed");
+    assert_eq!(result["observer_job_status"], "failed");
+    assert_eq!(
+        result["exception_artifact_ids"],
+        json!([
+            format!("staging_executor_exception_{}", a.execution_id),
+            format!("staging_observer_exception_{}", a.execution_id)
+        ])
+    );
+    assert_eq!(
+        closed.resource_refs["staging_dispatch"],
+        op.resource_refs["staging_dispatch"]
+    );
+    assert!(store
+        .get_artifact(&format!("staging_commit_{}", a.execution_id))
+        .await
+        .unwrap()
+        .is_none());
+    assert!(store
+        .active_workflow_operation(&f.work_item_id)
+        .await
+        .unwrap()
+        .is_none());
+    assert!(save(&f, &a, &p).await.is_err());
+    assert!(admit(&f, &a, &p).await.is_err());
+    tick(&f).await;
+    let control = store
+        .get_workflow_reconciliation(&f.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(control.condition, "blocked", "{}", control.condition_reason);
+    assert!(control.condition_reason.contains("cannot be replaced"));
+    assert!(store
+        .get_deployment_intent_for_stage(&a.pipeline_intent_id, DeliveryStage::Production)
+        .await
+        .unwrap()
+        .is_none());
+    let probe_time = now();
+    store
+        .wake_workflow(&f.work_item_id, probe_time)
+        .await
+        .unwrap();
+    let claim = store
+        .claim_due_workflow("lock-probe", probe_time, 60_000)
+        .await
+        .unwrap()
+        .unwrap();
+    let keys = op
+        .resource_keys
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    store
+        .begin_workflow_operation(
+            &claim,
+            BeginWorkflowOperation {
+                id: "workflowop_lock_probe",
+                action: "observe_probe",
+                input_hash: "sha256:probe",
+                effect: "observation",
+                resource_keys: &keys,
+            },
+            probe_time,
+        )
+        .await
+        .expect("released staging locks must be reacquirable");
+}
+#[tokio::test]
 async fn unconfirmed_staging_evidence_is_repeat_safe_and_never_counts_as_a_commit() {
     let fake = KubectlFixture::new(false);
     let (f, _, a) = start("staging_unconfirmed", &fake).await;
