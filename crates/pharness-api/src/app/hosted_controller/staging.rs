@@ -31,6 +31,10 @@ pub(in crate::app) const EXPIRED_BEFORE_DISPATCH: &str = "expired_before_dispatc
 /// (it saved a plan or is observed terminal) but its authority expired before
 /// any admission; a failed baseline is the usual cause.
 pub(in crate::app) const EXPIRED_WITHOUT_ADMISSION: &str = "expired_without_admission";
+/// Terminal `staging_result.status` of an operation that admitted a write
+/// whose commit was never confirmed before the authority expired, with both
+/// the writer and the bounded observer ended or absent.
+pub(in crate::app) const EXPIRED_UNCONFIRMED: &str = "expired_unconfirmed";
 
 fn deadline(operation: &StoredWorkflowOperation) -> i64 {
     operation.created_at.saturating_add(
@@ -121,6 +125,9 @@ pub(super) async fn candidate(
             }
             if previous.resource_refs["staging_result"]["status"] == EXPIRED_WITHOUT_ADMISSION {
                 return Err(ApiError::conflict("The recorded staging operation expired before any GitOps write was admitted; it cannot be replaced. Deploy this source through new work."));
+            }
+            if previous.resource_refs["staging_result"]["status"] == EXPIRED_UNCONFIRMED {
+                return Err(ApiError::conflict("The recorded staging operation admitted a GitOps write that was never confirmed before its deadline; it cannot be replaced. Inspect its retained receipts and the GitOps history before deploying this source through new work."));
             }
             return Err(ApiError::conflict("The recorded staging operation has no complete native runtime evidence; it cannot be replaced."));
         }
@@ -315,6 +322,34 @@ pub(super) async fn reconcile(
             .reconcile_hosted_build_job(&dispatch["observer_job_manifest"], dispatch_observer)
             .await
             .map_err(|e| ApiError::conflict(e.to_string()))?;
+        if timed_out && matches!(observed, "missing" | "failed" | "succeeded") {
+            // Past the deadline no writer or reader may be started, both Jobs
+            // are terminal or absent and no commit receipt exists. Whether the
+            // admitted write reached GitHub stays unknown; the retained
+            // exception receipts and the GitOps history answer that, not a
+            // lock held forever.
+            let mut exceptions = Vec::new();
+            for kind in ["executor_exception", "observer_exception"] {
+                let id = artifact_id(kind, execution);
+                if state.store.get_artifact(&id).await?.is_some() {
+                    exceptions.push(id);
+                }
+            }
+            let mut refs = operation.resource_refs.clone();
+            refs["staging_result"] = json!({"status":EXPIRED_UNCONFIRMED,"executor_job_name":dispatch["executor_job_manifest"]["metadata"]["name"],"executor_job_status":status,"observer_job_name":dispatch["observer_job_manifest"]["metadata"]["name"],"observer_job_status":observed,"exception_artifact_ids":exceptions,"deadline_ms":deadline(&operation),"recorded_at_ms":now()});
+            state
+                .store
+                .record_workflow_operation(
+                    claim,
+                    &operation.id,
+                    "succeeded",
+                    &refs,
+                    "The staging window expired after an admitted write whose commit was never confirmed; the operation's locks are released and its receipts are retained",
+                    now(),
+                )
+                .await?;
+            return Ok(condition("blocked", "The staging window expired after an admitted write whose commit was never confirmed. Inspect the retained writer and observer receipts and the GitOps history; the recorded operation is closed and cannot be replaced."));
+        }
         if matches!(observed, "failed" | "succeeded") || (observed == "missing" && !expired) {
             return Ok(condition("blocked", "The bounded staging observer is unavailable or ended without an accepted result. No replacement writer or observer was started."));
         }
