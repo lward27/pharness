@@ -211,6 +211,52 @@ fn validation_status_shapes_and_environment_config_cannot_silently_change() {
             ));
         }
     }
+    for (e, path) in [
+        (
+            expected(FinanceApplication::Yfinance, FinanceEnvironment::Staging),
+            "/healthz",
+        ),
+        (
+            expected(FinanceApplication::Frontend, FinanceEnvironment::Staging),
+            "/api/yfinance/healthz",
+        ),
+    ] {
+        let extended = json!({"status":"ok","version":"1.2.3","build":{"revision":"abc","image_digest":"unknown"}});
+        assert!(
+            matches_response(
+                &e,
+                path,
+                200,
+                "application/json",
+                extended.to_string().as_bytes()
+            ),
+            "extra health fields are allowed"
+        );
+        for body in [
+            json!({"status":"degraded","version":"1.2.3"}),
+            json!({"version":"1.2.3"}),
+            json!(["ok"]),
+            json!("ok"),
+        ] {
+            assert!(
+                !matches_response(
+                    &e,
+                    path,
+                    200,
+                    "application/json",
+                    body.to_string().as_bytes()
+                ),
+                "{body}"
+            );
+        }
+        assert!(!matches_response(
+            &e,
+            path,
+            503,
+            "application/json",
+            extended.to_string().as_bytes()
+        ));
+    }
     let e = expected(FinanceApplication::Frontend, FinanceEnvironment::Staging);
     let (_, _, production) = healthy_body(
         &expected(FinanceApplication::Frontend, FinanceEnvironment::Production),
