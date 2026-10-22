@@ -58,7 +58,7 @@ fn staging_request_is_one_digest_change_on_the_expected_gitops_head() {
         let input = &request["variables"]["input"];
         assert_eq!(
             input["branch"],
-            json!({"repositoryNameWithOwner":"lward27/lucas_engineering","refName":"main"})
+            json!({"repositoryNameWithOwner":"lward27/lucas_engineering","branchName":"main"})
         );
         assert_eq!(input["expectedHeadOid"], p.base_commit_sha);
         let changes = input["fileChanges"].as_object().unwrap();
