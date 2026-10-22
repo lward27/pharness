@@ -35,6 +35,10 @@ pub(in crate::app) const EXPIRED_WITHOUT_ADMISSION: &str = "expired_without_admi
 /// whose commit was never confirmed before the authority expired, with both
 /// the writer and the bounded observer ended or absent.
 pub(in crate::app) const EXPIRED_UNCONFIRMED: &str = "expired_unconfirmed";
+/// Terminal `staging_closure.status` of an operation whose GitOps commit was
+/// confirmed (`staging_result` keeps that receipt) but whose single runtime
+/// window failed or stayed inconclusive.
+pub(in crate::app) const RUNTIME_NOT_VERIFIED: &str = "runtime_not_verified";
 
 fn deadline(operation: &StoredWorkflowOperation) -> i64 {
     operation.created_at.saturating_add(
@@ -128,6 +132,9 @@ pub(super) async fn candidate(
             }
             if previous.resource_refs["staging_result"]["status"] == EXPIRED_UNCONFIRMED {
                 return Err(ApiError::conflict("The recorded staging operation admitted a GitOps write that was never confirmed before its deadline; it cannot be replaced. Inspect its retained receipts and the GitOps history before deploying this source through new work."));
+            }
+            if previous.resource_refs["staging_closure"]["status"] == RUNTIME_NOT_VERIFIED {
+                return Err(ApiError::conflict("The recorded staging operation committed to GitOps but its runtime window failed or stayed inconclusive; it cannot be replaced. Inspect its retained runtime evidence and deploy a fix through new work."));
             }
             return Err(ApiError::conflict("The recorded staging operation has no complete native runtime evidence; it cannot be replaced."));
         }
@@ -239,7 +246,8 @@ pub(super) async fn reconcile(
         }
         let saved = preparation::saved(state, id, execution).await?;
         let context = runtime::Context::new(state, &saved, &receipt).await?;
-        return runtime::reconcile(state, claim, &context, timed_out).await;
+        let verdict = runtime::reconcile(state, claim, &context, timed_out).await?;
+        return close_unverified_runtime(state, claim, &context, verdict).await;
     }
     let admitted = state
         .store
@@ -363,6 +371,50 @@ pub(super) async fn reconcile(
         } else {
             "Observing the original staging update. A GitOps commit, deployment and runtime verification remain separate evidence."
         },
+    ))
+}
+
+/// A staging operation gets exactly one runtime window. Once that window's
+/// result is recorded as anything but verified, no new window or promotion
+/// can follow, so holding the repository, staging and GitOps locks would only
+/// shut staging to every later WorkItem. Production keeps its operation open
+/// on the same verdict because its rollback path needs it.
+async fn close_unverified_runtime(
+    state: &AppState,
+    claim: &StoredWorkflowReconciliation,
+    context: &runtime::Context,
+    verdict: Condition,
+) -> Result<Condition, ApiError> {
+    let Some(operation) = state
+        .store
+        .get_workflow_operation(&context.operation.id)
+        .await?
+    else {
+        return Ok(verdict);
+    };
+    let result = &operation.resource_refs[context.ref_key("result")];
+    if operation.status != "running" || result["status"] != "blocked" {
+        return Ok(verdict);
+    }
+    let mut refs = operation.resource_refs.clone();
+    refs["staging_closure"] = json!({"status":RUNTIME_NOT_VERIFIED,"runtime_verification":result["runtime_verification"],"runtime_result_artifact_id":result["artifact_id"],"gitops_commit_sha":context.expected.gitops_commit_sha,"image_digest":context.expected.image_digest,"recorded_at_ms":now()});
+    state
+        .store
+        .record_workflow_operation(
+            claim,
+            &operation.id,
+            "succeeded",
+            &refs,
+            "The staging runtime window failed or stayed inconclusive; the operation's locks are released and its evidence is retained",
+            now(),
+        )
+        .await?;
+    Ok(condition(
+        "blocked",
+        format!(
+            "{} The recorded operation is closed and cannot be replaced; deploy a fix through new work.",
+            verdict.1
+        ),
     ))
 }
 

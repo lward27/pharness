@@ -113,9 +113,13 @@ async fn candidate_waits_for_exact_argo_image_then_fixes_one_window_even_while_p
 }
 
 #[tokio::test]
-async fn candidate_missing_telemetry_keeps_original_evidence_and_blocks_promotion() {
+async fn unverified_candidate_keeps_original_evidence_closes_the_operation_and_releases_its_locks()
+{
+    use pharness_store::{BeginWorkflowOperation, DeliveryStage};
     let fake = KubectlFixture::new(false);
-    let (f, a, _) = committed("runtime_no_telemetry", &fake).await;
+    let (f, a, p) = committed("runtime_no_telemetry", &fake).await;
+    let store = &f.state.store;
+    let op = operation(&f).await;
     let evidence = candidate(&f, &fake, &a, 0).await;
     staging::seed_runtime(
         &f.state,
@@ -135,17 +139,96 @@ async fn candidate_missing_telemetry_keeps_original_evidence_and_blocks_promotio
         "verified"
     );
     assert_eq!(native::reads(&fake), reads + 6);
-    let op = operation(&f).await;
+    let control = store
+        .get_workflow_reconciliation(&f.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(control.condition, "blocked", "{}", control.condition_reason);
+    assert!(
+        control
+            .condition_reason
+            .contains("failed or is inconclusive"),
+        "{}",
+        control.condition_reason
+    );
+    assert!(control.condition_reason.contains("cannot be replaced"));
+    // The single window is final: the operation closes with its evidence
+    // retained rather than holding staging and GitOps for every later WorkItem.
+    let closed = store.get_workflow_operation(&op.id).await.unwrap().unwrap();
+    assert_eq!(closed.status, "succeeded");
     assert_eq!(
-        op.resource_refs["staging_runtime_result"]["status"],
+        closed.resource_refs["staging_runtime_result"]["status"],
         "blocked"
     );
-    assert!(op
-        .resource_keys
-        .contains(&"gitops:lucas_engineering:main".into()));
+    assert_eq!(
+        closed.resource_refs["staging_result"]["status"],
+        "gitops_committed"
+    );
+    let result = &closed.resource_refs["staging_closure"];
+    assert_eq!(result["status"], staging::RUNTIME_NOT_VERIFIED);
+    assert_eq!(result["runtime_verification"], "inconclusive");
+    assert_eq!(
+        result["runtime_result_artifact_id"],
+        format!("staging_runtime_result_{}", a.execution_id)
+    );
+    assert_eq!(result["image_digest"], a.image_digest);
+    assert_eq!(
+        closed.resource_refs["staging_dispatch"],
+        op.resource_refs["staging_dispatch"]
+    );
+    assert!(store
+        .active_workflow_operation(&f.work_item_id)
+        .await
+        .unwrap()
+        .is_none());
+    assert!(store
+        .get_deployment_intent_for_stage(&a.pipeline_intent_id, DeliveryStage::Production)
+        .await
+        .unwrap()
+        .is_none());
+    assert!(save(&f, &a, &p).await.is_err());
     tick(&f).await;
     assert_eq!(record(&f, &a, "result").await.unwrap(), first);
     assert_eq!(native::reads(&fake), reads + 6);
+    assert_eq!(creates(&fake), 2, "no replacement writer or build");
+    let control = store
+        .get_workflow_reconciliation(&f.work_item_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(control.condition, "blocked", "{}", control.condition_reason);
+    assert!(control.condition_reason.contains("cannot be replaced"));
+    let probe_time = now();
+    store
+        .wake_workflow(&f.work_item_id, probe_time)
+        .await
+        .unwrap();
+    let claim = store
+        .claim_due_workflow("lock-probe", probe_time, 60_000)
+        .await
+        .unwrap()
+        .unwrap();
+    let keys = op
+        .resource_keys
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    assert!(keys.contains(&"gitops:lucas_engineering:main"));
+    store
+        .begin_workflow_operation(
+            &claim,
+            BeginWorkflowOperation {
+                id: "workflowop_lock_probe",
+                action: "observe_probe",
+                input_hash: "sha256:probe",
+                effect: "observation",
+                resource_keys: &keys,
+            },
+            probe_time,
+        )
+        .await
+        .expect("released staging locks must be reacquirable");
 }
 
 #[tokio::test]
@@ -388,7 +471,18 @@ async fn interrupted_candidate_final_collection_is_inconclusive_without_repeatin
     assert_eq!(record(&f, &a, "result").await.unwrap(), first);
     assert_eq!(native::reads(&fake), reads);
     assert_eq!(creates(&fake), 2);
-    assert_eq!(operation(&f).await.status, "running");
+    let op = f
+        .state
+        .store
+        .get_workflow_operation(&a.operation_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(op.status, "succeeded");
+    assert_eq!(
+        op.resource_refs["staging_closure"]["status"],
+        staging::RUNTIME_NOT_VERIFIED
+    );
 }
 
 #[tokio::test]

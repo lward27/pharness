@@ -217,7 +217,11 @@ fn matches_response(
         return false;
     };
     match path {
-        "/healthz" | "/api/yfinance/healthz" => status == 200 && document == json!({"status":"ok"}),
+        // Health reports may grow (version, build identity); only the liveness
+        // verdict is the contract.
+        "/healthz" | "/api/yfinance/healthz" => {
+            status == 200 && document.is_object() && document["status"] == "ok"
+        }
         "/history?ticker_name=%2A%2A%2A" => {
             status == 422 && document == json!({"detail":"Ticker contains invalid characters"})
         }
