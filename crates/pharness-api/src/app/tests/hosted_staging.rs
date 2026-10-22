@@ -153,7 +153,17 @@ fn remove_job(fake: &KubectlFixture, manifest: &Value) {
     )))
     .unwrap();
 }
-
+/// Mark the fixture's Job terminal the way the API server reports a writer
+/// that exceeded its deadline or exited non-zero.
+fn fail_job(fake: &KubectlFixture, manifest: &Value) {
+    let path = fake.dir.join(format!(
+        "{}.json",
+        manifest["metadata"]["name"].as_str().unwrap()
+    ));
+    let mut job: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    job["status"] = json!({"failed":1,"conditions":[{"type":"Failed","status":"True","reason":"DeadlineExceeded"}]});
+    std::fs::write(&path, job.to_string()).unwrap();
+}
 #[tokio::test]
 async fn staging_reclaims_expired_owner_without_replacing_authority_or_repeating_admission() {
     let fake = KubectlFixture::new(false);
@@ -399,6 +409,137 @@ async fn staging_whose_writer_never_existed_closes_at_its_deadline_and_releases_
         .expect("released staging locks must be reacquirable");
 }
 
+#[tokio::test]
+async fn staging_whose_writer_ended_without_admission_closes_at_its_deadline_and_releases_its_locks(
+) {
+    use pharness_store::BeginWorkflowOperation;
+    for (suffix, job_state) in [("failed", "failed"), ("collected", "missing")] {
+        let fake = KubectlFixture::new(false);
+        let (f, op, a) = start(&format!("staging_unadmitted_{suffix}"), &fake).await;
+        let p = plan(&a);
+        let store = &f.state.store;
+        let _ = save(&f, &a, &p).await.unwrap();
+        // An interrupted baseline is terminal: it never admits and is never replaced.
+        staging::seed_window(
+            &f.state,
+            &a.deployment_intent_id,
+            &a.execution_id,
+            now(),
+            Some("before"),
+        )
+        .await;
+        tick(&f).await;
+        let control = store
+            .get_workflow_reconciliation(&f.work_item_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(control.condition, "blocked", "{}", control.condition_reason);
+        assert!(control.condition_reason.contains("baseline"));
+        assert_eq!(operation(&f).await.status, "running");
+        crate::app::clock::advance_for_test(61 * 60 * 1000);
+        // An active writer is still observed after the deadline, never closed over.
+        tick(&f).await;
+        let control = store
+            .get_workflow_reconciliation(&f.work_item_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            control.condition, "wait_expired",
+            "{}",
+            control.condition_reason
+        );
+        assert_eq!(operation(&f).await.status, "running");
+        let manifest = &op.resource_refs["staging_dispatch"]["executor_job_manifest"];
+        if job_state == "missing" {
+            remove_job(&fake, manifest);
+        } else {
+            fail_job(&fake, manifest);
+        }
+        tick(&f).await;
+        let control = store
+            .get_workflow_reconciliation(&f.work_item_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(control.condition, "blocked", "{}", control.condition_reason);
+        assert!(control
+            .condition_reason
+            .contains("before any GitOps write was admitted"));
+        assert_eq!(
+            creates(&fake),
+            2,
+            "no replacement writer after the deadline"
+        );
+        let closed = store.get_workflow_operation(&op.id).await.unwrap().unwrap();
+        assert_eq!(closed.status, "succeeded");
+        assert_eq!(
+            closed.resource_refs["staging_result"]["status"],
+            staging::EXPIRED_WITHOUT_ADMISSION
+        );
+        assert_eq!(
+            closed.resource_refs["staging_result"]["executor_job_status"],
+            job_state
+        );
+        assert_eq!(
+            closed.resource_refs["staging_dispatch"],
+            op.resource_refs["staging_dispatch"]
+        );
+        assert!(closed.resource_refs["staging_baseline"]["result_artifact_id"].is_string());
+        assert!(store
+            .active_workflow_operation(&f.work_item_id)
+            .await
+            .unwrap()
+            .is_none());
+        assert!(
+            save(&f, &a, &p).await.is_err(),
+            "late writer callbacks are refused"
+        );
+        assert!(admit(&f, &a, &p).await.is_err());
+        // The same identity is never re-prepared; the WorkItem stays blocked.
+        tick(&f).await;
+        let control = store
+            .get_workflow_reconciliation(&f.work_item_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(control.condition, "blocked", "{}", control.condition_reason);
+        assert!(control.condition_reason.contains("cannot be replaced"));
+        assert_eq!(creates(&fake), 2);
+        // The repository, staging and GitOps locks are free for other work.
+        let probe_time = now();
+        store
+            .wake_workflow(&f.work_item_id, probe_time)
+            .await
+            .unwrap();
+        let claim = store
+            .claim_due_workflow("lock-probe", probe_time, 60_000)
+            .await
+            .unwrap()
+            .unwrap();
+        let keys = op
+            .resource_keys
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        assert!(keys.iter().any(|key| key.starts_with("repository:")));
+        store
+            .begin_workflow_operation(
+                &claim,
+                BeginWorkflowOperation {
+                    id: "workflowop_lock_probe",
+                    action: "observe_probe",
+                    input_hash: "sha256:probe",
+                    effect: "observation",
+                    resource_keys: &keys,
+                },
+                probe_time,
+            )
+            .await
+            .expect("released staging locks must be reacquirable");
+    }
+}
 #[tokio::test]
 async fn unconfirmed_staging_evidence_is_repeat_safe_and_never_counts_as_a_commit() {
     let fake = KubectlFixture::new(false);
