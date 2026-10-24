@@ -24,7 +24,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: ingress-nginx
+              kubernetes.io/metadata.name: {{ .Values.ingress.controllerNamespace }}
       ports:
         - protocol: TCP
           port: 4777
@@ -58,7 +58,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: ingress-nginx
+              kubernetes.io/metadata.name: {{ .Values.ingress.controllerNamespace }}
         - podSelector: {}
       ports:
         - protocol: TCP
