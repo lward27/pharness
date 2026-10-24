@@ -462,7 +462,11 @@ ingress:
   # hostname. Worker identity and one-time enrollment credentials still gate
   # every non-health route.
   apiEnabled: true
-  className: nginx
+  # Traefik streams SSE responses and sets no backend response timeout by
+  # default, so the routes need no proxy-buffering or read-timeout overrides.
+  className: traefik
+  # NetworkPolicies admit the ingress controller from this namespace only.
+  controllerNamespace: traefik
   clusterIssuer: letsencrypt-prod
   uiTlsSecretName: pharness-lucas-engineering-tls
   apiTlsSecretName: pharness-api-lucas-engineering-tls

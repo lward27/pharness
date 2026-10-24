@@ -12,12 +12,7 @@ metadata:
     cert-manager.io/revision-history-limit: "2147483647"
     # The console injects the operator bearer server-side, so the public
     # surface must carry its own authentication.
-    nginx.ingress.kubernetes.io/auth-type: basic
-    nginx.ingress.kubernetes.io/auth-secret: {{ .Values.ingress.basicAuthSecretName }}
-    nginx.ingress.kubernetes.io/auth-realm: "Pharness Console"
-    # SSE through the operator console proxy.
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    traefik.ingress.kubernetes.io/router.middlewares: {{ .Release.Namespace }}-pharness-console-basic-auth@kubernetescrd
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   tls:
@@ -35,6 +30,20 @@ spec:
                 name: pharness-ui
                 port:
                   name: http
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: pharness-console-basic-auth
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/part-of: pharness
+spec:
+  basicAuth:
+    # Traefik reads htpasswd lines from the Secret's data, including the
+    # `auth` key used by the original ingress-nginx Secret.
+    secret: {{ .Values.ingress.basicAuthSecretName }}
+    realm: Pharness Console
 {{- end }}
 {{- if and .Values.ingress.enabled .Values.ingress.agentHostApi.enabled }}
 ---
@@ -52,8 +61,6 @@ metadata:
     # The host protocol already requires an enrollment or host/lease bearer
     # credential. This exact prefix must not inherit console Basic Auth because
     # HTTP carries only one Authorization header.
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-buffering: "off"
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   tls:
@@ -85,8 +92,6 @@ metadata:
     cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer }}
     cert-manager.io/private-key-rotation-policy: "Never"
     cert-manager.io/revision-history-limit: "2147483647"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-buffering: "off"
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   tls:

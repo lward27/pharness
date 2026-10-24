@@ -224,11 +224,12 @@
     },
     "ingress": {
       "type": "object",
-      "required": ["enabled", "apiEnabled", "className", "clusterIssuer", "uiTlsSecretName", "apiTlsSecretName", "basicAuthSecretName", "agentHostApi"],
+      "required": ["enabled", "apiEnabled", "className", "controllerNamespace", "clusterIssuer", "uiTlsSecretName", "apiTlsSecretName", "basicAuthSecretName", "agentHostApi"],
       "properties": {
         "enabled": { "type": "boolean" },
         "apiEnabled": { "type": "boolean" },
         "className": { "type": "string", "minLength": 1, "maxLength": 63 },
+        "controllerNamespace": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", "maxLength": 63 },
         "clusterIssuer": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" },
         "uiTlsSecretName": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" },
         "apiTlsSecretName": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" },
