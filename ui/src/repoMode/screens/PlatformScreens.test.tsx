@@ -1,6 +1,19 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SettingsScreen } from "./PlatformScreens";
+import { InsightsScreen, SettingsScreen } from "./PlatformScreens";
+
+describe("Audit insights", () => {
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+  it("shows audit events returned by the API", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ events: [
+      { id: "audit-one", kind: "direct_capability.denied", created_at: "1793236465512" },
+    ] })));
+    render(<InsightsScreen section="audit" />);
+    expect(await screen.findByText("direct_capability.denied")).toBeInTheDocument();
+    expect(screen.queryByText(/No durable audit records/)).not.toBeInTheDocument();
+  });
+});
 
 describe("Environment profile settings", () => {
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
