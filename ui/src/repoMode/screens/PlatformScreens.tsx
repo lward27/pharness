@@ -42,7 +42,7 @@ const insightEndpoints:Record<string,string> = { audit:"/api/audit-events?limit=
 export function InsightsScreen({ section }: { section:string }) {
   const endpoint = insightEndpoints[section] || insightEndpoints.audit;
   const resource = useResource<any>(endpoint);
-  const entries = resource.data?.audit_events || resource.data?.observations || resource.data?.incidents || resource.data?.remediation_plans || [];
+  const entries = resource.data?.events || resource.data?.audit_events || resource.data?.observations || resource.data?.incidents || resource.data?.remediation_plans || [];
   return <ResourceState status={resource.status} error={resource.error}><SectionHeader eyebrow="History and evidence" title="Insights" summary="Audit, observations, incidents, and remediation remain contextual historical evidence—not primary workflow navigation." /><nav className="repo-tabs">{Object.keys(insightEndpoints).map(value => <button type="button" className={section === value ? "is-active" : ""} key={value} onClick={() => navigate(`insights/${value}`)}>{value}</button>)}</nav><section className="repo-panel"><header><h2>{section}</h2><span className="repo-count">{entries.length}</span></header><div className="repo-list">{entries.map((entry:any) => <article className="repo-list-row" key={entry.id}><ClockCounterClockwise size={18} /><div><strong>{entry.title || entry.kind || entry.action || entry.id}</strong><span>{entry.summary || entry.message || entry.reason || entry.created_at}</span></div><Status value={entry.status || entry.result || "recorded"} /></article>)}{!entries.length ? <p className="repo-muted">No durable {section} records.</p> : null}</div></section></ResourceState>;
 }
 
