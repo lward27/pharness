@@ -1,94 +1,48 @@
 use super::{SqliteStore, StoreError};
 use crate::{
-    ActiveCampusSession, CampusCourseRole, CampusIdentityKey, ConsumedCampusLoginAttempt,
-    CreateCampusLoginAttempt, CreateCampusSession, PutCampusMembership, StoredCampusIdentity,
-    StoredCampusMembership, UpsertCampusIdentity,
+    ActiveCampusSession, CampusCourseRole, CampusIdentityKey, ConsumeCampusLoginState,
+    CreateCampusSession, PutCampusMembership, StoredCampusIdentity, StoredCampusMembership,
+    UpsertCampusIdentity,
 };
 use sqlx::sqlite::SqliteRow;
-use sqlx::Row;
+use sqlx::{Row, SqliteConnection};
 
 /// Expired sessions are kept briefly so that a late request still reads as
 /// expired rather than unknown; afterwards they are deleted on new logins.
 const EXPIRED_SESSION_RETENTION_SECONDS: i64 = 86_400;
 
 impl SqliteStore {
-    /// Record a one-time login attempt, first deleting expired attempts.
+    /// Record that a login state has been used, first pruning records whose
+    /// sealed cookie has expired.
     ///
-    /// Returns a conflict when `max_outstanding` unexpired attempts already
-    /// exist, which bounds the table an unauthenticated caller can grow.
-    pub async fn create_campus_login_attempt(
+    /// Returns `true` for the first consumption and `false` for a replay.
+    /// The primary key on `state_hash` makes this exact under concurrency.
+    pub async fn consume_campus_login_state(
         &self,
-        attempt: CreateCampusLoginAttempt,
-        max_outstanding: i64,
-    ) -> Result<(), StoreError> {
+        consumption: ConsumeCampusLoginState,
+    ) -> Result<bool, StoreError> {
         let mut transaction = self.pool.begin().await?;
-        sqlx::query("DELETE FROM campus_login_attempts WHERE expires_at <= ?1")
-            .bind(attempt.now)
+        sqlx::query("DELETE FROM campus_consumed_login_states WHERE expires_at <= ?1")
+            .bind(consumption.now)
             .execute(&mut *transaction)
             .await?;
-        let outstanding: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM campus_login_attempts WHERE consumed_at IS NULL",
-        )
-        .fetch_one(&mut *transaction)
-        .await?;
-        if outstanding >= max_outstanding {
-            return Err(StoreError::Conflict(
-                "too many outstanding campus login attempts".into(),
-            ));
-        }
-        sqlx::query(
+        let inserted = sqlx::query(
             r#"
-            INSERT INTO campus_login_attempts (
-              state_hash, tenant_id, browser_binding_hash, nonce, pkce_verifier,
-              created_at, expires_at, consumed_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL)
+            INSERT INTO campus_consumed_login_states (state_hash, tenant_id, consumed_at, expires_at)
+            VALUES (?1, ?2, ?3, ?4)
+            ON CONFLICT (state_hash) DO NOTHING
             "#,
         )
-        .bind(&attempt.state_hash)
-        .bind(&attempt.tenant_id)
-        .bind(&attempt.browser_binding_hash)
-        .bind(&attempt.nonce)
-        .bind(&attempt.pkce_verifier)
-        .bind(attempt.now)
-        .bind(attempt.expires_at)
+        .bind(&consumption.state_hash)
+        .bind(&consumption.tenant_id)
+        .bind(consumption.now)
+        .bind(consumption.expires_at)
         .execute(&mut *transaction)
-        .await?;
+        .await?
+        .rows_affected()
+            == 1;
         transaction.commit().await?;
-        Ok(())
-    }
-
-    /// Atomically mark a login attempt consumed and return it.
-    ///
-    /// Exactly one caller can consume a state; a replay, an unknown state or
-    /// an already consumed state returns `None`. Expiry and browser binding
-    /// are checked by the caller after consumption so that a failed check
-    /// still burns the attempt.
-    pub async fn consume_campus_login_attempt(
-        &self,
-        state_hash: &str,
-        now: i64,
-    ) -> Result<Option<ConsumedCampusLoginAttempt>, StoreError> {
-        let row = sqlx::query(
-            r#"
-            UPDATE campus_login_attempts SET consumed_at = ?2
-            WHERE state_hash = ?1 AND consumed_at IS NULL
-            RETURNING tenant_id, browser_binding_hash, nonce, pkce_verifier, expires_at
-            "#,
-        )
-        .bind(state_hash)
-        .bind(now)
-        .fetch_optional(&self.pool)
-        .await?;
-        row.map(|row| {
-            Ok(ConsumedCampusLoginAttempt {
-                tenant_id: row.try_get("tenant_id")?,
-                browser_binding_hash: row.try_get("browser_binding_hash")?,
-                nonce: row.try_get("nonce")?,
-                pkce_verifier: row.try_get("pkce_verifier")?,
-                expires_at: row.try_get("expires_at")?,
-            })
-        })
-        .transpose()
+        Ok(inserted)
     }
 
     /// Insert or refresh the identity for `(tenant_id, issuer, subject)`.
@@ -187,26 +141,37 @@ impl SqliteStore {
         .bind(idle_ttl_seconds)
         .fetch_optional(&mut *transaction)
         .await?;
-        let Some(row) = row else {
-            return Ok(None);
-        };
-        let identity_id: String = row.try_get("identity_id")?;
-        let identity_row = sqlx::query("SELECT * FROM campus_identities WHERE id = ?1")
-            .bind(&identity_id)
-            .fetch_one(&mut *transaction)
-            .await?;
-        let identity = row_to_identity(&identity_row)?;
+        let active = with_identity(&mut transaction, row, tenant_id).await?;
         transaction.commit().await?;
-        if identity.tenant_id != tenant_id {
-            return Ok(None);
-        }
-        Ok(Some(ActiveCampusSession {
-            tenant_id: row.try_get("tenant_id")?,
-            csrf_hash: row.try_get("csrf_hash")?,
-            idle_expires_at: row.try_get("idle_expires_at")?,
-            absolute_expires_at: row.try_get("absolute_expires_at")?,
-            identity,
-        }))
+        Ok(active)
+    }
+
+    /// Like [`Self::touch_campus_session`] but read-only: the idle window is
+    /// not extended.
+    pub async fn get_active_campus_session(
+        &self,
+        id_hash: &str,
+        tenant_id: &str,
+        now: i64,
+    ) -> Result<Option<ActiveCampusSession>, StoreError> {
+        let mut connection = self.pool.acquire().await?;
+        let row = sqlx::query(
+            r#"
+            SELECT tenant_id, identity_id, csrf_hash, idle_expires_at, absolute_expires_at
+            FROM campus_sessions
+            WHERE id_hash = ?1
+              AND tenant_id = ?2
+              AND revoked_at IS NULL
+              AND idle_expires_at > ?3
+              AND absolute_expires_at > ?3
+            "#,
+        )
+        .bind(id_hash)
+        .bind(tenant_id)
+        .bind(now)
+        .fetch_optional(&mut *connection)
+        .await?;
+        with_identity(&mut connection, row, tenant_id).await
     }
 
     /// Revoke a session. Returns whether an unrevoked session was revoked.
@@ -357,24 +322,22 @@ impl SqliteStore {
     }
 
     /// Create or change one membership. Returns whether a row was created.
+    ///
+    /// The insert takes the write lock before anything is read, so the
+    /// result is exact even when the same membership is written
+    /// concurrently.
     pub async fn put_campus_course_membership(
         &self,
         membership: PutCampusMembership,
     ) -> Result<bool, StoreError> {
-        let existed = self
-            .get_campus_course_role(&membership.key, &membership.course_id)
-            .await?
-            .is_some();
-        sqlx::query(
+        let mut transaction = self.pool.begin().await?;
+        let created = sqlx::query(
             r#"
             INSERT INTO campus_course_memberships (
               tenant_id, course_id, issuer, subject, role, granted_by_identity_id,
               created_at, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
-            ON CONFLICT (tenant_id, course_id, issuer, subject) DO UPDATE SET
-              role = excluded.role,
-              granted_by_identity_id = excluded.granted_by_identity_id,
-              updated_at = excluded.updated_at
+            ON CONFLICT (tenant_id, course_id, issuer, subject) DO NOTHING
             "#,
         )
         .bind(&membership.key.tenant_id)
@@ -384,9 +347,38 @@ impl SqliteStore {
         .bind(membership.role.as_str())
         .bind(&membership.granted_by_identity_id)
         .bind(membership.now)
-        .execute(&self.pool)
-        .await?;
-        Ok(!existed)
+        .execute(&mut *transaction)
+        .await?
+        .rows_affected()
+            == 1;
+        if !created {
+            let updated = sqlx::query(
+                r#"
+                UPDATE campus_course_memberships SET
+                  role = ?5,
+                  granted_by_identity_id = ?6,
+                  updated_at = ?7
+                WHERE tenant_id = ?1 AND course_id = ?2 AND issuer = ?3 AND subject = ?4
+                "#,
+            )
+            .bind(&membership.key.tenant_id)
+            .bind(&membership.course_id)
+            .bind(&membership.key.issuer)
+            .bind(&membership.key.subject)
+            .bind(membership.role.as_str())
+            .bind(&membership.granted_by_identity_id)
+            .bind(membership.now)
+            .execute(&mut *transaction)
+            .await?
+            .rows_affected();
+            if updated != 1 {
+                return Err(StoreError::Conflict(
+                    "campus membership changed during update".into(),
+                ));
+            }
+        }
+        transaction.commit().await?;
+        Ok(created)
     }
 
     pub async fn delete_campus_course_membership(
@@ -408,6 +400,34 @@ impl SqliteStore {
         .await?;
         Ok(result.rows_affected() > 0)
     }
+}
+
+/// Attach the identity to a session row, rejecting an identity that belongs
+/// to another tenant.
+async fn with_identity(
+    connection: &mut SqliteConnection,
+    row: Option<SqliteRow>,
+    tenant_id: &str,
+) -> Result<Option<ActiveCampusSession>, StoreError> {
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    let identity_id: String = row.try_get("identity_id")?;
+    let identity_row = sqlx::query("SELECT * FROM campus_identities WHERE id = ?1")
+        .bind(&identity_id)
+        .fetch_one(&mut *connection)
+        .await?;
+    let identity = row_to_identity(&identity_row)?;
+    if identity.tenant_id != tenant_id {
+        return Ok(None);
+    }
+    Ok(Some(ActiveCampusSession {
+        tenant_id: row.try_get("tenant_id")?,
+        csrf_hash: row.try_get("csrf_hash")?,
+        idle_expires_at: row.try_get("idle_expires_at")?,
+        absolute_expires_at: row.try_get("absolute_expires_at")?,
+        identity,
+    }))
 }
 
 fn parse_role(value: &str) -> Result<CampusCourseRole, StoreError> {

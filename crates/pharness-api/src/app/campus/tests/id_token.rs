@@ -8,9 +8,11 @@ use hmac::{Hmac, Mac};
 use jsonwebtoken::Algorithm;
 use ring::rand::SystemRandom;
 use ring::signature::{RsaKeyPair, RSA_PKCS1_SHA256};
+use rsa::pkcs1::EncodeRsaPrivateKey;
+use rsa::traits::PublicKeyParts;
 use serde_json::{json, Value};
 use sha2::Sha256;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 const NONCE: &str = "expected-nonce";
 
@@ -375,105 +377,101 @@ async fn symmetric_mismatched_and_duplicate_jwks_entries_are_never_trusted() {
     );
 }
 
-/// Without RSA key generation in `ring`, this proves RS256 keys are built
-/// from `n`/`e` JWK components and used for verification: a token for the
-/// key reaches signature verification and fails only there.
+/// A 2048-bit RSA key generated once per test process; ring cannot
+/// generate RSA keys and jsonwebtoken (via ring) rejects keys under 2048 bits.
+struct RsaFixture {
+    pair: RsaKeyPair,
+    n: Vec<u8>,
+    e: Vec<u8>,
+}
+
+fn rsa_fixture() -> &'static RsaFixture {
+    static FIXTURE: OnceLock<RsaFixture> = OnceLock::new();
+    FIXTURE.get_or_init(|| {
+        let key = rsa::RsaPrivateKey::new(&mut rsa::rand_core::OsRng, 2048).unwrap();
+        let der = key.to_pkcs1_der().unwrap();
+        RsaFixture {
+            pair: RsaKeyPair::from_der(der.as_bytes()).unwrap(),
+            n: key.n().to_bytes_be(),
+            e: key.e().to_bytes_be(),
+        }
+    })
+}
+
+fn rsa_jwk(kid: &str, n: &[u8], e: &[u8]) -> Value {
+    json!({
+        "kty": "RSA", "kid": kid, "use": "sig", "alg": "RS256",
+        "n": b64(n), "e": b64(e),
+    })
+}
+
+fn rs256_token(header: &Value, claims: &Value) -> String {
+    let fixture = rsa_fixture();
+    let rng = SystemRandom::new();
+    compact_jws(header, claims, |message| {
+        let mut signature = vec![0; fixture.pair.public().modulus_len()];
+        fixture
+            .pair
+            .sign(&RSA_PKCS1_SHA256, &rng, message, &mut signature)
+            .unwrap();
+        signature
+    })
+}
+
+/// RS256 keys are built from the JWK's `n` and `e`: the same signature
+/// verifies only under the JWK that carries the signer's exact modulus and
+/// exponent.
 #[tokio::test]
 async fn rs256_keys_are_constructed_from_modulus_and_exponent() {
-    let mut modulus = vec![0xc5_u8; 256];
-    modulus[255] |= 1;
-    let idp = MockIdp::with_keys(&[json!({
-        "kty": "RSA", "kid": "rsa", "use": "sig", "alg": "RS256",
-        "n": b64(&modulus), "e": "AQAB",
-    })]);
+    let fixture = rsa_fixture();
+    let mut garbage_modulus = fixture.n.clone();
+    for (index, byte) in garbage_modulus.iter_mut().enumerate().skip(1) {
+        *byte ^= u8::try_from(index % 251).unwrap() | 1;
+    }
+    let mut neighbour_modulus = fixture.n.clone();
+    let last = neighbour_modulus.len() - 1;
+    neighbour_modulus[last] ^= 0x02;
+    let idp = MockIdp::with_keys(&[
+        rsa_jwk("correct", &fixture.n, &fixture.e),
+        rsa_jwk("garbage-modulus", &garbage_modulus, &fixture.e),
+        rsa_jwk("neighbour-modulus", &neighbour_modulus, &fixture.e),
+        rsa_jwk("other-exponent", &fixture.n, &[0x01, 0x00, 0x03]),
+    ]);
     let validator = validator(&idp);
-    let token = compact_jws(&json!({"alg": "RS256", "kid": "rsa"}), &claims(), |_| {
-        vec![0x42; 256]
-    });
-    assert_eq!(
-        check(&validator, &token).await,
-        Err(IdTokenError::InvalidSignature)
+    for (kid, expected) in [
+        ("correct", Ok(())),
+        ("garbage-modulus", Err(IdTokenError::InvalidSignature)),
+        ("neighbour-modulus", Err(IdTokenError::InvalidSignature)),
+        ("other-exponent", Err(IdTokenError::InvalidSignature)),
+    ] {
+        let token = rs256_token(&json!({"alg": "RS256", "kid": kid}), &claims());
+        assert_eq!(check(&validator, &token).await, expected, "{kid}");
+    }
+
+    let es = compact_jws(
+        &json!({"alg": "ES256", "kid": "correct"}),
+        &claims(),
+        |_| vec![0x42; 64],
     );
-    let es = compact_jws(&json!({"alg": "ES256", "kid": "rsa"}), &claims(), |_| {
-        vec![0x42; 64]
-    });
     assert_eq!(
         check(&validator, &es).await,
         Err(IdTokenError::AlgorithmMismatch)
     );
 }
 
-fn der_length(input: &[u8]) -> (usize, &[u8]) {
-    let first = input[0];
-    if first < 0x80 {
-        return (usize::from(first), &input[1..]);
-    }
-    let count = usize::from(first & 0x7f);
-    let length = input[1..=count]
-        .iter()
-        .fold(0_usize, |length, byte| (length << 8) | usize::from(*byte));
-    (length, &input[1 + count..])
-}
-
-fn der_integer(input: &[u8]) -> (&[u8], &[u8]) {
-    assert_eq!(input[0], 0x02, "DER INTEGER");
-    let (length, rest) = der_length(&input[1..]);
-    let value = &rest[..length];
-    let value = value.strip_prefix(&[0]).unwrap_or(value);
-    (value, &rest[length..])
-}
-
-/// A full RS256 round-trip using a key generated at test time by the system
-/// `openssl` binary (ring cannot generate RSA keys). Skipped when `openssl`
-/// is unavailable.
+/// A full RS256 round trip with a key generated when the test runs.
 #[tokio::test]
 async fn rs256_round_trip_with_a_runtime_generated_key() {
-    let output = match std::process::Command::new("openssl")
-        .args([
-            "genpkey",
-            "-algorithm",
-            "RSA",
-            "-pkeyopt",
-            "rsa_keygen_bits:2048",
-            "-outform",
-            "DER",
-        ])
-        .output()
-    {
-        Ok(output) if output.status.success() => output,
-        _ => {
-            eprintln!("skipping RS256 round-trip: openssl is unavailable");
-            return;
-        }
-    };
-    // OpenSSL versions differ on whether DER output is PKCS#8 or PKCS#1.
-    let pair = RsaKeyPair::from_pkcs8(&output.stdout)
-        .or_else(|_| RsaKeyPair::from_der(&output.stdout))
-        .unwrap();
-    let public = pair.public().as_ref();
-    assert_eq!(public[0], 0x30, "RSAPublicKey SEQUENCE");
-    let (_, body) = der_length(&public[1..]);
-    let (n, rest) = der_integer(body);
-    let (e, _) = der_integer(rest);
-    let idp = MockIdp::with_keys(&[json!({
-        "kty": "RSA", "kid": "rsa-runtime", "use": "sig", "alg": "RS256",
-        "n": b64(n), "e": b64(e),
-    })]);
+    let fixture = rsa_fixture();
+    let idp = MockIdp::with_keys(&[rsa_jwk("rsa-runtime", &fixture.n, &fixture.e)]);
     let validator = validator(&idp);
-    let rng = SystemRandom::new();
-    let sign = |message: &[u8]| {
-        let mut signature = vec![0; pair.public().modulus_len()];
-        pair.sign(&RSA_PKCS1_SHA256, &rng, message, &mut signature)
-            .unwrap();
-        signature
-    };
     let header = json!({"alg": "RS256", "kid": "rsa-runtime"});
-    let token = compact_jws(&header, &claims(), sign);
+    let token = rs256_token(&header, &claims());
     assert_eq!(check(&validator, &token).await, Ok(()));
 
     let mut tampered = claims();
     tampered["nonce"] = json!("other");
-    let token = compact_jws(&header, &tampered, sign);
+    let token = rs256_token(&header, &tampered);
     assert_eq!(
         check(&validator, &token).await,
         Err(IdTokenError::InvalidNonce)

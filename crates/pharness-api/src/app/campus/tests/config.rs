@@ -1,25 +1,40 @@
 use super::super::config::{load_campus_config, validate_campus_startup, CampusConfig};
+use super::{b64, random_login_cookie_key};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use jsonwebtoken::Algorithm;
+use secrecy::ExposeSecret;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-struct SecretFile(PathBuf);
+fn temp_file(contents: &[u8]) -> PathBuf {
+    let path = std::env::temp_dir().join(format!(
+        "pharness-campus-secret-{}-{}",
+        std::process::id(),
+        uuid::Uuid::now_v7().simple()
+    ));
+    std::fs::write(&path, contents).unwrap();
+    path
+}
+
+/// A client secret file plus a valid login-cookie key file, both removed on
+/// drop.
+struct SecretFile(PathBuf, PathBuf);
 
 impl SecretFile {
     fn new(contents: &str) -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "pharness-campus-secret-{}-{}",
-            std::process::id(),
-            uuid::Uuid::now_v7().simple()
-        ));
-        std::fs::write(&path, contents).unwrap();
-        Self(path)
+        Self::bytes(contents.as_bytes())
+    }
+
+    fn bytes(contents: &[u8]) -> Self {
+        Self(temp_file(contents), temp_file(&random_login_cookie_key()))
     }
 }
 
 impl Drop for SecretFile {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.0);
+        let _ = std::fs::remove_file(&self.1);
     }
 }
 
@@ -39,6 +54,10 @@ fn env(secret: &SecretFile) -> HashMap<&'static str, String> {
         (
             "PHARNESS_CAMPUS_OIDC_CLIENT_SECRET_FILE",
             secret.0.display().to_string(),
+        ),
+        (
+            "PHARNESS_CAMPUS_LOGIN_COOKIE_KEY_FILE",
+            secret.1.display().to_string(),
         ),
         (
             "PHARNESS_CAMPUS_OIDC_AUTHORIZATION_ENDPOINT",
@@ -104,6 +123,13 @@ fn complete_configuration_loads_with_bounded_defaults() {
         !debug.contains("super-secret-value"),
         "the client secret must never be formatted"
     );
+    let key = config.login_cookie_key.expose_secret();
+    assert_eq!(key.as_slice(), std::fs::read(&secret.1).unwrap().as_slice());
+    assert!(
+        !debug.contains(&format!("{key:?}")),
+        "the key is never formatted"
+    );
+    assert!(!debug.contains(&b64(key)));
 }
 
 #[test]
@@ -115,6 +141,7 @@ fn every_required_value_is_enforced_when_enabled() {
         "PHARNESS_CAMPUS_OIDC_ISSUER",
         "PHARNESS_CAMPUS_OIDC_CLIENT_ID",
         "PHARNESS_CAMPUS_OIDC_CLIENT_SECRET_FILE",
+        "PHARNESS_CAMPUS_LOGIN_COOKIE_KEY_FILE",
         "PHARNESS_CAMPUS_OIDC_AUTHORIZATION_ENDPOINT",
         "PHARNESS_CAMPUS_OIDC_TOKEN_ENDPOINT",
         "PHARNESS_CAMPUS_OIDC_JWKS_URI",
@@ -335,4 +362,68 @@ fn enabled_campus_requires_operator_tokens() {
     assert!(message.contains("PHARNESS_OPERATOR_TOKENS"));
     assert!(validate_campus_startup(Some(&config), 1).is_ok());
     assert!(validate_campus_startup(None, 0).is_ok());
+}
+
+#[test]
+fn login_cookie_key_is_32_random_bytes_raw_or_base64() {
+    let secret = SecretFile::new("secret");
+    let key = random_login_cookie_key();
+    for (label, contents) in [
+        ("raw", key.to_vec()),
+        ("base64", format!("{}\n", STANDARD.encode(key)).into_bytes()),
+        ("base64url", format!("  {}  ", b64(&key)).into_bytes()),
+    ] {
+        let file = SecretFile::bytes(&contents);
+        let mut values = env(&secret);
+        values.insert(
+            "PHARNESS_CAMPUS_LOGIN_COOKIE_KEY_FILE",
+            file.0.display().to_string(),
+        );
+        let config = load(&values).unwrap().unwrap();
+        assert_eq!(config.login_cookie_key.expose_secret(), &key, "{label}");
+    }
+
+    let printable = "k".repeat(16) + &"e".repeat(16);
+    let cases: Vec<(&str, Vec<u8>)> = vec![
+        ("empty", Vec::new()),
+        ("31 raw bytes", key[..31].to_vec()),
+        ("33 raw bytes", [key.as_slice(), &[7]].concat()),
+        ("short base64", STANDARD.encode(&key[..16]).into_bytes()),
+        (
+            "long base64",
+            STANDARD.encode([key, key].concat()).into_bytes(),
+        ),
+        (
+            "not base64",
+            "not a key at all, just some text!!".as_bytes().to_vec(),
+        ),
+        ("32 printable characters", printable.clone().into_bytes()),
+        ("all zero", vec![0; 32]),
+        ("oversized", vec![0x41; 4096]),
+    ];
+    for (label, contents) in cases {
+        let file = SecretFile::bytes(&contents);
+        let mut values = env(&secret);
+        values.insert(
+            "PHARNESS_CAMPUS_LOGIN_COOKIE_KEY_FILE",
+            file.0.display().to_string(),
+        );
+        let message = error(&values);
+        assert!(
+            message.contains("PHARNESS_CAMPUS_LOGIN_COOKIE_KEY_FILE"),
+            "{label}: {message}"
+        );
+        assert!(!message.contains(&printable), "{label} echoed the file");
+        assert!(
+            !message.contains("just some text"),
+            "{label} echoed the file"
+        );
+    }
+
+    let mut values = env(&secret);
+    values.insert(
+        "PHARNESS_CAMPUS_LOGIN_COOKIE_KEY_FILE",
+        "/nonexistent/pharness/login-cookie-key".into(),
+    );
+    assert!(error(&values).contains("PHARNESS_CAMPUS_LOGIN_COOKIE_KEY_FILE"));
 }

@@ -47,4 +47,6 @@ url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+# Test-only RSA key generation for the RS256 id_token round trip.
+rsa = { version = "0.9.10", default-features = false, features = ["std", "getrandom", "u64_digit"] }
 tower = { version = "0.5", features = ["util"] }

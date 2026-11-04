@@ -9,6 +9,7 @@ mod authz;
 mod config;
 mod error;
 mod handlers;
+mod login_cookie;
 mod oidc;
 mod session;
 mod state;

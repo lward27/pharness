@@ -35,11 +35,20 @@ pub(crate) fn clear_cookie(name: &str) -> HeaderValue {
 
 /// Read one cookie by exact name. Duplicate cookies are treated as an error
 /// rather than picking one.
+///
+/// Pairs containing non-ASCII bytes are skipped individually: a cookie set
+/// by a sibling domain must not be able to make the whole header unreadable
+/// and lock the user out. Campus cookie values are always ASCII.
 pub(crate) fn read_cookie(headers: &HeaderMap, name: &str) -> Result<Option<String>, ()> {
     let mut found = None;
     for value in headers.get_all(header::COOKIE) {
-        let value = value.to_str().map_err(|_| ())?;
-        for pair in value.split(';') {
+        for pair in value.as_bytes().split(|byte| *byte == b';') {
+            let Some(pair) = std::str::from_utf8(pair)
+                .ok()
+                .filter(|pair| pair.is_ascii())
+            else {
+                continue;
+            };
             let Some((cookie_name, cookie_value)) = pair.trim().split_once('=') else {
                 continue;
             };
@@ -144,6 +153,28 @@ pub(crate) async fn require_campus_session(
     }
     let session_id_hash = sha256_hex(&session_id);
     let now = runtime.clock.now();
+    // CSRF and origin are checked before the session is touched, so a
+    // rejected cross-site request cannot keep a session alive. The token is
+    // derived from the session id, so no storage read is needed for it.
+    let csrf_hash = sha256_hex(&csrf_token_for_session(&session_id));
+    let state_changing = !is_safe_method(request.method());
+    if state_changing {
+        if let Err(error) = check_csrf(request.headers(), config, &csrf_hash) {
+            // Report an invalid session as 401 rather than a CSRF failure,
+            // using a lookup that does not extend the idle window.
+            return match state
+                .store
+                .get_active_campus_session(&session_id_hash, &config.tenant_id, now)
+                .await
+            {
+                Ok(Some(active)) if active.identity.issuer == config.issuer => {
+                    error.into_response()
+                }
+                Ok(_) => unauthenticated(),
+                Err(error) => CampusError::from(error).into_response(),
+            };
+        }
+    }
     let active = match state
         .store
         .touch_campus_session(
@@ -163,10 +194,8 @@ pub(crate) async fn require_campus_session(
     if active.identity.issuer != config.issuer {
         return unauthenticated();
     }
-    if !is_safe_method(request.method()) {
-        if let Err(error) = check_csrf(request.headers(), config, &active.csrf_hash) {
-            return error.into_response();
-        }
+    if state_changing && !secrets_match(&csrf_hash, &active.csrf_hash) {
+        return CampusError::forbidden("missing or invalid campus CSRF token").into_response();
     }
     let key = CampusIdentityKey {
         tenant_id: active.tenant_id.clone(),

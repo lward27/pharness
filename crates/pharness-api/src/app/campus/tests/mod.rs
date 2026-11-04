@@ -7,9 +7,11 @@
 mod config;
 mod flow;
 mod id_token;
+mod login_cookie;
 mod routes;
 
 use super::config::CampusConfig;
+use super::login_cookie::LOGIN_COOKIE_KEY_BYTES;
 use super::oidc::{IdTokenResponse, OidcHttp, OidcHttpError, TokenExchange};
 use super::state::{CampusClock, CampusMount, CampusRuntime};
 use super::tokens::{pkce_challenge, sha256_hex};
@@ -22,11 +24,13 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use jsonwebtoken::Algorithm;
 use pharness_store::SqliteStore;
-use ring::rand::SystemRandom;
+use ring::rand::{SecureRandom, SystemRandom};
 use ring::signature::{EcdsaKeyPair, KeyPair, ECDSA_P256_SHA256_FIXED_SIGNING};
-use secrecy::SecretString;
+use secrecy::{Secret, SecretString};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use sqlx::{Connection, Row};
+use std::collections::{BTreeMap, HashMap};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tower::ServiceExt;
@@ -55,6 +59,12 @@ impl CampusClock for TestClock {
     }
 }
 
+pub(super) fn random_login_cookie_key() -> [u8; LOGIN_COOKIE_KEY_BYTES] {
+    let mut key = [0_u8; LOGIN_COOKIE_KEY_BYTES];
+    SystemRandom::new().fill(&mut key).unwrap();
+    key
+}
+
 pub(super) fn test_config() -> CampusConfig {
     CampusConfig {
         tenant_id: TENANT.into(),
@@ -62,6 +72,7 @@ pub(super) fn test_config() -> CampusConfig {
         issuer: ISSUER.into(),
         client_id: CLIENT_ID.into(),
         client_secret: SecretString::new(CLIENT_SECRET.into()),
+        login_cookie_key: Secret::new(random_login_cookie_key()),
         authorization_endpoint: Url::parse("https://idp.campus.test/authorize?kc_idp_hint=campus")
             .unwrap(),
         token_endpoint: Url::parse("https://idp.campus.test/token").unwrap(),
@@ -242,12 +253,26 @@ pub(super) struct Session {
     pub(super) csrf: String,
 }
 
+/// A temporary on-disk database, removed on drop, that a second connection
+/// can inspect while the application uses it.
+pub(super) struct DiskDatabase(PathBuf);
+
+impl Drop for DiskDatabase {
+    fn drop(&mut self) {
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{suffix}", self.0.display()));
+        }
+    }
+}
+
 pub(super) struct Harness {
     pub(super) app: Router,
     pub(super) store: Arc<SqliteStore>,
     pub(super) idp: Arc<MockIdp>,
     pub(super) clock: Arc<TestClock>,
     pub(super) key: EcKey,
+    pub(super) config: CampusConfig,
+    disk: Option<DiskDatabase>,
     next_code: AtomicUsize,
 }
 
@@ -315,11 +340,28 @@ impl Harness {
     }
 
     pub(super) async fn with_config(config: CampusConfig) -> Self {
-        let store = Arc::new(SqliteStore::connect_in_memory().await.unwrap());
+        let store = SqliteStore::connect_in_memory().await.unwrap();
+        Self::build(config, store, None)
+    }
+
+    /// A harness backed by a file database so that [`Self::row_counts`]
+    /// can observe every table.
+    pub(super) async fn on_disk() -> Self {
+        let path = std::env::temp_dir().join(format!(
+            "pharness-campus-api-{}-{}.db",
+            std::process::id(),
+            uuid::Uuid::now_v7().simple()
+        ));
+        let store = SqliteStore::connect(&path).await.unwrap();
+        Self::build(test_config(), store, Some(DiskDatabase(path)))
+    }
+
+    fn build(config: CampusConfig, store: SqliteStore, disk: Option<DiskDatabase>) -> Self {
+        let store = Arc::new(store);
         let key = EcKey::generate("campus-key-1");
         let idp = MockIdp::with_keys(&[key.jwk()]);
         let clock = Arc::new(TestClock(AtomicI64::new(START)));
-        let runtime = CampusRuntime::new(config, idp.clone(), clock.clone());
+        let runtime = CampusRuntime::new(config.clone(), idp.clone(), clock.clone());
         let app = full_app(store.clone(), CampusMount::Enabled(Box::new(runtime)));
         Self {
             app,
@@ -327,8 +369,52 @@ impl Harness {
             idp,
             clock,
             key,
+            config,
+            disk,
             next_code: AtomicUsize::new(1),
         }
+    }
+
+    /// Row count of every table, read through a separate connection.
+    pub(super) async fn row_counts(&self) -> BTreeMap<String, i64> {
+        let disk = self
+            .disk
+            .as_ref()
+            .expect("row_counts needs Harness::on_disk");
+        let mut connection =
+            sqlx::SqliteConnection::connect(&format!("sqlite://{}?mode=ro", disk.0.display()))
+                .await
+                .unwrap();
+        let tables: Vec<String> = sqlx::query_scalar(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+        )
+        .fetch_all(&mut connection)
+        .await
+        .unwrap();
+        let mut counts = BTreeMap::new();
+        for table in tables {
+            let row = sqlx::query(&format!("SELECT COUNT(*) AS count FROM \"{table}\""))
+                .fetch_one(&mut connection)
+                .await
+                .unwrap();
+            counts.insert(table, row.get::<i64, _>("count"));
+        }
+        assert!(counts.len() > 50, "every table was counted");
+        counts
+    }
+
+    /// Seal a login cookie with the given key, tenant and issuer.
+    pub(super) fn seal_login_cookie(
+        &self,
+        key: &[u8; LOGIN_COOKIE_KEY_BYTES],
+        tenant_id: &str,
+        issuer: &str,
+        attempt: &super::login_cookie::LoginAttempt,
+    ) -> String {
+        let sealed = super::login_cookie::LoginCookieKey::new(key)
+            .seal(&SystemRandom::new(), tenant_id, issuer, attempt)
+            .unwrap();
+        format!("{}={sealed}", super::session::LOGIN_COOKIE)
     }
 
     pub(super) fn now(&self) -> i64 {

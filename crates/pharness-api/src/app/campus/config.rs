@@ -4,9 +4,12 @@
 //! IdP cannot change PHarness endpoints at runtime. Swapping the test IdP for
 //! the institution's issuer is a configuration-only change.
 
+use super::login_cookie::LOGIN_COOKIE_KEY_BYTES;
 use anyhow::{bail, Context};
+use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD};
+use base64::Engine;
 use jsonwebtoken::Algorithm;
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, Secret, SecretString, SecretVec};
 use std::net::IpAddr;
 use url::Url;
 
@@ -16,6 +19,7 @@ pub(crate) const ENV_PUBLIC_ORIGIN: &str = "PHARNESS_CAMPUS_PUBLIC_ORIGIN";
 pub(crate) const ENV_ISSUER: &str = "PHARNESS_CAMPUS_OIDC_ISSUER";
 pub(crate) const ENV_CLIENT_ID: &str = "PHARNESS_CAMPUS_OIDC_CLIENT_ID";
 pub(crate) const ENV_CLIENT_SECRET_FILE: &str = "PHARNESS_CAMPUS_OIDC_CLIENT_SECRET_FILE";
+pub(crate) const ENV_LOGIN_COOKIE_KEY_FILE: &str = "PHARNESS_CAMPUS_LOGIN_COOKIE_KEY_FILE";
 pub(crate) const ENV_AUTHORIZATION_ENDPOINT: &str = "PHARNESS_CAMPUS_OIDC_AUTHORIZATION_ENDPOINT";
 pub(crate) const ENV_TOKEN_ENDPOINT: &str = "PHARNESS_CAMPUS_OIDC_TOKEN_ENDPOINT";
 pub(crate) const ENV_JWKS_URI: &str = "PHARNESS_CAMPUS_OIDC_JWKS_URI";
@@ -45,6 +49,7 @@ const DEFAULT_IDLE_TTL_SECONDS: i64 = 30 * 60;
 const MIN_IDLE_TTL_SECONDS: i64 = 5 * 60;
 const MAX_BOOTSTRAP_ADMINS: usize = 32;
 const MAX_CLIENT_SECRET_BYTES: usize = 4096;
+const MAX_LOGIN_COOKIE_KEY_FILE_BYTES: usize = 1024;
 pub(crate) const MAX_SUBJECT_CHARS: usize = 255;
 pub(crate) const MAX_ISSUER_CHARS: usize = 512;
 
@@ -57,6 +62,8 @@ pub(crate) struct CampusConfig {
     pub(crate) issuer: String,
     pub(crate) client_id: String,
     pub(crate) client_secret: SecretString,
+    /// ChaCha20-Poly1305 key that seals the stateless login cookie.
+    pub(crate) login_cookie_key: Secret<[u8; LOGIN_COOKIE_KEY_BYTES]>,
     pub(crate) authorization_endpoint: Url,
     pub(crate) token_endpoint: Url,
     pub(crate) jwks_uri: Url,
@@ -129,6 +136,7 @@ pub(crate) fn load_campus_config(
         bail!("{ENV_CLIENT_ID} must be at most 256 printable characters");
     }
     let client_secret = read_client_secret(&required(ENV_CLIENT_SECRET_FILE)?)?;
+    let login_cookie_key = read_login_cookie_key(&required(ENV_LOGIN_COOKIE_KEY_FILE)?)?;
 
     let authorization_endpoint = secure_url(
         ENV_AUTHORIZATION_ENDPOINT,
@@ -214,6 +222,7 @@ pub(crate) fn load_campus_config(
         issuer,
         client_id,
         client_secret,
+        login_cookie_key,
         authorization_endpoint,
         token_endpoint,
         jwks_uri,
@@ -325,6 +334,51 @@ fn read_client_secret(path: &str) -> anyhow::Result<SecretString> {
             bail!("{ENV_CLIENT_SECRET_FILE} at {path} must contain one non-empty printable secret")
         }
     }
+}
+
+/// Read the login-cookie key: exactly 32 random bytes, either raw or
+/// base64 (standard or URL-safe, padding optional). Nothing read from the
+/// file is ever included in an error.
+fn read_login_cookie_key(path: &str) -> anyhow::Result<Secret<[u8; LOGIN_COOKIE_KEY_BYTES]>> {
+    let invalid = || {
+        anyhow::anyhow!(
+            "{ENV_LOGIN_COOKIE_KEY_FILE} at {path} must hold exactly {LOGIN_COOKIE_KEY_BYTES} random bytes, raw or base64-encoded"
+        )
+    };
+    let contents = SecretVec::new(
+        std::fs::read(path)
+            .with_context(|| format!("failed to read {ENV_LOGIN_COOKIE_KEY_FILE} at {path}"))?,
+    );
+    let contents = contents.expose_secret();
+    if contents.len() > MAX_LOGIN_COOKIE_KEY_FILE_BYTES {
+        return Err(invalid());
+    }
+    let decoded = if contents.len() == LOGIN_COOKIE_KEY_BYTES {
+        // 32 printable characters are a password, not a random key.
+        if contents
+            .iter()
+            .all(|byte| byte.is_ascii_graphic() || byte.is_ascii_whitespace())
+        {
+            return Err(invalid());
+        }
+        SecretVec::new(contents.clone())
+    } else {
+        let text = std::str::from_utf8(contents).map_err(|_| invalid())?.trim();
+        let decoded = [STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD]
+            .iter()
+            .find_map(|engine| engine.decode(text).ok())
+            .ok_or_else(invalid)?;
+        SecretVec::new(decoded)
+    };
+    let key: [u8; LOGIN_COOKIE_KEY_BYTES] = decoded
+        .expose_secret()
+        .as_slice()
+        .try_into()
+        .map_err(|_| invalid())?;
+    if key.iter().all(|byte| *byte == key[0]) {
+        return Err(invalid());
+    }
+    Ok(Secret::new(key))
 }
 
 /// Only asymmetric signature algorithms are supported; `none` and HMAC

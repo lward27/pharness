@@ -34,35 +34,16 @@ pub struct CampusIdentityKey {
     pub subject: String,
 }
 
+/// Single-use consumption of a login state presented at the callback.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CreateCampusLoginAttempt {
+pub struct ConsumeCampusLoginState {
+    /// SHA-256 of the state; the state itself is never stored.
     pub state_hash: String,
     pub tenant_id: String,
-    pub browser_binding_hash: String,
-    pub nonce: String,
-    pub pkce_verifier: String,
     pub now: i64,
+    /// When the sealed login cookie stops being accepted. The record is kept
+    /// until then, so a replay is detectable for the cookie's whole lifetime.
     pub expires_at: i64,
-}
-
-/// A login attempt that was atomically marked consumed by this call.
-#[derive(Clone, PartialEq, Eq)]
-pub struct ConsumedCampusLoginAttempt {
-    pub tenant_id: String,
-    pub browser_binding_hash: String,
-    pub nonce: String,
-    pub pkce_verifier: String,
-    pub expires_at: i64,
-}
-
-impl std::fmt::Debug for ConsumedCampusLoginAttempt {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("ConsumedCampusLoginAttempt")
-            .field("tenant_id", &self.tenant_id)
-            .field("expires_at", &self.expires_at)
-            .finish_non_exhaustive()
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

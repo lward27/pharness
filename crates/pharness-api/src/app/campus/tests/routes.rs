@@ -1,6 +1,7 @@
 use super::super::session::SESSION_COOKIE;
 use super::{
-    body_json, request, Harness, Session, ISSUER, OPERATOR_TOKEN, ORIGIN, TENANT, WORKER_TOKEN,
+    base_claims, body_json, issued_cookie, request, Harness, Session, ISSUER, OPERATOR_TOKEN,
+    ORIGIN, TENANT, WORKER_TOKEN,
 };
 use axum::body::Body;
 use axum::http::{header, Method, StatusCode};
@@ -11,9 +12,11 @@ use serde_json::json;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CampusRouteClass {
-    /// Public entry point; creates only a one-time login attempt.
+    /// Public entry point; writes nothing and issues only a sealed login
+    /// cookie.
     Login,
-    /// Public; guarded by state, browser binding and id_token validation.
+    /// Public; guarded by the sealed login cookie, single-use state and
+    /// id_token validation.
     Callback,
     /// Requires a valid Campus session (and CSRF when state-changing).
     Session,
@@ -191,13 +194,42 @@ async fn every_campus_route_fails_closed_without_a_valid_session() {
                         .starts_with(&format!("{SESSION_COOKIE}="))));
             }
             CampusRouteClass::Callback => {
+                // Each credential rides along with an otherwise complete
+                // login. It neither authorizes the callback (without the
+                // sealed cookie it fails on browser binding) nor rejects it
+                // (with the sealed cookie the login succeeds).
                 for (label, headers) in &credentials {
-                    let mut builder = request(method, &uri);
-                    for (name, value) in headers {
-                        builder = builder.header(name, value);
+                    let start = harness.start_login().await;
+                    let token = harness.key.sign(&base_claims(
+                        "callback-user",
+                        &start.nonce,
+                        harness.now(),
+                    ));
+                    let code = harness.code_for(&start, token);
+                    let uri = format!("{uri}?code={code}&state={}", start.state);
+                    for with_login_cookie in [false, true] {
+                        let mut builder = request(method, &uri);
+                        if with_login_cookie {
+                            builder = builder.header(header::COOKIE, &start.login_cookie);
+                        }
+                        for (name, value) in headers {
+                            builder = builder.header(name, value);
+                        }
+                        let response = harness.send(builder.body(Body::empty()).unwrap()).await;
+                        let has_session = issued_cookie(response.headers(), SESSION_COOKIE);
+                        if with_login_cookie {
+                            assert_eq!(response.status(), StatusCode::SEE_OTHER, "{label}");
+                            assert!(has_session.is_some(), "{label}");
+                        } else {
+                            assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{label}");
+                            assert!(has_session.is_none(), "{label}");
+                            assert_eq!(
+                                body_json(response).await["error"],
+                                "login attempt was not started by this browser",
+                                "{label}"
+                            );
+                        }
                     }
-                    let response = harness.send(builder.body(Body::empty()).unwrap()).await;
-                    assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{label}");
                 }
             }
             CampusRouteClass::Session => {

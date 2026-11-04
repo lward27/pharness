@@ -21,9 +21,9 @@ pub use agent_execution::{
     StoredAgentLease,
 };
 pub use campus::{
-    ActiveCampusSession, CampusCourseRole, CampusIdentityKey, ConsumedCampusLoginAttempt,
-    CreateCampusLoginAttempt, CreateCampusSession, PutCampusMembership, StoredCampusIdentity,
-    StoredCampusMembership, UpsertCampusIdentity,
+    ActiveCampusSession, CampusCourseRole, CampusIdentityKey, ConsumeCampusLoginState,
+    CreateCampusSession, PutCampusMembership, StoredCampusIdentity, StoredCampusMembership,
+    UpsertCampusIdentity,
 };
 pub use hosted_controller::{
     BeginWorkflowOperation, DatabaseSize, FinishWorkflowReconciliation, HostedControllerMetrics,

@@ -1267,6 +1267,7 @@ dependencies = [
  "pharness-store",
  "reqwest",
  "ring",
+ "rsa",
  "secrecy",
  "serde",
  "serde_json",

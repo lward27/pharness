@@ -1,6 +1,6 @@
 use crate::{
-    CampusCourseRole, CampusIdentityKey, CreateCampusLoginAttempt, CreateCampusSession,
-    PutCampusMembership, SqliteStore, StoreError, UpsertCampusIdentity,
+    CampusCourseRole, CampusIdentityKey, ConsumeCampusLoginState, CreateCampusSession,
+    PutCampusMembership, SqliteStore, UpsertCampusIdentity,
 };
 
 fn key(tenant: &str, subject: &str) -> CampusIdentityKey {
@@ -11,13 +11,10 @@ fn key(tenant: &str, subject: &str) -> CampusIdentityKey {
     }
 }
 
-fn attempt(state_hash: &str, now: i64) -> CreateCampusLoginAttempt {
-    CreateCampusLoginAttempt {
+fn consumption(state_hash: &str, now: i64) -> ConsumeCampusLoginState {
+    ConsumeCampusLoginState {
         state_hash: state_hash.into(),
         tenant_id: "tenant-a".into(),
-        browser_binding_hash: "binding".into(),
-        nonce: "nonce".into(),
-        pkce_verifier: "verifier".into(),
         now,
         expires_at: now + 600,
     }
@@ -37,55 +34,129 @@ async fn identity(store: &SqliteStore, subject: &str, email: &str, now: i64) -> 
         .id
 }
 
-#[tokio::test]
-async fn login_attempts_are_consumed_exactly_once_and_bounded() {
-    let store = SqliteStore::connect_in_memory().await.unwrap();
-    store
-        .create_campus_login_attempt(attempt("state-1", 100), 2)
-        .await
-        .unwrap();
-    let consumed = store
-        .consume_campus_login_attempt("state-1", 101)
-        .await
-        .unwrap()
-        .expect("first consumption succeeds");
-    assert_eq!(consumed.nonce, "nonce");
-    assert_eq!(consumed.expires_at, 700);
-    assert!(store
-        .consume_campus_login_attempt("state-1", 102)
-        .await
-        .unwrap()
-        .is_none());
-    assert!(store
-        .consume_campus_login_attempt("unknown", 102)
-        .await
-        .unwrap()
-        .is_none());
+/// A file-backed store, so that several pooled connections really run
+/// concurrently. The files are removed on drop.
+struct DiskStore {
+    store: SqliteStore,
+    path: std::path::PathBuf,
+}
 
-    store
-        .create_campus_login_attempt(attempt("state-2", 100), 2)
-        .await
-        .unwrap();
-    store
-        .create_campus_login_attempt(attempt("state-3", 100), 2)
-        .await
-        .unwrap();
-    assert!(matches!(
-        store
-            .create_campus_login_attempt(attempt("state-4", 100), 2)
-            .await,
-        Err(StoreError::Conflict(_))
-    ));
-    // Expired attempts are purged before counting.
-    store
-        .create_campus_login_attempt(attempt("state-5", 800), 2)
-        .await
-        .unwrap();
+impl DiskStore {
+    async fn new(label: &str) -> Self {
+        let path = std::env::temp_dir().join(format!(
+            "pharness-campus-{label}-{}-{}.db",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let store = SqliteStore::connect(&path).await.unwrap();
+        Self { store, path }
+    }
+}
+
+impl Drop for DiskStore {
+    fn drop(&mut self) {
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{suffix}", self.path.display()));
+        }
+    }
+}
+
+#[tokio::test]
+async fn login_states_are_consumed_exactly_once_and_pruned_after_expiry() {
+    let store = SqliteStore::connect_in_memory().await.unwrap();
     assert!(store
-        .consume_campus_login_attempt("state-2", 801)
+        .consume_campus_login_state(consumption("state-1", 100))
         .await
-        .unwrap()
-        .is_none());
+        .unwrap());
+    assert!(
+        !store
+            .consume_campus_login_state(consumption("state-1", 101))
+            .await
+            .unwrap(),
+        "a replay is reported"
+    );
+    assert!(store
+        .consume_campus_login_state(consumption("state-2", 101))
+        .await
+        .unwrap());
+    // Still a replay one second before the sealed cookie expires.
+    assert!(!store
+        .consume_campus_login_state(consumption("state-1", 699))
+        .await
+        .unwrap());
+    // Once the cookie has expired the record is pruned; the callback rejects
+    // the expired cookie before it would ever get here.
+    assert!(store
+        .consume_campus_login_state(consumption("state-1", 700))
+        .await
+        .unwrap());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_consumption_of_one_state_succeeds_once() {
+    let disk = DiskStore::new("consume").await;
+    let tasks = (0..16)
+        .map(|_| {
+            let store = disk.store.clone();
+            tokio::spawn(async move {
+                store
+                    .consume_campus_login_state(consumption("state-race", 100))
+                    .await
+                    .unwrap()
+            })
+        })
+        .collect::<Vec<_>>();
+    let mut fresh = 0;
+    for task in tasks {
+        if task.await.unwrap() {
+            fresh += 1;
+        }
+    }
+    assert_eq!(fresh, 1);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_membership_puts_report_exactly_one_creation() {
+    let disk = DiskStore::new("membership").await;
+    let tasks = (0..16)
+        .map(|index| {
+            let store = disk.store.clone();
+            tokio::spawn(async move {
+                store
+                    .put_campus_course_membership(PutCampusMembership {
+                        key: key("tenant-a", "student"),
+                        course_id: "cs101".into(),
+                        role: if index % 2 == 0 {
+                            CampusCourseRole::Student
+                        } else {
+                            CampusCourseRole::Instructor
+                        },
+                        granted_by_identity_id: format!("admin-{index}"),
+                        now: index,
+                    })
+                    .await
+                    .unwrap()
+            })
+        })
+        .collect::<Vec<_>>();
+    let mut created = 0;
+    for task in tasks {
+        if task.await.unwrap() {
+            created += 1;
+        }
+    }
+    assert_eq!(created, 1);
+    assert_eq!(
+        disk.store
+            .list_campus_course_members("tenant-a", "cs101")
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -132,6 +203,20 @@ async fn sessions_expire_on_idle_absolute_and_revocation() {
         .await
         .unwrap()
         .is_none());
+    let peeked = store
+        .get_active_campus_session("session", "tenant-a", 99)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        peeked.idle_expires_at, 100,
+        "a read-only lookup does not extend"
+    );
+    assert!(store
+        .get_active_campus_session("session", "tenant-b", 99)
+        .await
+        .unwrap()
+        .is_none());
     let active = store
         .touch_campus_session("session", "tenant-a", 99, 100)
         .await
@@ -168,6 +253,11 @@ async fn sessions_expire_on_idle_absolute_and_revocation() {
         .await
         .unwrap()
         .is_none());
+    assert!(store
+        .get_active_campus_session("idle", "tenant-a", 100)
+        .await
+        .unwrap()
+        .is_none());
 
     store
         .create_campus_session(CreateCampusSession {
@@ -185,6 +275,11 @@ async fn sessions_expire_on_idle_absolute_and_revocation() {
     assert!(!store.revoke_campus_session("revoked", 6).await.unwrap());
     assert!(store
         .touch_campus_session("revoked", "tenant-a", 6, 100)
+        .await
+        .unwrap()
+        .is_none());
+    assert!(store
+        .get_active_campus_session("revoked", "tenant-a", 6)
         .await
         .unwrap()
         .is_none());

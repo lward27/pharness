@@ -7,6 +7,7 @@
 use super::authz::{authorize, CampusAction, CampusActor, CampusDecision};
 use super::config::is_valid_subject;
 use super::error::CampusError;
+use super::login_cookie::LoginAttempt;
 use super::oidc::{OidcHttpError, TokenExchange};
 use super::session::{
     clear_cookie, read_cookie, session_token, set_cookie, CampusPrincipal, LOGIN_COOKIE,
@@ -22,14 +23,13 @@ use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use pharness_store::{
-    CampusCourseRole, CampusIdentityKey, CreateCampusLoginAttempt, CreateCampusSession,
-    PutCampusMembership, StoreError, UpsertCampusIdentity,
+    CampusCourseRole, CampusIdentityKey, ConsumeCampusLoginState, CreateCampusSession,
+    PutCampusMembership, UpsertCampusIdentity,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 pub(crate) const LOGIN_ATTEMPT_TTL_SECONDS: i64 = 10 * 60;
-const MAX_OUTSTANDING_LOGIN_ATTEMPTS: i64 = 10_000;
 const MAX_CODE_CHARS: usize = 2048;
 const MAX_COURSE_ID_CHARS: usize = 128;
 
@@ -54,35 +54,26 @@ fn random(state: &CampusState) -> Result<String, CampusError> {
 }
 
 /// Start a one-time authorization-code login with PKCE, state and nonce.
+///
+/// Nothing is written to storage: the attempt lives only in the sealed login
+/// cookie, so unauthenticated callers cannot exhaust any server-side
+/// capacity here.
 pub(crate) async fn login(State(state): State<CampusState>) -> Result<Response, CampusError> {
-    let config = &state.runtime.config;
-    let now = state.runtime.clock.now();
-    let login_state = random(&state)?;
-    let nonce = random(&state)?;
-    let verifier = random(&state)?;
-    let binding = random(&state)?;
-    let attempt = CreateCampusLoginAttempt {
-        state_hash: sha256_hex(&login_state),
-        tenant_id: config.tenant_id.clone(),
-        browser_binding_hash: sha256_hex(&binding),
-        nonce: nonce.clone(),
-        pkce_verifier: verifier.clone(),
-        now,
+    let runtime = &state.runtime;
+    let config = &runtime.config;
+    let now = runtime.clock.now();
+    let attempt = LoginAttempt {
+        state: random(&state)?,
+        nonce: random(&state)?,
+        pkce_verifier: random(&state)?,
+        issued_at: now,
         expires_at: now + LOGIN_ATTEMPT_TTL_SECONDS,
     };
-    match state
-        .store
-        .create_campus_login_attempt(attempt, MAX_OUTSTANDING_LOGIN_ATTEMPTS)
-        .await
-    {
-        Ok(()) => {}
-        Err(StoreError::Conflict(_)) => {
-            return Err(CampusError::unavailable(
-                "too many campus logins are in progress; try again shortly",
-            ))
-        }
-        Err(error) => return Err(error.into()),
-    }
+    let sealed = runtime
+        .login_cookie_key
+        .seal(&runtime.rng, &config.tenant_id, &config.issuer, &attempt)
+        .map_err(|_| CampusError::unavailable("secure randomness is unavailable"))?;
+    let (login_state, nonce, verifier) = (attempt.state, attempt.nonce, attempt.pkce_verifier);
 
     let mut location = config.authorization_endpoint.clone();
     location
@@ -98,7 +89,7 @@ pub(crate) async fn login(State(state): State<CampusState>) -> Result<Response, 
     let mut response = redirect(location.as_str())?;
     response.headers_mut().append(
         header::SET_COOKIE,
-        set_cookie(LOGIN_COOKIE, &binding, LOGIN_ATTEMPT_TTL_SECONDS),
+        set_cookie(LOGIN_COOKIE, &sealed, LOGIN_ATTEMPT_TTL_SECONDS),
     );
     Ok(response)
 }
@@ -158,31 +149,38 @@ async fn complete_login(
     }
 
     let now = runtime.clock.now();
-    // Consumed before any other check so a state can never be replayed, even
-    // after a failed attempt.
-    let attempt = state
-        .store
-        .consume_campus_login_attempt(&sha256_hex(&login_state), now)
-        .await?
-        .ok_or_else(|| CampusError::bad_request("login attempt is unknown or already used"))?;
+    let not_this_browser =
+        || CampusError::bad_request("login attempt was not started by this browser");
+    let attempt = match read_cookie(headers, LOGIN_COOKIE) {
+        Ok(Some(value)) => runtime
+            .login_cookie_key
+            .open(&config.tenant_id, &config.issuer, &value),
+        _ => None,
+    }
+    .ok_or_else(not_this_browser)?;
+    if !secrets_match(&login_state, &attempt.state) {
+        return Err(not_this_browser());
+    }
     if attempt.expires_at <= now {
         return Err(CampusError::bad_request("login attempt expired"));
     }
-    if attempt.tenant_id != config.tenant_id {
-        return Err(CampusError::bad_request(
-            "login attempt is unknown or already used",
-        ));
+    if attempt.issued_at > now + config.clock_skew_seconds {
+        return Err(CampusError::bad_request("login attempt is not yet valid"));
     }
-    let binding_matches = matches!(
-        read_cookie(headers, LOGIN_COOKIE),
-        Ok(Some(binding))
-            if is_well_formed_token(&binding)
-                && secrets_match(&sha256_hex(&binding), &attempt.browser_binding_hash)
-    );
-    if !binding_matches {
-        return Err(CampusError::bad_request(
-            "login attempt was not started by this browser",
-        ));
+    // Recorded only once the sealed cookie has proved this browser started
+    // the login, and before the code is redeemed, so a state is single-use
+    // even when the exchange or token validation fails afterwards.
+    let fresh = state
+        .store
+        .consume_campus_login_state(ConsumeCampusLoginState {
+            state_hash: sha256_hex(&attempt.state),
+            tenant_id: config.tenant_id.clone(),
+            now,
+            expires_at: attempt.expires_at,
+        })
+        .await?;
+    if !fresh {
+        return Err(CampusError::bad_request("login attempt was already used"));
     }
 
     let tokens = runtime

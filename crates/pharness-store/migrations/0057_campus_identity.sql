@@ -1,11 +1,12 @@
 -- Campus OIDC identities, tenant administrators, course memberships,
--- one-time login attempts and server-side browser sessions.
+-- consumed login states and server-side browser sessions.
 --
 -- The identity key is always (tenant_id, issuer, subject). Email and display
 -- name are display-only. Memberships and administrators reference the same
 -- tuple so that manual enrollment can precede the first login. Secrets are
--- never stored: sessions, CSRF tokens, login states and browser bindings are
--- SHA-256 hashes. All timestamps are Unix seconds.
+-- never stored: sessions, CSRF tokens and consumed login states are SHA-256
+-- hashes. In-flight logins live only in a sealed browser cookie, so starting
+-- a login writes nothing here. All timestamps are Unix seconds.
 
 CREATE TABLE campus_identities (
   id TEXT PRIMARY KEY,
@@ -44,18 +45,18 @@ CREATE TABLE campus_course_memberships (
 CREATE INDEX campus_course_memberships_identity
   ON campus_course_memberships (tenant_id, issuer, subject);
 
-CREATE TABLE campus_login_attempts (
+-- One row per login state that reached the callback with a valid sealed
+-- cookie. The primary key makes consumption single-use; a row is needed only
+-- until the sealed cookie itself expires, after which it is pruned.
+CREATE TABLE campus_consumed_login_states (
   state_hash TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,
-  browser_binding_hash TEXT NOT NULL,
-  nonce TEXT NOT NULL,
-  pkce_verifier TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  expires_at INTEGER NOT NULL,
-  consumed_at INTEGER
+  consumed_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
 );
 
-CREATE INDEX campus_login_attempts_expiry ON campus_login_attempts (expires_at);
+CREATE INDEX campus_consumed_login_states_expiry
+  ON campus_consumed_login_states (expires_at);
 
 CREATE TABLE campus_sessions (
   id_hash TEXT PRIMARY KEY,

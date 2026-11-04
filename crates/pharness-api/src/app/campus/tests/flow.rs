@@ -1,12 +1,16 @@
+use super::super::login_cookie::LoginAttempt;
 use super::super::session::{LOGIN_COOKIE, SESSION_COOKIE};
 use super::super::state::CampusMount;
 use super::{
-    base_claims, body_json, body_text, full_app, issued_cookie, request, send, session_hash,
-    set_cookies, Harness, Session, CLIENT_ID, ORIGIN,
+    b64, base_claims, body_json, body_text, full_app, issued_cookie, random_login_cookie_key,
+    request, send, session_hash, set_cookies, Harness, Session, CLIENT_ID, ISSUER, ORIGIN, TENANT,
 };
 use axum::body::Body;
-use axum::http::{header, StatusCode};
+use axum::http::{header, HeaderValue, StatusCode};
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine;
 use pharness_store::SqliteStore;
+use secrecy::ExposeSecret;
 use serde_json::json;
 use std::sync::Arc;
 
@@ -62,6 +66,21 @@ async fn login_uses_pkce_state_nonce_and_hardened_cookies() {
     let login_cookie = &set_cookies(login.headers(), LOGIN_COOKIE)[0];
     assert!(login_cookie.ends_with("; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=600"));
     assert!(!login_cookie.to_ascii_lowercase().contains("domain"));
+    let location = login.headers()[header::LOCATION]
+        .to_str()
+        .unwrap()
+        .to_string();
+    let state = url::Url::parse(&location)
+        .unwrap()
+        .query_pairs()
+        .find(|(name, _)| name == "state")
+        .unwrap()
+        .1
+        .into_owned();
+    assert!(
+        !login_cookie.contains(&state),
+        "the login cookie carries the state only in sealed form"
+    );
 
     let start = harness.start_login().await;
     assert_eq!(start.location.host_str(), Some("idp.campus.test"));
@@ -149,6 +168,15 @@ async fn login_state_cannot_be_replayed_and_expires() {
         .await;
     assert_eq!(replay.status(), StatusCode::BAD_REQUEST);
     assert!(issued_cookie(replay.headers(), SESSION_COOKIE).is_none());
+    assert_eq!(
+        body_json(replay).await["error"],
+        "login attempt was already used"
+    );
+    assert_eq!(
+        harness.idp.exchanges.lock().unwrap().len(),
+        1,
+        "a replayed state never redeems a code"
+    );
 
     let expired = harness.start_login().await;
     harness.clock.advance(601);
@@ -168,16 +196,20 @@ async fn login_state_cannot_be_replayed_and_expires() {
 async fn login_must_finish_in_the_browser_that_started_it() {
     let harness = Harness::new().await;
     let attacker = harness.start_login().await;
+    let victim = harness.start_login().await;
+    let token = harness
+        .key
+        .sign(&base_claims("victim", &victim.nonce, harness.now()));
+    let code = harness.code_for(&victim, token);
     for cookies in [
         None,
         Some(attacker.login_cookie.clone()),
         Some(format!("{LOGIN_COOKIE}=short")),
+        Some(format!(
+            "{}; {}",
+            victim.login_cookie, attacker.login_cookie
+        )),
     ] {
-        let victim = harness.start_login().await;
-        let token = harness
-            .key
-            .sign(&base_claims("attacker", &victim.nonce, harness.now()));
-        let code = harness.code_for(&victim, token);
         let response = harness
             .callback(&victim.state, &code, cookies.as_deref())
             .await;
@@ -187,22 +219,122 @@ async fn login_must_finish_in_the_browser_that_started_it() {
             body_json(response).await["error"],
             "login attempt was not started by this browser"
         );
-        // The failed attempt was consumed, so the right cookie no longer helps.
-        let response = harness
-            .callback(&victim.state, &code, Some(&victim.login_cookie))
-            .await;
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert!(issued_cookie(response.headers(), SESSION_COOKIE).is_none());
     }
     assert!(
         harness.idp.exchanges.lock().unwrap().is_empty(),
-        "no code is redeemed for an unbound attempt"
+        "no code is redeemed without the matching sealed cookie"
     );
+    // Without the cookie nobody can burn the state, so the browser that
+    // started the login can still finish it.
+    let response = harness
+        .callback(&victim.state, &code, Some(&victim.login_cookie))
+        .await;
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+}
 
-    let duplicate = harness.start_login().await;
-    let both = format!("{}; {}", duplicate.login_cookie, attacker.login_cookie);
-    let response = harness.callback(&duplicate.state, "c", Some(&both)).await;
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+fn flip_bit(cookie: &str, index: usize) -> String {
+    let (name, value) = cookie.split_once('=').unwrap();
+    let mut raw = URL_SAFE_NO_PAD.decode(value).unwrap();
+    raw[index] ^= 0x01;
+    format!("{name}={}", b64(&raw))
+}
+
+#[tokio::test]
+async fn tampered_and_foreign_login_cookies_are_rejected() {
+    let harness = Harness::new().await;
+    let start = harness.start_login().await;
+    let raw_len = URL_SAFE_NO_PAD
+        .decode(start.login_cookie.split_once('=').unwrap().1)
+        .unwrap()
+        .len();
+    let token = harness
+        .key
+        .sign(&base_claims("s1", &start.nonce, harness.now()));
+    let code = harness.code_for(&start, token);
+    // Version byte, AEAD nonce, ciphertext and tag.
+    for index in [0, 1, 12, 13, 40, raw_len - 17, raw_len - 1] {
+        let response = harness
+            .callback(
+                &start.state,
+                &code,
+                Some(&flip_bit(&start.login_cookie, index)),
+            )
+            .await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "byte {index}");
+        assert_eq!(
+            body_json(response).await["error"],
+            "login attempt was not started by this browser"
+        );
+    }
+
+    // A cookie the attacker seals for a state of their choosing, under any
+    // key other than the deployment's, or for another tenant or issuer.
+    let now = harness.now();
+    let forged = LoginAttempt {
+        state: "F".repeat(43),
+        nonce: "N".repeat(43),
+        pkce_verifier: "V".repeat(43),
+        issued_at: now,
+        expires_at: now + 600,
+    };
+    let real_key = *harness.config.login_cookie_key.expose_secret();
+    for (label, cookie) in [
+        (
+            "different key",
+            harness.seal_login_cookie(&random_login_cookie_key(), TENANT, ISSUER, &forged),
+        ),
+        (
+            "other tenant",
+            harness.seal_login_cookie(&real_key, "tenant-b", ISSUER, &forged),
+        ),
+        (
+            "other issuer",
+            harness.seal_login_cookie(&real_key, TENANT, "https://evil.test", &forged),
+        ),
+    ] {
+        let response = harness.callback(&forged.state, "c", Some(&cookie)).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{label}");
+        assert_eq!(
+            body_json(response).await["error"],
+            "login attempt was not started by this browser",
+            "{label}"
+        );
+    }
+    assert!(harness.idp.exchanges.lock().unwrap().is_empty());
+
+    // Control: the same forgery sealed under the deployment key reaches the
+    // token exchange, so the rejections above came from the seal.
+    let control = harness.seal_login_cookie(&real_key, TENANT, ISSUER, &forged);
+    let response = harness.callback(&forged.state, "c", Some(&control)).await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(harness.idp.exchanges.lock().unwrap().len(), 1);
+
+    // The untampered cookie still completes the original login.
+    let response = harness
+        .callback(&start.state, &code, Some(&start.login_cookie))
+        .await;
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+}
+
+#[tokio::test]
+async fn login_writes_nothing_to_the_database() {
+    let harness = Harness::on_disk().await;
+    let before = harness.row_counts().await;
+    for _ in 0..25 {
+        let response = harness.get("/api/campus/auth/login", None).await;
+        assert_eq!(response.status(), StatusCode::FOUND);
+    }
+    assert_eq!(harness.row_counts().await, before);
+
+    // Control: the counter does see the callback's single-use record.
+    let session = harness.login("s1").await;
+    let after = harness.row_counts().await;
+    assert_eq!(after["campus_consumed_login_states"], 1);
+    assert_eq!(after["campus_sessions"], before["campus_sessions"] + 1);
+    assert_eq!(
+        harness.get("/api/campus/me", Some(&session)).await.status(),
+        StatusCode::OK
+    );
 }
 
 #[tokio::test]
@@ -448,15 +580,144 @@ async fn state_changes_require_the_session_csrf_token_and_campus_origin() {
 
 #[tokio::test]
 async fn unauthenticated_requests_never_touch_session_state() {
-    let harness = Harness::new().await;
+    let harness = Harness::on_disk().await;
+    let real = harness.login("s1").await;
+    let before = harness.row_counts().await;
+    assert_eq!(before["campus_sessions"], 1);
     let forged = Session {
         cookie: format!("{SESSION_COOKIE}={}", "B".repeat(43)),
         csrf: "B".repeat(43),
     };
+    let mut responses = Vec::new();
     for path in ["/api/campus/me", "/api/campus/courses/cs101"] {
-        assert_eq!(
-            harness.get(path, Some(&forged)).await.status(),
-            StatusCode::UNAUTHORIZED
-        );
+        responses.push(harness.get(path, Some(&forged)).await);
     }
+    responses.push(
+        harness
+            .mutate("POST", "/api/campus/auth/logout", &forged, json!({}))
+            .await,
+    );
+    // A forged cookie carrying the real session's CSRF token.
+    let borrowed = Session {
+        csrf: real.csrf.clone(),
+        ..forged.clone()
+    };
+    responses.push(
+        harness
+            .mutate("POST", "/api/campus/auth/logout", &borrowed, json!({}))
+            .await,
+    );
+    for response in responses {
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(
+            issued_cookie(response.headers(), SESSION_COOKIE).is_none(),
+            "no session cookie is issued"
+        );
+        assert!(set_cookies(response.headers(), SESSION_COOKIE)
+            .iter()
+            .all(|cookie| cookie.starts_with(&format!("{SESSION_COOKIE}=;"))));
+    }
+    assert_eq!(harness.row_counts().await, before, "no row was written");
+    assert_eq!(
+        harness.get("/api/campus/me", Some(&real)).await.status(),
+        StatusCode::OK
+    );
+}
+
+#[tokio::test]
+async fn a_rejected_csrf_request_does_not_extend_the_session() {
+    let harness = Harness::new().await;
+    let session = harness.login("s1").await;
+    harness.clock.advance(20 * 60);
+    for csrf in [None, Some("A".repeat(43))] {
+        let mut builder = request("POST", "/api/campus/auth/logout")
+            .header(header::COOKIE, &session.cookie)
+            .header(header::ORIGIN, ORIGIN);
+        if let Some(csrf) = csrf {
+            builder = builder.header("x-campus-csrf", csrf);
+        }
+        let response = harness.send(builder.body(Body::empty()).unwrap()).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+    let response = harness
+        .send(
+            request("POST", "/api/campus/auth/logout")
+                .header(header::COOKIE, &session.cookie)
+                .header("x-campus-csrf", &session.csrf)
+                .header(header::ORIGIN, "https://evil.test")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    // 31 minutes after the last accepted request the idle window has closed;
+    // the rejected requests at minute 20 did not extend it.
+    harness.clock.advance(11 * 60);
+    assert_eq!(
+        harness.get("/api/campus/me", Some(&session)).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+}
+
+#[tokio::test]
+async fn a_non_ascii_cookie_from_a_sibling_domain_does_not_lock_users_out() {
+    let harness = Harness::new().await;
+    let session = harness.login("s1").await;
+    let mut header_value = b"theme=caf\xc3\xa9; ".to_vec();
+    header_value.extend_from_slice(session.cookie.as_bytes());
+    header_value.extend_from_slice(b"; lang=\xff\xfe");
+    let header_value = HeaderValue::from_bytes(&header_value).unwrap();
+    assert!(
+        header_value.to_str().is_err(),
+        "the header is not visible ASCII"
+    );
+    let response = harness
+        .send(
+            request("GET", "/api/campus/me")
+                .header(header::COOKIE, header_value.clone())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Duplicate session cookies are still rejected around non-ASCII pairs.
+    let mut duplicated = header_value.as_bytes().to_vec();
+    duplicated.extend_from_slice(format!("; {SESSION_COOKIE}={}", "C".repeat(43)).as_bytes());
+    let response = harness
+        .send(
+            request("GET", "/api/campus/me")
+                .header(
+                    header::COOKIE,
+                    HeaderValue::from_bytes(&duplicated).unwrap(),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    // A login still completes with a non-ASCII sibling cookie present.
+    let start = harness.start_login().await;
+    let token = harness
+        .key
+        .sign(&base_claims("s2", &start.nonce, harness.now()));
+    let code = harness.code_for(&start, token);
+    let mut cookies = b"theme=caf\xc3\xa9; ".to_vec();
+    cookies.extend_from_slice(start.login_cookie.as_bytes());
+    let response = harness
+        .send(
+            request(
+                "GET",
+                &format!(
+                    "/api/campus/auth/callback?code={code}&state={}",
+                    start.state
+                ),
+            )
+            .header(header::COOKIE, HeaderValue::from_bytes(&cookies).unwrap())
+            .body(Body::empty())
+            .unwrap(),
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
 }

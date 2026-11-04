@@ -1,7 +1,9 @@
 use super::config::CampusConfig;
+use super::login_cookie::LoginCookieKey;
 use super::oidc::{IdTokenValidator, OidcHttp, ReqwestOidcHttp};
 use pharness_store::SqliteStore;
 use ring::rand::SystemRandom;
+use secrecy::ExposeSecret;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -28,6 +30,7 @@ pub(crate) struct CampusRuntime {
     pub(crate) validator: IdTokenValidator,
     pub(crate) clock: Arc<dyn CampusClock>,
     pub(crate) rng: SystemRandom,
+    pub(crate) login_cookie_key: LoginCookieKey,
 }
 
 impl CampusRuntime {
@@ -42,12 +45,14 @@ impl CampusRuntime {
         clock: Arc<dyn CampusClock>,
     ) -> Self {
         let validator = IdTokenValidator::new(&config, http.clone());
+        let login_cookie_key = LoginCookieKey::new(config.login_cookie_key.expose_secret());
         Self {
             config,
             http,
             validator,
             clock,
             rng: SystemRandom::new(),
+            login_cookie_key,
         }
     }
 }
