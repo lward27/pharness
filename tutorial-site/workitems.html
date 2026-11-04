@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PHarness Operator Tutorial — The Harness</title>
+  <link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <a class="brand" href="index.html">PHarness
+      <small>Operator Tutorial</small>
+    </a>
+    <nav>
+      <h2>Getting started</h2>
+      <a href="index.html#overview">Overview</a>
+      <a href="index.html#prerequisites">Prerequisites</a>
+      <a href="index.html#local-build">Build locally</a>
+      <a href="index.html#local-test">Test locally</a>
+      <a href="index.html#local-config">Local configuration</a>
+      <h2>The harness</h2>
+      <a href="workitems.html#lifecycle">WorkItem lifecycle</a>
+      <a href="workitems.html#create">Create a WorkItem</a>
+      <a href="workitems.html#execute">Run a coding attempt</a>
+      <a href="workitems.html#approvals">Approvals</a>
+      <a href="workitems.html#change-sets">ChangeSets &amp; delivery</a>
+      <h2>Releasing</h2>
+      <a href="release.html#images">Build release images</a>
+      <a href="release.html#pinning">Pin the release</a>
+      <a href="release.html#verify">Verify a release</a>
+      <a href="release.html#production">Production approval</a>
+      <h2>Reference</h2>
+      <a href="reference.html#cli">CLI cheat sheet</a>
+      <a href="reference.html#config">Config reference</a>
+      <a href="reference.html#troubleshooting">Troubleshooting</a>
+      <a href="reference.html#safety">Safety rules</a>
+    </nav>
+  </aside>
+
+  <main>
+    <h1 id="lifecycle"><span class="kicker">The harness</span>Moving a WorkItem through the harness</h1>
+    <p class="lead">
+      The operator works from a <strong>Product</strong> and a bounded <strong>WorkItem</strong>.
+      A WorkItem is one bounded engineering intent and its complete lifecycle record:
+      applicable stages, plans, executions, approvals, evidence, source delivery,
+      and any connected release work.
+    </p>
+
+    <h2>The lifecycle at a glance</h2>
+    <p>Each WorkItem moves through a small state machine enforced by the API
+    (<code>work-items transition</code> validates every move):</p>
+    <div class="pipeline">
+      <span class="stage">proposed</span><span class="arrow">→</span>
+      <span class="stage">submitted</span><span class="arrow">→</span>
+      <span class="stage">planning</span><span class="arrow">→</span>
+      <span class="stage">awaiting_approval</span><span class="arrow">→</span>
+      <span class="stage">executing</span><span class="arrow">→</span>
+      <span class="stage">verifying</span><span class="arrow">→</span>
+      <span class="stage">completed</span>
+    </div>
+    <table>
+      <tr><th>State</th><th>Allowed next states</th></tr>
+      <tr><td><code>proposed</code> / <code>submitted</code></td><td><code>planning</code>, <code>cancelled</code></td></tr>
+      <tr><td><code>planning</code></td><td><code>awaiting_approval</code>, <code>blocked</code>, <code>failed</code>, <code>cancelled</code></td></tr>
+      <tr><td><code>awaiting_approval</code></td><td><code>executing</code>, <code>blocked</code>, <code>failed</code>, <code>cancelled</code></td></tr>
+      <tr><td><code>executing</code></td><td><code>verifying</code>, <code>blocked</code>, <code>failed</code>, <code>cancelled</code></td></tr>
+      <tr><td><code>verifying</code></td><td><code>completed</code>, <code>waiting_external</code>, <code>blocked</code>, <code>failed</code>, <code>cancelled</code></td></tr>
+      <tr><td><code>waiting_external</code></td><td><code>completed</code>, <code>blocked</code>, <code>failed</code>, <code>cancelled</code></td></tr>
+      <tr><td><code>blocked</code> / <code>failed</code></td><td><code>planning</code>, <code>awaiting_approval</code>, <code>cancelled</code></td></tr>
+      <tr><td><code>completed</code> / <code>cancelled</code></td><td>terminal — no transitions</td></tr>
+    </table>
+
+    <div class="callout note">
+      <span class="label">Stages vs. states</span>
+      <p>The <em>lifecycle states</em> above track the WorkItem. Inside it, the
+      deterministic controller works stage by stage:
+      <code>discover → plan → implement → test → verify → source_delivery → release → observe</code>.
+      Each terminal stage execution produces an immutable, controller-sealed
+      <strong>StageOutcome</strong> (<code>succeeded</code>, <code>failed</code>,
+      <code>blocked</code>, <code>cancelled</code>, or <code>inapplicable</code>).
+      An agent may propose a summary but <strong>cannot seal its own success</strong> —
+      the controller adjudicates against typed evidence before the WorkItem advances.</p>
+    </div>
+
+    <div class="callout warn">
+      <span class="label">When to create a new WorkItem</span>
+      <p>A replan stays in the same WorkItem while the desired outcome, mutable
+      repository, and acceptance boundary remain the same. Create a new linked
+      WorkItem (with a typed relationship like <code>supersedes</code>,
+      <code>follows_up</code>, or <code>discovered_from</code>) when the operator
+      materially changes the outcome, the mutable repository or delivery target,
+      or the acceptance boundary. A hosted WorkItem mutates exactly one
+      application repository; other repositories may only be pinned read-only.</p>
+    </div>
+
+    <h2 id="create">Step 1 — Create the WorkItem</h2>
+    <p>Register intent with acceptance criteria up front. This is what the
+    controller later verifies — vague criteria produce vague outcomes.</p>
+    <pre><code>cargo run -p pharness-cli -- work-items create \
+  --title "Add rate limit to public API" \
+  --intent "Enforce a per-client token bucket on the public API endpoints so a single client cannot exhaust model quota." \
+  --acceptance-criterion "Requests over the limit return 429 with a Retry-After header" \
+  --acceptance-criterion "The limit counter resets each 60s window" \
+  --acceptance-criterion "cargo test --workspace passes unchanged" \
+  --source-repo https://github.com/lward27/pharness \
+  --source-ref main \
+  --target-environment dev \
+  --actor lucas</code></pre>
+    <p>Key flags:</p>
+    <table>
+      <tr><th>Flag</th><th>Meaning</th></tr>
+      <tr><td><code>--acceptance-criterion</code> (repeatable)</td><td>Each independently testable criterion. The verify stage checks exactly these.</td></tr>
+      <tr><td><code>--source-repo</code> / <code>--source-ref</code></td><td>The <strong>mutable</strong> application repository, exact HTTPS URL. The mutable repo + pinned revision are immutable WorkItem inputs.</td></tr>
+      <tr><td><code>--gitops-repo</code> / <code>--gitops-ref</code></td><td>Optional separate GitOps delivery repository (for hosted delivery).</td></tr>
+      <tr><td><code>--target-environment</code> / <code>--target-namespace</code> / <code>--argo-application</code></td><td>Where the outcome should land. Dev targets first — production is separately gated.</td></tr>
+      <tr><td><code>--production-impacting</code></td><td>Set only if the change can affect production; it tightens approval requirements.</td></tr>
+      <tr><td><code>--max-attempts</code> / <code>--max-elapsed-seconds</code></td><td>Budget caps for bounded retries.</td></tr>
+      <tr><td><code>--actor</code></td><td>Attribution for audit events.</td></tr>
+    </table>
+    <pre><code># Inspect what you created
+cargo run -p pharness-cli -- work-items list
+cargo run -p pharness-cli -- work-items get --work-item-id &lt;id&gt;</code></pre>
+
+    <h2>Step 2 — Plan</h2>
+    <p>Move the item into planning. An ephemeral Planner AgentRun proposes the
+    WorkPlan; the proposal must declare readiness (<code>ready</code> with an
+    empty blocker list, or <code>needs_decision</code> with concrete blockers).
+    A blocked proposal is retained with its blockers — resolve the blocking
+    choice with an annotation, then replan.</p>
+    <pre><code>cargo run -p pharness-cli -- work-items transition \
+  --work-item-id &lt;id&gt; --target-status planning --actor lucas
+
+cargo run -p pharness-cli -- work-items get --work-item-id &lt;id&gt;   # inspect the plan
+cargo run -p pharness-cli -- work-items create-work-plan --work-item-id &lt;id&gt;  # WorkPlan + declared workspace</code></pre>
+    <p>If the plan needs operator input, use <code>replan</code> to schedule one
+    remaining bounded retry after a failed or blocked attempt:</p>
+    <pre><code>cargo run -p pharness-cli -- work-items replan \
+  --work-item-id &lt;id&gt; --actor lucas --reason "operator approved the proposed approach"</code></pre>
+
+    <h2 id="execute">Step 3 — Approve and execute the coding attempt</h2>
+    <p>Approving the plan moves the item to <code>executing</code>. <code>execute</code>
+    provisions an isolated local clone under <code>workspace_root</code> and starts
+    one bounded coding attempt. The clone is isolated: Pharness never pushes,
+    merges, or touches your source checkout from the workspace.</p>
+    <pre><code>cargo run -p pharness-cli -- work-items transition \
+  --work-item-id &lt;id&gt; --target-status awaiting_approval --actor lucas
+
+cargo run -p pharness-cli -- work-items transition \
+  --work-item-id &lt;id&gt; --target-status executing \
+  --actor lucas --reason "plan reviewed and approved"
+
+cargo run -p pharness-cli -- work-items execute \
+  --work-item-id &lt;id&gt; --actor lucas \
+  --max-turns 40    # optional budget cap</code></pre>
+
+    <h2 id="approvals">While it executes: approvals</h2>
+    <p>The policy mode decides what the agent must ask permission for. The default
+    local policy requires approval for writes, network, and destructive
+    operations, and denies secret access outright. Watch the queue:</p>
+    <pre><code>cargo run -p pharness-cli -- approvals list            # pending + decided
+cargo run -p pharness-cli -- approvals summary         # counts by status/kind/risk
+cargo run -p pharness-cli -- approvals get --approval-id &lt;aid&gt;
+cargo run -p pharness-cli -- approvals approve --approval-id &lt;aid&gt;
+cargo run -p pharness-cli -- approvals deny --approval-id &lt;aid&gt; --reason "out of scope"</code></pre>
+    <div class="callout danger">
+      <span class="label">Deny by default</span>
+      <p>Only approve what you understand from the approval detail. A network
+      approval means the runner may reach the listed hosts during that run —
+      the runner itself has no direct internet egress in the deployed runtime;
+      it goes through the phase-specific CONNECT proxies with server-owned
+      exact-host allowlists.</p>
+    </div>
+
+    <h2>Step 4 — Verify</h2>
+    <p>When the coding attempt finishes, transition to <code>verifying</code>.
+      The controller runs the declared acceptance commands against the workspace
+      and seals a StageOutcome against your acceptance criteria. Inspect the
+      evidence before moving on:</p>
+    <pre><code>cargo run -p pharness-cli -- work-items transition \
+  --work-item-id &lt;id&gt; --target-status verifying --actor lucas
+
+cargo run -p pharness-cli -- work-items get --work-item-id &lt;id&gt;      # stage outcomes, evidence refs
+cargo run -p pharness-cli -- work-items events --work-item-id &lt;id&gt;   # audit trail
+cargo run -p pharness-cli -- runs get --run-id &lt;rid&gt;                 # the agent run
+cargo run -p pharness-cli -- runs diff --run-id &lt;rid&gt;                # stored file diffs
+cargo run -p pharness-cli -- artifacts list --run-id &lt;rid&gt;</code></pre>
+    <div class="callout success">
+      <span class="label">What counts as verified</span>
+      <p>Verified facts are bound to typed evidence: exact acceptance command,
+      execution identity, exit result, captured output reference. Agent claims
+      that could not be independently verified are labeled as claims, not
+      facts. Missing runtime telemetry is <em>inconclusive</em>, never a pass.
+      If the outcome is <code>blocked</code> or <code>failed</code>, the item
+      returns to <code>planning</code> or <code>awaiting_approval</code> — replan,
+      don't force it.</p>
+    </div>
+
+    <h2 id="change-sets">Step 5 — ChangeSets, pipeline, and delivery</h2>
+    <p>Once verification succeeds, derive the proposed <strong>ChangeSet</strong>
+      from the workspace diff, then drive delivery. The delivery chain is a
+      sequence of durable, individually audited records — each with its own
+      approval gate:</p>
+    <pre><code># 1. Derive the proposed ChangeSet from the latest completed workspace diff
+cargo run -p pharness-cli -- work-items capture-change-set \
+  --work-item-id &lt;id&gt; --actor lucas
+cargo run -p pharness-cli -- change-sets list
+cargo run -p pharness-cli -- change-sets get --change-set-id &lt;csid&gt;   # review before anything applies
+
+# 2. Propose a PipelineIntent from the approved, immutable merged source revision
+cargo run -p pharness-cli -- work-items create-pipeline-intent \
+  --work-item-id &lt;id&gt; --pipeline-contract-id &lt;pcid&gt; --actor lucas
+cargo run -p pharness-cli -- pipeline-intents list
+cargo run -p pharness-cli -- pipeline-contracts list
+
+# 3. Review the deployment contract, then execute the deployment intent
+cargo run -p pharness-cli -- deployment-contracts list
+cargo run -p pharness-cli -- deployment-intents list
+cargo run -p pharness-cli -- deployment-intents execute --apply \
+  --deployment-intent-id &lt;diid&gt; --actor lucas
+
+# 4. Watch approvals and external waits
+cargo run -p pharness-cli -- approval-gates list
+cargo run -p pharness-cli -- work-items waits --work-item-id &lt;id&gt;
+cargo run -p pharness-cli -- work-items reconcile-due-waits --actor lucas</code></pre>
+    <p>For an inert, safe end-to-end rehearsal of the delivery path (creates
+      durable test records, changes no application, reads no secret):</p>
+    <pre><code>export PHARNESS_API_TOKEN='your operator token'
+scripts/pharness-tekton-execution-smoke.sh            # preflight — stops before any PipelineRun
+scripts/pharness-tekton-execution-smoke.sh --apply    # dispatch the single inert PipelineRun</code></pre>
+    <div class="callout note">
+      <span class="label">Console equivalent</span>
+      <p>The Lamina console offers the same flow: <strong>Delivery Test</strong> →
+      review fixture scope → <em>Prepare preflight</em> → confirm
+      <em>Preflight Passed</em> → <em>Dispatch inert PipelineRun</em> → wait for
+      <em>Completed</em> → <em>Open delivery flow</em> to inspect the WorkPlan,
+      ChangeSet, PipelineIntent, approval gates, audit events, and PipelineRun
+      receipt. A terminal <code>succeeded</code> receipt is an <em>execution</em>
+      result, not a deployment approval — the executor also persists a
+      bounded PipelineRunAnalysis whose satisfied evidence is required before a
+      DeploymentIntent can approve.</p>
+    </div>
+
+    <h2 id="complete">Step 6 — Complete or recover</h2>
+    <pre><code># Success path: verifying → waiting_external (e.g. merge check) → completed
+cargo run -p pharness-cli -- work-items transition \
+  --work-item-id &lt;id&gt; --target-status waiting_external --actor lucas
+cargo run -p pharness-cli -- work-items transition \
+  --work-item-id &lt;id&gt; --target-status completed --actor lucas \
+  --reason "acceptance criteria verified; delivery evidence sealed"
+
+# Failure path
+cargo run -p pharness-cli -- work-items transition \
+  --work-item-id &lt;id&gt; --target-status failed --actor lucas \
+  --reason "acceptance command X fails: &lt;output ref&gt;"
+# then: replan (same intent) or create a new linked WorkItem (changed intent)
+
+# Abort at any non-terminal state
+cargo run -p pharness-cli -- work-items cancel \
+  --work-item-id &lt;id&gt; --actor lucas --reason "no longer needed"</code></pre>
+    <div class="callout warn">
+      <span class="label">Source-only vs. deployed</span>
+      <p>Source merge, deployment, and verified runtime behavior are <strong>distinct
+      results</strong>. Legacy source-only success remains valid history but does
+      not imply anything was deployed. New hosted WorkItems remain nonterminal
+      until the approved target has deployed <em>and</em> runtime acceptance is
+      verified. Production GitOps merge requires human approval bound to the
+      exact artifact and evidence.</p>
+    </div>
+
+    <h2>Next</h2>
+    <p>The WorkItem journey ends at a verified source revision. To turn a source
+      change into a running, verified release, continue to
+      <a href="release.html#images">Building and releasing</a>.</p>
+
+    <div class="page-footer">
+      <span>PHarness operator tutorial — generated from the repository docs and CLI source</span>
+      <span><a href="index.html">← Back</a> <a href="release.html">Next: Releasing →</a></span>
+    </div>
+  </main>
+</div>
+<script src="js/site.js"></script>
+</body>
+</html>

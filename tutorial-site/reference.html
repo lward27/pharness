@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PHarness Operator Tutorial — Reference</title>
+  <link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <a class="brand" href="index.html">PHarness
+      <small>Operator Tutorial</small>
+    </a>
+    <nav>
+      <h2>Getting started</h2>
+      <a href="index.html#overview">Overview</a>
+      <a href="index.html#prerequisites">Prerequisites</a>
+      <a href="index.html#local-build">Build locally</a>
+      <a href="index.html#local-test">Test locally</a>
+      <a href="index.html#local-config">Local configuration</a>
+      <h2>The harness</h2>
+      <a href="workitems.html#lifecycle">WorkItem lifecycle</a>
+      <a href="workitems.html#create">Create a WorkItem</a>
+      <a href="workitems.html#execute">Run a coding attempt</a>
+      <a href="workitems.html#approvals">Approvals</a>
+      <a href="workitems.html#change-sets">ChangeSets &amp; delivery</a>
+      <h2>Releasing</h2>
+      <a href="release.html#images">Build release images</a>
+      <a href="release.html#pinning">Pin the release</a>
+      <a href="release.html#verify">Verify a release</a>
+      <a href="release.html#production">Production approval</a>
+      <h2>Reference</h2>
+      <a href="reference.html#cli">CLI cheat sheet</a>
+      <a href="reference.html#config">Config reference</a>
+      <a href="reference.html#troubleshooting">Troubleshooting</a>
+      <a href="reference.html#safety">Safety rules</a>
+    </nav>
+  </aside>
+
+  <main>
+    <h1 id="cli"><span class="kicker">Reference</span>CLI cheat sheet</h1>
+    <p class="lead">
+      The <code>pharness</code> CLI is the machine-facing control surface. Every
+      command accepts <code>--api-url</code> (default
+      <code>http://127.0.0.1:4777</code>, env <code>PHARNESS_API_URL</code>) and
+      attaches <code>Authorization: Bearer $PHARNESS_API_TOKEN</code> when that env
+      var is set. Deployed APIs require the token; local loopback APIs ignore it.
+    </p>
+
+    <h2>Core workflow</h2>
+    <table>
+      <tr><th>Command</th><th>What it does</th></tr>
+      <tr><td><code>run --task &lt;text&gt;</code></td><td>Submit a run to the API and wait for a structured result.</td></tr>
+      <tr><td><code>runs list | summary | get | events | diff | cancel</code></td><td>Inspect persisted runs, stream durable events, fetch stored file diffs, cancel a run.</td></tr>
+      <tr><td><code>config</code></td><td>Inspect or validate configuration.</td></tr>
+      <tr><td><code>work-items list | get | create | transition | cancel | reconcile | replan | create-work-plan | execute | capture-change-set | create-pipeline-intent | pipeline-intent-context | events | waits | reconcile-due-waits</code></td><td>The full WorkItem lifecycle (see <a href="workitems.html">The harness</a>).</td></tr>
+      <tr><td><code>approvals list | summary | get | approve | deny</code></td><td>Inspect and decide run approvals.</td></tr>
+      <tr><td><code>artifacts list | get</code></td><td>Inspect persisted run artifacts.</td></tr>
+      <tr><td><code>observations list | get</code></td><td>Inspect normalized run observations.</td></tr>
+      <tr><td><code>workspaces list | get</code></td><td>Inspect declared isolated source workspaces.</td></tr>
+      <tr><td><code>work-plans …</code> / <code>change-sets …</code> / <code>gitops-change-sets …</code></td><td>Inspect durable work plans and (GitOps) change sets.</td></tr>
+      <tr><td><code>pipeline-intents …</code> / <code>pipeline-contracts …</code></td><td>Inspect durable pipeline intents and operator-managed Tekton Pipeline contracts.</td></tr>
+      <tr><td><code>deployment-contracts list | get | create | retire</code></td><td>Operator-managed Argo CD deployment contracts.</td></tr>
+      <tr><td><code>deployment-intents list | get | create-from-pipeline-intent | transition | attach-evidence | create-trusted-envelope | preflight | execute [--apply]</code></td><td>Durable deployment intents; <code>execute</code> is dry-run unless <code>--apply</code>.</td></tr>
+      <tr><td><code>releases list | get | create-from-deployment-intent | transition | attach-evidence | verify [--complete]</code></td><td>Durable releases; <code>verify</code> performs typed read-only checks (see <a href="release.html#verify">Verify a release</a>).</td></tr>
+      <tr><td><code>registry-evidence …</code> / <code>approval-gates …</code> / <code>permission-grants …</code></td><td>Inspect registry evidence, approval gates, and permission grants.</td></tr>
+      <tr><td><code>audit-events --resource-kind &lt;kind&gt; --resource-id &lt;id&gt;</code></td><td>Inspect durable audit events.</td></tr>
+      <tr><td><code>incidents …</code> / <code>remediation-plans …</code></td><td>Inspect incident candidates and remediation plan drafts.</td></tr>
+      <tr><td><code>fireworks models</code></td><td>List serverless models visible to <code>FIREWORKS_API_KEY</code>.</td></tr>
+    </table>
+
+    <h2>Read-only capabilities (no model, no mutation)</h2>
+    <table>
+      <tr><th>Command</th><th>Reads</th></tr>
+      <tr><td><code>capabilities kubernetes-get</code></td><td>Kubernetes resources through the typed <code>kubernetes_get</code> capability.</td></tr>
+      <tr><td><code>capabilities argo-get-app</code></td><td>An Argo CD Application.</td></tr>
+      <tr><td><code>capabilities prometheus-query</code></td><td>A read-only Prometheus instant query.</td></tr>
+      <tr><td><code>capabilities prometheus-inventory</code></td><td>Bounded Prometheus target, rule, and alert inventory.</td></tr>
+      <tr><td><code>capabilities loki-log-summary</code></td><td>Bounded Loki log lines.</td></tr>
+      <tr><td><code>capabilities tekton-get-pipeline-runs</code> / <code>tekton-get-task-runs</code> / <code>tekton-analyze-pipeline-run</code></td><td>Tekton runs and bounded analysis.</td></tr>
+      <tr><td><code>capabilities registry-inspect-image</code></td><td>An OCI/Docker registry image manifest (anonymous).</td></tr>
+    </table>
+
+    <h2 id="config">Config reference</h2>
+    <p>Full example: <code>config/pharness.example.toml</code>. Runtime env
+    equivalents exist for the key fields (e.g. <code>PHARNESS_POLICY_MODE</code>
+    for <code>[policy].mode</code>, <code>PHARNESS_REGISTRY_ALIASES</code> for
+    <code>[cluster].registry_aliases</code>).</p>
+    <table>
+      <tr><th>Section</th><th>Fields</th><th>Notes</th></tr>
+      <tr>
+        <td><code>[workspace]</code></td>
+        <td><code>root</code>, <code>respect_gitignore</code>, <code>additional_read_dirs</code>, <code>additional_write_dirs</code></td>
+        <td>Read/write boundaries for local execution.</td>
+      </tr>
+      <tr>
+        <td><code>[model]</code></td>
+        <td><code>provider</code>, <code>model</code>, <code>api_key_env</code>, <code>base_url</code>, <code>context_*</code>, <code>temperature</code>, <code>max_tokens</code>, <code>tool_protocol</code> (<code>native_tools</code> | <code>json_action</code>), <code>reasoning_effort</code></td>
+        <td>The key is read from the env var named by <code>api_key_env</code> — never stored in the file.</td>
+      </tr>
+      <tr>
+        <td><code>[agent]</code></td>
+        <td><code>max_turns</code>, <code>max_context_tokens</code>, <code>shell_output_max_bytes</code>, <code>file_read_max_bytes</code></td>
+        <td>Budgets per agent run.</td>
+      </tr>
+      <tr>
+        <td><code>[execution]</code></td>
+        <td><code>target</code> = <code>local_process</code> | <code>kubernetes_job</code>, <code>environment</code></td>
+        <td>Where coding runs execute.</td>
+      </tr>
+      <tr>
+        <td><code>[cluster]</code></td>
+        <td><code>name</code>, <code>namespace</code>, <code>service_account</code>, <code>kubectl_bin</code>, <code>argocd_namespace</code>, <code>prometheus_url</code>, <code>loki_url</code>, <code>tempo_url</code>, <code>tool_timeout_ms</code>, <code>tool_max_output_bytes</code>, <code>gitops_source_of_truth</code>, <code>default_delivery_mode</code> = <code>gitops</code> | <code>direct_apply_break_glass</code>, <code>registry_aliases</code></td>
+        <td>Cluster identities and GitOps posture. <code>direct_apply_break_glass</code> is exactly what it sounds like.</td>
+      </tr>
+      <tr>
+        <td><code>[rag]</code></td>
+        <td><code>enabled</code>, <code>endpoint_env</code>, <code>collection</code></td>
+        <td>Optional retrieval endpoint.</td>
+      </tr>
+      <tr>
+        <td><code>[policy]</code></td>
+        <td><code>subject</code>, <code>environment</code>, <code>mode</code> = <code>default</code> | <code>trusted_writes</code> | <code>plan</code> | <code>deny_all_writes</code>, <code>allow_read_only_shell</code>, <code>require_approval_for_writes</code>, <code>require_approval_for_network</code>, <code>require_approval_for_destructive</code>, <code>deny_privileged</code>, <code>deny_secret_access</code>, <code>command_timeout_ms</code></td>
+        <td>The approval/denial surface. Keep <code>deny_secret_access</code> on.</td>
+      </tr>
+      <tr>
+        <td><code>[policy.cluster]</code></td>
+        <td><code>allow_read_only_cluster_inspection</code>, <code>require_approval_for_registry_write</code>, <code>require_approval_for_tekton_run</code>, <code>require_approval_for_argocd_sync</code>, <code>require_approval_for_database_change</code>, <code>deny_secret_reads</code>, <code>deny_direct_production_apply</code></td>
+        <td>Cluster-scoped policy. <code>deny_direct_production_apply</code> is the production break-glass gate.</td>
+      </tr>
+      <tr>
+        <td><code>[storage]</code></td>
+        <td><code>kind = "sqlite"</code>, <code>path</code>, <code>workspace_root</code>, <code>workspace_allowed_repos</code>, <code>workspace_allowed_remote_repos</code></td>
+        <td>Single-writer SQLite store. Real coding only clones repos listed here, into an isolated workspace; Pharness never pushes, merges, or touches the source checkout. Remote repos must be exact HTTPS URLs (credentials in URLs are rejected).</td>
+      </tr>
+      <tr>
+        <td><code>[worker.kubernetes]</code></td>
+        <td>workspace sizing (<code>workspace_dir</code>, <code>workspace_size_limit</code>, <code>workspace_storage_class</code>, ephemeral requests/limits, <code>workspace_node_hostname</code>), <code>max_concurrent_run_jobs</code>, and the dedicated identities: <code>argo_executor_*</code>, <code>git_writer_*</code>, <code>gitops_writer_*</code>, <code>git_observer_*</code></td>
+        <td>Every dedicated identity is <strong>disabled by default</strong> and uses a separate service account, token Secret name, and repository allowlist. The API never reads the token Secret — only the dedicated writer Job mounts its <code>token</code> key.</td>
+      </tr>
+      <tr>
+        <td><code>[api]</code></td>
+        <td><code>bind</code> = <code>127.0.0.1:4777</code>, <code>cors_origin</code> = <code>http://127.0.0.1:5173</code></td>
+        <td>Loopback bind by default.</td>
+      </tr>
+    </table>
+
+    <h2 id="troubleshooting">Troubleshooting</h2>
+    <table>
+      <tr><th>Symptom</th><th>Likely cause / check</th></tr>
+      <tr>
+        <td><code>cannot transition work item from X to Y</code> (409)</td>
+        <td>Invalid move in the WorkItem state machine. Check the allowed transitions on the <a href="workitems.html#lifecycle">lifecycle page</a>; from <code>blocked</code>/<code>failed</code> you must return to <code>planning</code> or <code>awaiting_approval</code>, not <code>verifying</code>.</td>
+      </tr>
+      <tr>
+        <td>Planner run returns <code>needs_decision</code></td>
+        <td>Expected: the proposal has concrete blockers. Read them, add an operator annotation, then <code>work-items replan</code>. A blocked proposal is retained with its blockers — never inferred ready.</td>
+      </tr>
+      <tr>
+        <td><code>releases verify</code> returns <code>attention_required</code></td>
+        <td>Expected safety outcome: the target is unhealthy or still progressing. Inspect the returned observation ids and the release audit trail; do not force <code>--complete</code>.</td>
+      </tr>
+      <tr>
+        <td>Build preflight fails: "build preflight did not return the requested immutable revision"</td>
+        <td>The revision must be the exact current merged <code>origin/main</code> (40-char lowercase SHA). Re-fetch and re-resolve.</td>
+      </tr>
+      <tr>
+        <td>Build preflight: builder error</td>
+        <td>The builder name must be an explicit, reachable buildx builder (e.g. <code>rancher-desktop</code>). No fallback is permitted — create/inspect it with <code>docker buildx ls</code>.</td>
+      </tr>
+      <tr>
+        <td>Release pinning: "release pinning requires a clean worktree"</td>
+        <td>Commit or stash changes first; the script refuses to pin over a dirty tree.</td>
+      </tr>
+      <tr>
+        <td>Release pinning: "rendered release contains a mutable Pharness image"</td>
+        <td>A <code>:latest</code> tag survived in the rendered chart. The pin script should have replaced every digest — check the diff it printed and re-run from a clean tree.</td>
+      </tr>
+      <tr>
+        <td>UI won't talk to the API</td>
+        <td>Check <code>[api].cors_origin</code> matches the console origin (default <code>http://127.0.0.1:5173</code>); for deployed APIs, set <code>PHARNESS_API_TOKEN</code> and confirm the API is reachable at <code>PHARNESS_API_URL</code>.</td>
+      </tr>
+      <tr>
+        <td><code>unsupported work item status</code></td>
+        <td><code>transition --target-status</code> must be one of: <code>proposed</code>, <code>submitted</code>, <code>planning</code>, <code>awaiting_approval</code>, <code>executing</code>, <code>verifying</code>, <code>waiting_external</code>, <code>blocked</code>, <code>completed</code>, <code>failed</code>, <code>cancelled</code>.</td>
+      </tr>
+      <tr>
+        <td>Stage outcome <code>blocked</code> mid-execution</td>
+        <td>A required input, capability, policy decision, authorization, or external condition is unsatisfied. Check <code>work-items waits</code> and the approval queue; reconcile due waits against persisted evidence only.</td>
+      </tr>
+    </table>
+
+    <h2 id="safety">Safety rules (non-negotiable)</h2>
+    <ol>
+      <li><strong>Never copy credentials into playbooks, command transcripts, or docs.</strong>
+        Tokens come from env vars or mounted Secrets; the API never reads writer
+        token Secrets itself.</li>
+      <li><strong>State the effect boundary before any effectful operation</strong> —
+        exact cluster context, namespace, target, expected mutation, success
+        criteria, and cleanup ownership.</li>
+      <li><strong>Never infer acceptance from readiness or Argo health alone.</strong>
+        Typed verification with durable evidence is the bar.</li>
+      <li><strong>Agents cannot seal their own success.</strong> The controller
+        adjudicates against typed evidence; agent claims stay claims.</li>
+      <li><strong>A missing or stale evidence record is recorded honestly.</strong>
+        Absence of a failing record is never converted into success.</li>
+      <li><strong>Production requires human approval bound to the exact artifact
+        and evidence.</strong> Rollback restores service; it does not make the
+        WorkItem succeed.</li>
+      <li><strong>Manage deployments through their GitOps sources.</strong>
+        Hand <code>kubectl apply</code> on production is the
+        <code>direct_apply_break_glass</code> escape hatch, not a workflow.</li>
+      <li><strong>Preserve the single-writer database and scoped
+        reader/writer/effect responsibilities</strong> when changing code — run
+        <code>scripts/check-app-module-boundaries.sh</code>.</li>
+    </ol>
+
+    <h2>Where to read more</h2>
+    <table>
+      <tr><th>Document</th><th>Path</th></tr>
+      <tr><td>Documentation map</td><td><code>planning/README.md</code></td></tr>
+      <tr><td>Product vision and boundaries</td><td><code>planning/design/product-vision-and-boundaries.md</code></td></tr>
+      <tr><td>Product model (entities)</td><td><code>planning/design/product-model.md</code></td></tr>
+      <tr><td>Stage outcomes and evidence handoffs</td><td><code>planning/design/stage-outcomes-and-evidence-handoffs.md</code></td></tr>
+      <tr><td>Operations playbooks</td><td><code>planning/operations/README.md</code></td></tr>
+      <tr><td>Release verification smoke playbook</td><td><code>planning/operations/runbooks/release-verification-smoke-playbook.md</code></td></tr>
+      <tr><td>Tekton executor smoke playbook</td><td><code>planning/operations/runbooks/tekton-executor-smoke-playbook.md</code></td></tr>
+      <tr><td>ASTRA autonomous SDLC program</td><td><code>planning/programs/autonomous-sdlc/ASTRA-00-PROGRAM.md</code></td></tr>
+      <tr><td>Operator checkpoint</td><td><code>planning/evidence/autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md</code></td></tr>
+      <tr><td>UI guidance</td><td><code>ui/AGENTS.md</code></td></tr>
+    </table>
+
+    <div class="callout note">
+      <span class="label">Tutorial provenance</span>
+      <p>This site is generated from the repository: <code>README.md</code>,
+      <code>config/pharness.example.toml</code>, <code>planning/</code>
+      documentation, <code>scripts/</code>, and the CLI source
+      (<code>crates/pharness-cli/src/main.rs</code>). If a command or flag has
+      changed, the source and the runbooks above win.</p>
+    </div>
+
+    <div class="page-footer">
+      <span>PHarness operator tutorial — generated from the repository docs and CLI source</span>
+      <span><a href="release.html">← Back</a> <a href="index.html">Start over</a></span>
+    </div>
+  </main>
+</div>
+<script src="js/site.js"></script>
+</body>
+</html>
