@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PHarness Operator Tutorial — Build & Test</title>
+  <link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <a class="brand" href="index.html">PHarness
+      <small>Operator Tutorial</small>
+    </a>
+    <nav>
+      <h2>Getting started</h2>
+      <a href="index.html#overview">Overview</a>
+      <a href="index.html#prerequisites">Prerequisites</a>
+      <a href="index.html#local-build">Build locally</a>
+      <a href="index.html#local-test">Test locally</a>
+      <a href="index.html#local-config">Local configuration</a>
+      <h2>The harness</h2>
+      <a href="workitems.html#lifecycle">WorkItem lifecycle</a>
+      <a href="workitems.html#create">Create a WorkItem</a>
+      <a href="workitems.html#execute">Run a coding attempt</a>
+      <a href="workitems.html#approvals">Approvals</a>
+      <a href="workitems.html#change-sets">ChangeSets &amp; delivery</a>
+      <h2>Releasing</h2>
+      <a href="release.html#images">Build release images</a>
+      <a href="release.html#pinning">Pin the release</a>
+      <a href="release.html#verify">Verify a release</a>
+      <a href="release.html#production">Production approval</a>
+      <h2>Reference</h2>
+      <a href="reference.html#cli">CLI cheat sheet</a>
+      <a href="reference.html#config">Config reference</a>
+      <a href="reference.html#troubleshooting">Troubleshooting</a>
+      <a href="reference.html#safety">Safety rules</a>
+    </nav>
+  </aside>
+
+  <main>
+    <h1 id="overview"><span class="kicker">Getting started</span>Operating PHarness</h1>
+    <p class="lead">
+      PHarness is an SDLC control plane: one bounded request (a <strong>WorkItem</strong>)
+      progresses through coding, tests, source delivery, immutable builds, staging,
+      human production approval, and runtime verification. You operate it from the
+      <code>pharness</code> CLI, the API, and the Lamina operator console.
+    </p>
+
+    <div class="callout note">
+      <span class="label">How to read this site</span>
+      <p><strong>Page 1 (here)</strong> — build and test the codebase locally.
+      <strong>Page 2</strong> — move a WorkItem through the coding harness.
+      <strong>Page 3</strong> — build, pin, and verify a release.
+      <strong>Page 4</strong> — reference material.</p>
+    </div>
+
+    <h2>Prerequisites</h2>
+    <p>The workspace contains the Rust runtime, API, store, workers, model gateway,
+    evaluator, CLI, and the React/Vite console under <code>ui/</code>. You need:</p>
+    <table>
+      <tr><th>Tool</th><th>Used for</th></tr>
+      <tr><td><code>rust</code> (workspace pins <code>rust-version = "1.80"</code>, see <code>rust-toolchain.toml</code>)</td><td>Building and testing all crates</td></tr>
+      <tr><td><code>node</code> / <code>npm</code></td><td>The console UI in <code>ui/</code> (Vite + Vitest)</td></tr>
+      <tr><td><code>docker</code> + a buildx builder</td><td>Release image builds (page 3)</td></tr>
+      <tr><td><code>helm</code>, <code>jq</code>, <code>kubectl</code></td><td>Release pinning and cluster operations</td></tr>
+    </table>
+    <p>Environment variables you will use throughout (never write secret values into
+    playbooks or transcripts):</p>
+    <pre><code>export PHARNESS_API_URL=http://127.0.0.1:4777   # where the API is listening
+export PHARNESS_API_TOKEN=&lt;operator token&gt;      # deployed APIs require it; local loopback APIs ignore it</code></pre>
+
+    <h2 id="local-build">Build locally</h2>
+    <ol class="steps">
+      <li>
+        <strong class="title">Check formatting</strong>
+        <pre><code>cd ~/Personal/pharness
+cargo fmt --all -- --check</code></pre>
+      </li>
+      <li>
+        <strong class="title">Lint the whole workspace</strong>
+        <pre><code>cargo clippy --workspace --all-targets -- -D warnings</code></pre>
+      </li>
+      <li>
+        <strong class="title">Build everything (debug is fine for local work)</strong>
+        <pre><code>cargo build --workspace</code></pre>
+        <p>Binaries you care about live in <code>target/debug/</code>:</p>
+        <table>
+          <tr><th>Binary</th><th>Source crate</th><th>Role</th></tr>
+          <tr><td><code>pharness</code></td><td><code>pharness-cli</code></td><td>Machine-facing control CLI (your main operator tool)</td></tr>
+          <tr><td>API binary</td><td><code>pharness-api</code></td><td>Axum control-plane API, default bind <code>127.0.0.1:4777</code></td></tr>
+          <tr><td><code>pharness-worker</code></td><td><code>pharness-worker</code></td><td>Local-process execution of coding runs and egress proxy</td></tr>
+          <tr><td><code>pharness-admin</code></td><td><code>pharness-api</code> bin</td><td>Admin/maintenance operations</td></tr>
+        </table>
+      </li>
+    </ol>
+
+    <div class="callout warn">
+      <span class="label">Module boundaries</span>
+      <p>Before changing API app code, run the architecture guardrails:
+      <code>scripts/check-app-module-boundaries.sh</code>. Fixes must preserve the
+      single-writer database and scoped reader/writer/effect responsibilities.
+      For UI work, follow <code>ui/AGENTS.md</code>.</p>
+    </div>
+
+    <h2 id="local-test">Test locally</h2>
+    <ol class="steps">
+      <li>
+        <strong class="title">Rust test suite</strong>
+        <pre><code>cargo test --workspace</code></pre>
+        <p>Every crate has tests; the deterministic replay and stage-outcome logic in
+        particular must stay green. A subset is fast:</p>
+        <pre><code>cargo test -p pharness-core      # stage model, repo mode, inference grants
+cargo test -p pharness-runhost   # command sandboxing, workspace validation
+cargo test -p pharness-api       # app routes and auth</code></pre>
+      </li>
+      <li>
+        <strong class="title">UI checks</strong>
+        <pre><code>cd ui
+npm ci
+npm test            # vitest run
+npm run build       # vite build
+npm run dev         # console at http://127.0.0.1:5173</code></pre>
+        <p>The CORS origin in config defaults to <code>http://127.0.0.1:5173</code>,
+        so a locally served console talks to a locally bound API with no extra setup.</p>
+      </li>
+      <li>
+        <strong class="title">Start a local API and poke it</strong>
+        <p>Copy the example config, start the API, then use the CLI against it:</p>
+        <pre><code>cp config/pharness.example.toml ~/.config/pharness/config.toml
+# adjust [model] (provider/api key env) and [storage] as needed
+cargo run -p pharness-api &amp;          # listens on 127.0.0.1:4777 by default
+
+export PHARNESS_API_URL=http://127.0.0.1:4777
+cargo run -p pharness-cli -- config          # inspect/validate configuration
+cargo run -p pharness-cli -- runs list       # inspect persisted runs
+cargo run -p pharness-cli -- work-items list # inspect durable work items</code></pre>
+      </li>
+    </ol>
+
+    <div class="callout note">
+      <span class="label">Local vs. deployed</span>
+      <p>Local execution (<code>[execution] target = "local_process"</code>) remains
+      useful for development; it is <em>not</em> the primary product promise. The
+      deployed runtime runs workers as Kubernetes Jobs. Treat a locally successful
+      run as a development signal, not release acceptance — never infer release
+      acceptance from readiness or Argo health alone.</p>
+    </div>
+
+    <h2 id="local-config">Local configuration</h2>
+    <p>Local runtime configuration is illustrated in
+    <code>config/pharness.example.toml</code>. The sections that matter day to day:</p>
+    <table>
+      <tr><th>Section</th><th>Key fields</th><th>Notes</th></tr>
+      <tr><td><code>[model]</code></td><td><code>provider</code>, <code>model</code>, <code>api_key_env</code>, <code>tool_protocol</code></td><td>Which model serves coding runs. The key comes from the named env var, never the file.</td></tr>
+      <tr><td><code>[agent]</code></td><td><code>max_turns</code>, <code>max_context_tokens</code></td><td>Budgets for one agent run.</td></tr>
+      <tr><td><code>[execution]</code></td><td><code>target</code> = <code>local_process</code> | <code>kubernetes_job</code></td><td>Where coding runs execute.</td></tr>
+      <tr><td><code>[storage]</code></td><td><code>kind = "sqlite"</code>, <code>path</code>, <code>workspace_root</code>, <code>workspace_allowed_repos</code></td><td>Single-writer SQLite store. Real coding only clones repos listed here, into an isolated workspace under <code>workspace_root</code>; Pharness does not push, merge, or touch the source checkout.</td></tr>
+      <tr><td><code>[policy]</code></td><td><code>mode</code> = <code>default</code> | <code>trusted_writes</code> | <code>plan</code> | <code>deny_all_writes</code></td><td>Approval requirements for writes, network, destructive ops; secret access denied.</td></tr>
+      <tr><td><code>[api]</code></td><td><code>bind</code>, <code>cors_origin</code></td><td>Loopback bind by default.</td></tr>
+    </table>
+    <p>See <a href="reference.html#config">Config reference</a> for the full tour,
+    including the <code>[worker.kubernetes]</code> identities (git writer, GitOps
+    writer, observer, Argo runner) and their disabled-by-default posture.</p>
+
+    <h2>Next</h2>
+    <p>Build and tests are green? Now learn how a request actually moves through the
+    harness → <a href="workitems.html#lifecycle">WorkItem lifecycle</a>.</p>
+
+    <div class="page-footer">
+      <span>PHarness operator tutorial — generated from the repository docs and CLI source</span>
+      <span><a href="workitems.html">Next: The harness →</a></span>
+    </div>
+  </main>
+</div>
+<script src="js/site.js"></script>
+</body>
+</html>
