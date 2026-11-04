@@ -1,0 +1,57 @@
+{
+  "schema_version": "pharness.dev/campus-profile/v1alpha1",
+  "id": "campus-coding",
+  "version": "v1",
+  "kind": "coding",
+  "isolation": "gvisor",
+  "image": "registry.lucas.engineering/pharness-node-runner@sha256:0c306727ef835d47dad6f366a94416e33de0cd15c3ab1d932afe8a4b32f7f24f",
+  "resources": {
+    "cpu_millicores": 2000,
+    "memory_mib": 4096,
+    "ephemeral_storage_mib": 4096,
+    "pids": 256
+  },
+  "network": {
+    "mode": "approved_egress",
+    "egress": [
+      { "host": "pypi.org", "port": 443 },
+      { "host": "files.pythonhosted.org", "port": 443 },
+      { "host": "registry.npmjs.org", "port": 443 },
+      { "host": "github.com", "port": 443 },
+      { "host": "codeload.github.com", "port": 443 }
+    ]
+  },
+  "ttl_seconds": 5400,
+  "agent_budget": {
+    "initial_turns": 48,
+    "hard_turns": 100,
+    "initial_tokens": 400000,
+    "hard_tokens": 1000000,
+    "active_execution_seconds": 3600
+  },
+  "model_policy": {
+    "model_aliases": ["campus-default"],
+    "session_allocation_micro_usd": 2000000,
+    "max_output_tokens": 8192,
+    "max_concurrent_requests": 2
+  },
+  "capabilities": [
+    { "tool": "environment_info", "scope": "session_workspace" },
+    { "tool": "list_dir", "scope": "session_workspace" },
+    { "tool": "read_file", "scope": "session_workspace" },
+    { "tool": "search_files", "scope": "session_workspace" },
+    { "tool": "create_directory", "scope": "session_workspace" },
+    { "tool": "write_file", "scope": "session_workspace" },
+    { "tool": "patch_file", "scope": "session_workspace" },
+    { "tool": "apply_patch", "scope": "session_workspace" },
+    { "tool": "git_diff", "scope": "session_workspace" },
+    { "tool": "git_status", "scope": "session_workspace" },
+    { "tool": "run_workspace_command", "scope": "session_shell" },
+    { "tool": "finish", "scope": "agent_control" }
+  ],
+  "student_choices": {
+    "model_aliases": ["campus-default"],
+    "min_ttl_seconds": 1800
+  },
+  "launch_gate": "enabled"
+}
