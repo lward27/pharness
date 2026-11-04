@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: campus-litellm-spike
+resources:
+  - manifests/00-namespace.yaml
+  - manifests/10-networkpolicy.yaml
+  - manifests/20-postgres.yaml
+  - manifests/21-redis.yaml
+  - manifests/30-fake-upstream.yaml
+  - manifests/40-litellm.yaml
+  - manifests/50-driver.yaml
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    pharness.dev/purpose: luc-115-litellm-spike
+configMapGenerator:
+  - name: spike-harness
+    files:
+      - harness/fake_upstream.py
+      - harness/driver.py
+      - harness/reset_straddle.py
+  - name: spike-litellm-config
+    files:
+      - config.yaml=manifests/litellm-config.yaml
+labels:
+  - pairs:
+      pharness.dev/purpose: luc-115-litellm-spike

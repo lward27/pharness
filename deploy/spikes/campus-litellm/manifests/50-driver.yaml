@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: driver
+  namespace: campus-litellm-spike
+  labels:
+    app: driver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: driver
+  template:
+    metadata:
+      labels:
+        app: driver
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: driver
+          image: docker.io/library/python:3.13.9-alpine@sha256:e5fa639e49b85986c4481e28faa2564b45aa8021413f31026c3856e5911618b1
+          command: [/bin/sh, -c, "exec sleep 2147483647"]
+          env:
+            - name: LITELLM_MASTER_KEY
+              valueFrom:
+                secretKeyRef: {name: spike-litellm, key: master-key}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: spike-redis, key: password}
+            - {name: WORK_DIR, value: /work}
+            - {name: PYTHONUNBUFFERED, value: "1"}
+          resources:
+            requests: {cpu: 250m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - {name: harness, mountPath: /harness, readOnly: true}
+            - {name: work, mountPath: /work}
+      volumes:
+        - name: harness
+          configMap:
+            name: spike-harness
+        - {name: work, emptyDir: {sizeLimit: 256Mi}}

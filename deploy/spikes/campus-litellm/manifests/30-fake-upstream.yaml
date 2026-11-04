@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fake-upstream
+  namespace: campus-litellm-spike
+  labels:
+    app: fake-upstream
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: fake-upstream
+  template:
+    metadata:
+      labels:
+        app: fake-upstream
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: fake-upstream
+          image: docker.io/library/python:3.13.9-alpine@sha256:e5fa639e49b85986c4481e28faa2564b45aa8021413f31026c3856e5911618b1
+          command: [python3, -u, /harness/fake_upstream.py]
+          env:
+            - {name: CALL_LOG, value: /data/calls.jsonl}
+            - {name: TIMEOUT_SLEEP, value: "30"}
+            - {name: PORT, value: "8080"}
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet: {path: /healthz, port: 8080}
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 250m, memory: 64Mi}
+            limits: {cpu: "1", memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - {name: harness, mountPath: /harness, readOnly: true}
+            - {name: data, mountPath: /data}
+      volumes:
+        - name: harness
+          configMap:
+            name: spike-harness
+        - {name: data, emptyDir: {sizeLimit: 256Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fake-upstream
+  namespace: campus-litellm-spike
+spec:
+  selector:
+    app: fake-upstream
+  ports:
+    - port: 8080
+      targetPort: 8080
