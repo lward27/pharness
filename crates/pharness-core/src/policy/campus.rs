@@ -1242,6 +1242,54 @@ impl EffectiveCampusPolicy {
         run_scope: &RunScope,
         approval: Option<&CampusApproval>,
     ) -> CampusDecisionRecord {
+        let decision = baseline.evaluate_action_without_grants(action);
+        self.evaluate_with_baseline(baseline, action, decision, run_scope, approval)
+    }
+
+    /// [`Self::evaluate_action`] for an action a Campus sandbox will run.
+    ///
+    /// The SDLC baseline allows every workspace command because the SDLC
+    /// runtime confines it to an executable allowlist declared by the
+    /// repository contract. A Campus sandbox has no such allowlist, so a
+    /// workspace command is given the baseline decision of the same command
+    /// line run as a shell command; every other action is evaluated exactly
+    /// as [`Self::evaluate_action`] does.
+    pub fn evaluate_sandbox_action(
+        &self,
+        baseline: &SafetyPolicy,
+        action: &AgentAction,
+        run_scope: &RunScope,
+        approval: Option<&CampusApproval>,
+    ) -> CampusDecisionRecord {
+        let decision = match action {
+            AgentAction::RunWorkspaceCommand {
+                id,
+                reason,
+                executable,
+                args,
+                cwd,
+                timeout_ms,
+            } => baseline.evaluate_action_without_grants(&AgentAction::RunShell {
+                id: id.clone(),
+                reason: reason.clone(),
+                cmd: command_line(executable, args),
+                cwd: cwd.clone(),
+                timeout_ms: *timeout_ms,
+                dry_run: false,
+            }),
+            _ => baseline.evaluate_action_without_grants(action),
+        };
+        self.evaluate_with_baseline(baseline, action, decision, run_scope, approval)
+    }
+
+    fn evaluate_with_baseline(
+        &self,
+        baseline: &SafetyPolicy,
+        action: &AgentAction,
+        decision: PolicyDecision,
+        run_scope: &RunScope,
+        approval: Option<&CampusApproval>,
+    ) -> CampusDecisionRecord {
         let tool = action.kind_name();
         let subject = format!("action:{tool}");
         if let Some(authority) =
@@ -1263,7 +1311,6 @@ impl EffectiveCampusPolicy {
             };
         }
 
-        let decision = baseline.evaluate_action_without_grants(action);
         let risk = match &decision {
             PolicyDecision::Allow { risk, .. }
             | PolicyDecision::Ask { risk, .. }
@@ -1396,14 +1443,18 @@ fn operation_kind(action: &AgentAction, decision: &PolicyDecision) -> Option<App
         AgentAction::RunShell { cmd, .. } => command_kind(cmd),
         AgentAction::RunWorkspaceCommand {
             executable, args, ..
-        } => command_kind(
-            &std::iter::once(executable.as_str())
-                .chain(args.iter().map(String::as_str))
-                .collect::<Vec<_>>()
-                .join(" "),
-        ),
+        } => command_kind(&command_line(executable, args)),
         _ => None,
     }
+}
+
+/// The command line a workspace command is classified as. Arguments are
+/// joined unquoted, which is enough for the heuristic classifier.
+pub(crate) fn command_line(executable: &str, args: &[String]) -> String {
+    std::iter::once(executable)
+        .chain(args.iter().map(String::as_str))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn command_kind(command: &str) -> Option<ApprovalKind> {

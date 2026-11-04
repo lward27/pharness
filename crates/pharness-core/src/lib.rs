@@ -2,6 +2,7 @@
 
 pub mod agent;
 pub mod agent_execution;
+pub mod campus_capability;
 pub mod campus_profile;
 pub mod events;
 pub mod execution;
