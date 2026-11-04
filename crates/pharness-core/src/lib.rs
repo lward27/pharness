@@ -58,8 +58,13 @@ pub use model::{
     ProviderProtocolErrorKind, TextPatch, TokenUsage, ToolChoiceMode, ToolProtocolMode, ToolSpec,
 };
 pub use policy::{
-    classify_command, CommandClass, PermissionGrant, PermissionGrantPolicy, PermissionGrantScope,
-    PolicyDecision, PolicyMode, RiskLevel, SafetyPolicy,
+    classify_command, CampusApproval, CampusApproverRole, CampusAuthority, CampusAuthorityDenies,
+    CampusDecisionOutcome, CampusDecisionReason, CampusDecisionRecord, CampusEffectiveConstraints,
+    CampusMandatoryDenies, CampusPolicyConstraints, CampusPolicyDimension, CampusPolicyError,
+    CampusPolicyLayer, CampusPolicyLayerRef, CampusPolicySource, CommandClass,
+    EffectiveCampusPolicy, PermissionGrant, PermissionGrantPolicy, PermissionGrantScope,
+    PolicyDecision, PolicyMode, RiskLevel, SafetyPolicy, CAMPUS_POLICY_LAYER_SCHEMA,
+    EFFECTIVE_CAMPUS_POLICY_SCHEMA, MAX_HARD_TOKENS,
 };
 pub use project::{
     AcceptanceCommand, AgentNetworkPolicy, DependencyLock, EnvironmentProfile,
