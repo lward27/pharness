@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "description": "Package indexes that Campus lab sessions may be pointed at. The first entry of each list is the default. Network egress enforcement for these hosts is LUC-130; until then the pins are configuration, not a network control.",
+  "pip_index_urls": [
+    "https://pypi.org/simple"
+  ],
+  "npm_registries": [
+    "https://registry.npmjs.org/"
+  ]
+}
