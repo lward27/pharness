@@ -1,0 +1,46 @@
+{
+  "schema_version": "pharness.dev/campus-profile/v1alpha1",
+  "id": "campus-security",
+  "version": "v1",
+  "kind": "security",
+  "isolation": "hardware_isolated",
+  "image": "registry.lucas.engineering/pharness-python-runner@sha256:fba7af5624c6806d7401420f777915ea5afd5198408fa431ebb78be585806731",
+  "resources": {
+    "cpu_millicores": 2000,
+    "memory_mib": 4096,
+    "ephemeral_storage_mib": 4096,
+    "pids": 256
+  },
+  "network": {
+    "mode": "denied",
+    "egress": []
+  },
+  "ttl_seconds": 3600,
+  "agent_budget": {
+    "initial_turns": 24,
+    "hard_turns": 40,
+    "initial_tokens": 200000,
+    "hard_tokens": 480000,
+    "active_execution_seconds": 3000
+  },
+  "model_policy": {
+    "model_aliases": ["campus-default"],
+    "session_allocation_micro_usd": 1000000,
+    "max_output_tokens": 4096,
+    "max_concurrent_requests": 1
+  },
+  "capabilities": [
+    { "tool": "environment_info", "scope": "session_workspace" },
+    { "tool": "list_dir", "scope": "session_workspace" },
+    { "tool": "read_file", "scope": "session_workspace" },
+    { "tool": "search_files", "scope": "session_workspace" },
+    { "tool": "write_file", "scope": "session_workspace" },
+    { "tool": "run_workspace_command", "scope": "session_shell" },
+    { "tool": "finish", "scope": "agent_control" }
+  ],
+  "student_choices": {
+    "model_aliases": ["campus-default"],
+    "min_ttl_seconds": 900
+  },
+  "launch_gate": { "requires_qualification": "campus-security-profile" }
+}

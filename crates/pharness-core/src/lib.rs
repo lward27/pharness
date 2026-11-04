@@ -2,6 +2,7 @@
 
 pub mod agent;
 pub mod agent_execution;
+pub mod campus_profile;
 pub mod events;
 pub mod execution;
 pub mod hosted_sdlc;
@@ -29,6 +30,12 @@ pub use agent_execution::{
     AGENT_EXECUTION_REGISTRY_SCHEMA, CODEX_PROTOCOL_CASES, CODEX_PROTOCOL_EVALUATION_SCHEMA,
     CODEX_PROTOCOL_FIXTURE_REVISION, CODEX_PROTOCOL_SUITE_ID,
     RESOLVED_AGENT_EXECUTION_BINDING_SCHEMA,
+};
+pub use campus_profile::{
+    CampusAgentBudget, CampusCapabilityBinding, CampusCapabilityScope, CampusEgressDestination,
+    CampusIsolation, CampusLaunchGate, CampusModelPolicy, CampusNetworkMode, CampusNetworkProfile,
+    CampusProfile, CampusProfileError, CampusProfileKind, CampusProfileRef, CampusResourceCeilings,
+    CampusStudentChoices, CAMPUS_PROFILE_SCHEMA, SECURITY_PROFILE_QUALIFICATION,
 };
 pub use events::{AgentEvent, EventKind, EventSink, InMemoryEventSink};
 pub use execution::{EnvironmentRef, EnvironmentTier, ExecutionTarget, RunScope, WorkspaceMount};
