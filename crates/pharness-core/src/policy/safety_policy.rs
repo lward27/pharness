@@ -150,7 +150,7 @@ impl SafetyPolicy {
         self.apply_permission_grants(action, run_scope, decision)
     }
 
-    fn evaluate_action_without_grants(&self, action: &AgentAction) -> PolicyDecision {
+    pub(super) fn evaluate_action_without_grants(&self, action: &AgentAction) -> PolicyDecision {
         match action {
             AgentAction::Respond { .. }
             | AgentAction::Finish { .. }
@@ -243,7 +243,7 @@ impl SafetyPolicy {
         }
     }
 
-    fn apply_permission_grants(
+    pub(super) fn apply_permission_grants(
         &self,
         action: &AgentAction,
         run_scope: &RunScope,

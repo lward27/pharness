@@ -208,6 +208,10 @@ const CAMPUS_TOOL_CATALOG: &[(&str, CampusCapabilityScope)] = &[
     ("run_workspace_command", CampusCapabilityScope::SessionShell),
 ];
 
+pub(crate) fn is_campus_tool(tool: &str) -> bool {
+    CAMPUS_TOOL_CATALOG.iter().any(|(name, _)| *name == tool)
+}
+
 impl CampusProfile {
     /// Parse and fully validate a profile document.
     pub fn parse(document: &str) -> Result<Self, CampusProfileError> {
@@ -518,7 +522,7 @@ fn check_range(field: &str, value: u32, min: u32, max: u32) -> Result<(), Campus
     }
 }
 
-fn validate_identifier(field: &str, value: &str) -> Result<(), CampusProfileError> {
+pub(crate) fn validate_identifier(field: &str, value: &str) -> Result<(), CampusProfileError> {
     let valid = (1..=64).contains(&value.len())
         && value
             .bytes()
@@ -584,7 +588,7 @@ fn validate_immutable_image(value: &str) -> Result<(), CampusProfileError> {
 /// Destinations are DNS names only. IP literals, wildcards and local or
 /// metadata names are rejected; resolution-time checks remain the network
 /// enforcer's job.
-fn validate_egress_host(field: &str, host: &str) -> Result<(), CampusProfileError> {
+pub(crate) fn validate_egress_host(field: &str, host: &str) -> Result<(), CampusProfileError> {
     let labels = host.split('.').collect::<Vec<_>>();
     let well_formed = host.len() <= 253
         && labels.len() >= 2
