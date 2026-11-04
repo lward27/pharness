@@ -21,6 +21,8 @@ async fn main() -> anyhow::Result<()> {
     let operator_tokens =
         parse_operator_tokens(std::env::var("PHARNESS_OPERATOR_TOKENS").ok().as_deref())?;
     validate_operator_auth_configuration(bind, &operator_tokens)?;
+    let campus_config = app::campus::load_campus_config_from_env()?;
+    app::campus::validate_campus_startup(campus_config.as_ref(), operator_tokens.len())?;
     let db_path = config.storage.path.clone();
     let cluster_tools = config.cluster_tools();
     let policy = config.policy.clone();
@@ -87,6 +89,35 @@ async fn main() -> anyhow::Result<()> {
             })
             .await?;
     }
+    let campus = match campus_config {
+        None => app::campus::CampusMount::Disabled,
+        Some(_) if operational_mode == app::OperationalMode::ReadOnly => {
+            tracing::warn!("campus is configured but unavailable in read-only mode");
+            app::campus::CampusMount::Unavailable("campus is unavailable in read-only mode")
+        }
+        Some(campus_config) => {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_secs()
+                .try_into()?;
+            store
+                .sync_campus_bootstrap_admins(
+                    &campus_config.tenant_id,
+                    &campus_config.bootstrap_admins,
+                    now,
+                )
+                .await?;
+            tracing::info!(
+                tenant = %campus_config.tenant_id,
+                issuer = %campus_config.issuer,
+                "campus OIDC enabled"
+            );
+            app::campus::CampusMount::Enabled(Box::new(
+                app::campus::CampusRuntime::production(campus_config)
+                    .context("failed to configure campus OIDC client")?,
+            ))
+        }
+    };
     let dispatcher = match config.worker.mode {
         pharness_config::WorkerMode::Local => {
             let worker = worker::LocalWorker::from_options(
@@ -132,7 +163,7 @@ async fn main() -> anyhow::Result<()> {
             "operator token auth enabled"
         );
     }
-    let app::AppRouters { app, metrics } = app::routers_with_runtime_configs(
+    let app::AppRouters { app, metrics } = app::routers_with_campus(
         store,
         dispatcher,
         cluster_tools,
@@ -147,6 +178,7 @@ async fn main() -> anyhow::Result<()> {
         config.inference.clone(),
         config.agent_execution.clone(),
         config.hosted_workflow.clone(),
+        campus,
     );
     if let Some(metrics_bind) = config.api.metrics_bind {
         let metrics_listener = tokio::net::TcpListener::bind(metrics_bind)

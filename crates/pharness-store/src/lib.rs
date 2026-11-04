@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod agent_execution;
+mod campus;
 mod data_lifecycle;
 mod hosted_controller;
 mod inference;
@@ -18,6 +19,11 @@ pub use agent_execution::{
     EnrollAgentHost, StoredAgentExecutionPolicyQualification, StoredAgentExecutionSelection,
     StoredAgentHost, StoredAgentHostCapabilitySnapshot, StoredAgentHostEnrollment,
     StoredAgentLease,
+};
+pub use campus::{
+    ActiveCampusSession, CampusCourseRole, CampusIdentityKey, ConsumedCampusLoginAttempt,
+    CreateCampusLoginAttempt, CreateCampusSession, PutCampusMembership, StoredCampusIdentity,
+    StoredCampusMembership, UpsertCampusIdentity,
 };
 pub use hosted_controller::{
     BeginWorkflowOperation, DatabaseSize, FinishWorkflowReconciliation, HostedControllerMetrics,

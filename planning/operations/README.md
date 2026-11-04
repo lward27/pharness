@@ -8,6 +8,8 @@ and effect boundary before it runs.
 
 - [Conference demo](runbooks/conference-demo.md) rehearses typed allow/deny decisions and browser-visible audit evidence.
 
+- [Campus OIDC sessions and course authorization](campus-oidc-auth.md) configures the disabled-by-default `/api/campus/*` boundary, its cookies, CSRF, logout and IdP swap.
+
 - [Exact-policy gateway preflight](ASTRA-M04-GATEWAY-PREFLIGHT.md) binds protocol evidence to the selected stage policy before diagnostics or qualification.
 
 - [Minisforum Windows local-model setup](ASTRA-MINISFORUM-WINDOWS-LOCAL-MODELS.md)
