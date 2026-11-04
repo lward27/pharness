@@ -19,9 +19,11 @@ ui-e2e = []
 anyhow.workspace = true
 async-trait.workspace = true
 axum.workspace = true
+base64.workspace = true
 futures.workspace = true
 globset.workspace = true
 hmac.workspace = true
+jsonwebtoken.workspace = true
 pharness-core = { path = "../pharness-core" }
 pharness-config = { path = "../pharness-config" }
 pharness-fireworks = { path = "../pharness-fireworks" }
@@ -29,6 +31,7 @@ pharness-openai-compatible = { path = "../pharness-openai-compatible" }
 pharness-runhost = { path = "../pharness-runhost" }
 pharness-store = { path = "../pharness-store" }
 reqwest.workspace = true
+ring.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -44,4 +47,6 @@ url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+# Test-only RSA key generation for the RS256 id_token round trip.
+rsa = { version = "0.9.10", default-features = false, features = ["std", "getrandom", "u64_digit"] }
 tower = { version = "0.5", features = ["util"] }

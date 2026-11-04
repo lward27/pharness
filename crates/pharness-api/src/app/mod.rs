@@ -18,6 +18,7 @@ mod approval_policy;
 mod approvals;
 mod audit;
 mod auth;
+pub(crate) mod campus;
 mod capabilities;
 mod clock;
 mod data_lifecycle;
@@ -251,6 +252,7 @@ pub fn router_with_runtime_configs(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 pub fn routers_with_runtime_configs(
     store: Arc<SqliteStore>,
     worker: RunDispatcher,
@@ -263,6 +265,40 @@ pub fn routers_with_runtime_configs(
     agent_execution: pharness_config::AgentExecutionBackendConfig,
     hosted_workflow: pharness_core::hosted_sdlc::HostedWorkflowConfig,
 ) -> AppRouters {
+    routers_with_campus(
+        store,
+        worker,
+        cluster_tools,
+        policy,
+        worker_token,
+        operator_tokens,
+        workspace,
+        inference,
+        agent_execution,
+        hosted_workflow,
+        campus::CampusMount::Disabled,
+    )
+}
+
+/// Build the application. The Campus boundary is merged after the operator
+/// and worker routers have their middleware applied, so their bearer-token
+/// layers never wrap Campus routes and Campus session middleware never wraps
+/// theirs.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn routers_with_campus(
+    store: Arc<SqliteStore>,
+    worker: RunDispatcher,
+    cluster_tools: ReadOnlyClusterTools,
+    policy: SafetyPolicy,
+    worker_token: Option<String>,
+    operator_tokens: Vec<(String, String)>,
+    workspace: WorkspaceProvisioner,
+    inference: pharness_config::InferenceGatewayConfig,
+    agent_execution: pharness_config::AgentExecutionBackendConfig,
+    hosted_workflow: pharness_core::hosted_sdlc::HostedWorkflowConfig,
+    campus: campus::CampusMount,
+) -> AppRouters {
+    let campus_routes = campus::router(store.clone(), campus);
     let state = AppState {
         store,
         worker,
@@ -319,7 +355,8 @@ pub fn routers_with_runtime_configs(
                 .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
                 .on_response(DefaultOnResponse::new().level(Level::INFO)),
         )
-        .with_state(state);
+        .with_state(state)
+        .merge(campus_routes);
     AppRouters { app, metrics }
 }
 

@@ -32,6 +32,7 @@ use std::str::FromStr;
 use thiserror::Error;
 
 mod agent_execution;
+mod campus;
 mod data_lifecycle;
 mod delivery;
 mod hosted_controller;
@@ -7059,7 +7060,7 @@ mod tests {
             .fetch_one(&store.pool)
             .await
             .unwrap();
-        assert_eq!(latest, 56);
+        assert_eq!(latest, 57);
         store.pool.close().await;
         for suffix in ["", "-wal", "-shm"] {
             let _ = std::fs::remove_file(format!("{}{}", database_path.display(), suffix));
