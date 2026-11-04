@@ -1,0 +1,72 @@
+"""DNS and HTTPS egress sanity checks for lab dependencies."""
+import fcntl
+import json
+import os
+import socket
+import struct
+import time
+import urllib.request
+
+HOSTS = ["github.com", "pypi.org", "files.pythonhosted.org", "registry.npmjs.org", "kubernetes.default.svc.cluster.local"]
+URLS = ["https://github.com/", "https://pypi.org/simple/pip/", "https://registry.npmjs.org/uuid"]
+DOWNLOAD = "https://registry.npmjs.org/typescript/-/typescript-5.0.4.tgz"
+UA = {"User-Agent": "pharness-luc-114-runtime-spike"}
+
+
+def emit(name, status, **fields):
+    print("@@NET " + json.dumps({"name": name, "status": status, **fields}), flush=True)
+
+
+def ms(start):
+    return round((time.perf_counter() - start) * 1000, 1)
+
+
+emit("resolv_conf", "info", detail=open("/etc/resolv.conf").read().strip())
+for host in HOSTS:
+    start = time.perf_counter()
+    try:
+        infos = socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)
+        emit(f"dns:{host}", "ok", ms=ms(start), addrs=sorted({i[4][0] for i in infos})[:4])
+    except OSError as exc:
+        emit(f"dns:{host}", "fail", ms=ms(start), detail=str(exc))
+
+for url in URLS:
+    start = time.perf_counter()
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=30) as resp:
+            resp.read(4096)
+            emit(f"https:{url}", "ok", ms=ms(start), code=resp.status)
+    except Exception as exc:  # noqa: BLE001
+        emit(f"https:{url}", "fail", ms=ms(start), detail=f"{type(exc).__name__}: {exc}")
+
+start = time.perf_counter()
+try:
+    with urllib.request.urlopen(urllib.request.Request(DOWNLOAD, headers=UA), timeout=60) as resp:
+        size = len(resp.read())
+    secs = time.perf_counter() - start
+    emit("download:typescript-5.0.4.tgz", "ok", ms=round(secs * 1000, 1), bytes=size, mib_per_s=round(size / secs / 1048576, 2))
+except Exception as exc:  # noqa: BLE001
+    emit("download:typescript-5.0.4.tgz", "fail", ms=ms(start), detail=f"{type(exc).__name__}: {exc}")
+
+SIOCGIFADDR, SIOCGIFMTU = 0x8915, 0x8921
+interfaces = {}
+probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+for line in open("/proc/net/dev").read().splitlines()[2:]:
+    name = line.split(":", 1)[0].strip()
+    req = struct.pack("16s16s", name.encode(), b"")
+    entry = {"sysfs_mtu": open(f"/sys/class/net/{name}/mtu").read().strip() if os.path.exists(f"/sys/class/net/{name}/mtu") else "absent"}
+    try:
+        entry["ioctl_mtu"] = struct.unpack_from("i", fcntl.ioctl(probe, SIOCGIFMTU, req), 16)[0]
+    except OSError as exc:
+        entry["ioctl_mtu"] = f"error {exc}"
+    try:
+        entry["ipv4"] = socket.inet_ntoa(fcntl.ioctl(probe, SIOCGIFADDR, req)[20:24])
+    except OSError as exc:
+        entry["ipv4"] = f"error {exc.strerror}"
+    interfaces[name] = entry
+probe.close()
+emit("interfaces", "info", detail=interfaces)
+routes = [line.split() for line in open("/proc/net/route").read().splitlines()[1:]] if os.path.exists("/proc/net/route") else []
+default = [r[0] for r in routes if len(r) > 2 and r[1] == "00000000"]
+emit("default_route", "info", detail=f"default via interface(s) {default}; {len(routes)} IPv4 routes")
+print("@@DONE", flush=True)

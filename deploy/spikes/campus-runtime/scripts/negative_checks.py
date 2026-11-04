@@ -1,0 +1,251 @@
+"""Safe negative checks: each probe is expected to be denied.
+
+No probe writes data to the host. Results: "@@NEG {json}" with outcome
+denied, allowed, absent, info or error.
+"""
+import ctypes
+import errno
+import json
+import os
+import shutil
+import socket
+import subprocess
+
+libc = ctypes.CDLL(None, use_errno=True)
+libc.ptrace.argtypes = [ctypes.c_long, ctypes.c_long, ctypes.c_void_p, ctypes.c_void_p]
+libc.ptrace.restype = ctypes.c_long
+libc.syscall.restype = ctypes.c_long
+libc.mount.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_ulong, ctypes.c_void_p]
+
+CLONE_NEWNS = 0x00020000
+CLONE_NEWUTS = 0x04000000
+CLONE_NEWUSER = 0x10000000
+CLONE_NEWNET = 0x40000000
+SYS_FINIT_MODULE = 313
+SYS_BPF = 321
+SYS_USERFAULTFD = 323
+SYS_IO_URING_SETUP = 425
+PTRACE_ATTACH = 16
+PTRACE_DETACH = 17
+WALL = 0x40000000
+
+
+def emit(name, outcome, detail=""):
+    print("@@NEG " + json.dumps({"name": name, "outcome": outcome, "detail": str(detail)[:900]}), flush=True)
+
+
+def ename(num):
+    return errno.errorcode.get(num, str(num))
+
+
+def errno_result(rv):
+    if rv < 0:
+        err = ctypes.get_errno()
+        return ["denied", f"{ename(err)}: {os.strerror(err)}"]
+    return ["allowed", f"returned {rv}"]
+
+
+def in_child(fn):
+    """Run fn in a forked child so namespace or root changes never leak back."""
+    read_fd, write_fd = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        os.close(read_fd)
+        try:
+            result = fn()
+        except Exception as exc:  # noqa: BLE001
+            result = ["error", f"{type(exc).__name__}: {exc}"]
+        os.write(write_fd, json.dumps(result).encode())
+        os._exit(0)
+    os.close(write_fd)
+    data = b""
+    while True:
+        chunk = os.read(read_fd, 65536)
+        if not chunk:
+            break
+        data += chunk
+    os.close(read_fd)
+    os.waitpid(pid, 0)
+    return json.loads(data or b'["error", "child produced no result"]')
+
+
+def child_call(name, fn):
+    outcome, detail = in_child(fn)
+    emit(name, outcome, detail)
+
+
+def py_call(name, fn):
+    try:
+        result = fn()
+        emit(name, "allowed", result)
+    except OSError as exc:
+        code = ename(exc.errno) if exc.errno else type(exc).__name__
+        emit(name, "denied", f"{code}: {exc.strerror or exc}")
+    except Exception as exc:  # noqa: BLE001
+        emit(name, "error", f"{type(exc).__name__}: {exc}")
+
+
+def info(name, fn):
+    try:
+        emit(name, "info", fn())
+    except Exception as exc:  # noqa: BLE001
+        emit(name, "info", f"{type(exc).__name__}: {exc}")
+
+
+def cli(name, argv, timeout=10):
+    if shutil.which(argv[0]) is None:
+        emit(name, "absent", f"{argv[0]} not in PATH")
+        return
+    try:
+        proc = subprocess.run(argv, capture_output=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        emit(name, "error", "timeout")
+        return
+    out = (proc.stdout + proc.stderr)[:500].decode(errors="replace").strip()
+    emit(name, "denied" if proc.returncode else "allowed", f"rc={proc.returncode} {out}")
+
+
+def status_lines():
+    keep = ("Cap", "NoNewPrivs", "Seccomp", "Uid", "Gid")
+    with open("/proc/self/status") as handle:
+        return " | ".join(line.strip() for line in handle if line.startswith(keep))
+
+
+def cpuinfo():
+    with open("/proc/cpuinfo") as handle:
+        text = handle.read()
+    models = sorted({line.split(":", 1)[1].strip() for line in text.splitlines() if line.startswith("model name")})
+    flags_line = next((line for line in text.splitlines() if line.startswith("flags")), "")
+    flags = set(flags_line.split(":", 1)[1].split()) if flags_line else set()
+    procs = sum(1 for line in text.splitlines() if line.startswith("processor"))
+    return (
+        f"processors={procs} model={models} flags={len(flags)} hypervisor={'hypervisor' in flags} "
+        f"vmx={'vmx' in flags} svm={'svm' in flags}"
+    )
+
+
+def read_first(path, limit=300):
+    with open(path, "rb") as handle:
+        return handle.read(limit).decode(errors="replace").strip()
+
+
+def klog():
+    buf = ctypes.create_string_buffer(1 << 16)
+    rv = libc.klogctl(3, buf, len(buf))
+    if rv < 0:
+        err = ctypes.get_errno()
+        raise OSError(err, os.strerror(err))
+    lines = buf.raw[:rv].decode(errors="replace").splitlines()
+    return f"{rv} bytes, {len(lines)} lines; first: {lines[:6]}"
+
+
+def kcore():
+    st = os.stat("/proc/kcore")
+    with open("/proc/kcore", "rb") as handle:
+        data = handle.read(16)
+    return f"open succeeded; st_size={st.st_size}; read {len(data)} bytes {data[:8]!r}"
+
+
+def open_for_write(path, create=False):
+    def run():
+        flags = os.O_WRONLY | (os.O_CREAT if create else 0)
+        fd = os.open(path, flags, 0o644)
+        os.close(fd)
+        return "open for write succeeded; no data written"
+    return run
+
+
+def unshare(flags):
+    return lambda: errno_result(libc.unshare(flags))
+
+
+def userns_mount():
+    rv = libc.unshare(CLONE_NEWUSER | CLONE_NEWNS)
+    if rv < 0:
+        return errno_result(rv)
+    uid_line = read_first("/proc/self/uid_map", 200) or "(empty uid_map)"
+    os.makedirs("/tmp/negmnt-userns", exist_ok=True)
+    mrv = libc.mount(b"none", b"/tmp/negmnt-userns", b"tmpfs", 0, None)
+    if mrv < 0:
+        err = ctypes.get_errno()
+        return ["allowed", f"unshare(USER|NS) succeeded, uid_map={uid_line!r}; tmpfs mount inside it -> {ename(err)}"]
+    return ["allowed", f"unshare(USER|NS) succeeded, uid_map={uid_line!r}; tmpfs mount inside the private user+mount namespace succeeded (namespaced root only)"]
+
+
+def ptrace_attach(pid):
+    def run():
+        rv = libc.ptrace(PTRACE_ATTACH, pid, None, None)
+        if rv < 0:
+            return errno_result(rv)
+        try:
+            os.waitpid(pid, WALL)
+        except ChildProcessError:
+            pass
+        libc.ptrace(PTRACE_DETACH, pid, None, None)
+        return ["allowed", f"PTRACE_ATTACH to pid {pid} succeeded and was detached immediately"]
+    return run
+
+
+def syscall_fd(nr, *args):
+    def run():
+        rv = libc.syscall(nr, *args)
+        result = errno_result(rv)
+        if rv >= 0:
+            os.close(rv)
+        return result
+    return run
+
+
+os.makedirs("/tmp/negmnt", exist_ok=True)
+info("identity", lambda: f"uid={os.getuid()} euid={os.geteuid()} gid={os.getgid()} pid={os.getpid()} ppid={os.getppid()}")
+info("proc_status", status_lines)
+info("uname", lambda: " ".join(os.uname()))
+info("proc_version", lambda: read_first("/proc/version"))
+info("cpuinfo", cpuinfo)
+info("meminfo", lambda: read_first("/proc/meminfo", 120).splitlines()[0])
+info("ptrace_scope", lambda: read_first("/proc/sys/kernel/yama/ptrace_scope"))
+info("dmesg_restrict", lambda: read_first("/proc/sys/kernel/dmesg_restrict"))
+info("unprivileged_userns_clone", lambda: read_first("/proc/sys/kernel/unprivileged_userns_clone"))
+info("dev_entries", lambda: sorted(os.listdir("/dev")))
+info("sys_fs_cgroup", lambda: f"entries={len(os.listdir('/sys/fs/cgroup'))} writable={os.access('/sys/fs/cgroup', os.W_OK)}")
+info("proc_1_cgroup", lambda: read_first("/proc/1/cgroup"))
+info("serviceaccount_token_dir", lambda: os.path.exists("/var/run/secrets/kubernetes.io/serviceaccount"))
+info("runtime_sockets", lambda: {p: os.path.exists(p) for p in ("/run/containerd/containerd.sock", "/var/run/docker.sock", "/run/k3s/containerd/containerd.sock")})
+
+child_call("mount_tmpfs_syscall", lambda: errno_result(libc.mount(b"tmpfs", b"/tmp/negmnt", b"tmpfs", 0, None)))
+cli("mount_tmpfs_cli", ["mount", "-t", "tmpfs", "tmpfs", "/tmp/negmnt"])
+child_call("unshare_user_syscall", unshare(CLONE_NEWUSER))
+child_call("unshare_mount_syscall", unshare(CLONE_NEWNS))
+child_call("unshare_net_syscall", unshare(CLONE_NEWNET))
+child_call("unshare_uts_syscall", unshare(CLONE_NEWUTS))
+child_call("userns_then_mount", userns_mount)
+cli("unshare_r_cli", ["unshare", "-r", "id"])
+cli("unshare_m_cli", ["unshare", "-m", "true"])
+py_call("raw_socket_inet_icmp", lambda: socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP).close() or "raw socket created")
+py_call("raw_socket_packet", lambda: socket.socket(socket.AF_PACKET, socket.SOCK_RAW, 0).close() or "packet socket created")
+py_call("icmp_dgram_ping_socket", lambda: socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_ICMP).close() or "unprivileged ping socket created")
+sleeper = subprocess.Popen(["sleep", "30"])
+child_call("ptrace_attach_sibling_process", ptrace_attach(sleeper.pid))
+sleeper.kill()
+sleeper.wait()
+child_call("ptrace_attach_pid1", ptrace_attach(1))
+child_call("finit_module_devnull", lambda: (lambda fd: errno_result(libc.syscall(SYS_FINIT_MODULE, fd, b"", 0)))(os.open("/dev/null", os.O_RDONLY)))
+cli("insmod_cli", ["insmod", "/dev/null"])
+info("module_tools", lambda: {t: shutil.which(t) for t in ("modprobe", "insmod", "rmmod", "lsmod")})
+py_call("proc_kcore_read", kcore)
+py_call("sysfs_open_for_write_thp", open_for_write("/sys/kernel/mm/transparent_hugepage/enabled"))
+py_call("sysfs_create_file", open_for_write("/sys/kernel/luc114-probe", create=True))
+py_call("procsys_open_for_write_hostname", open_for_write("/proc/sys/kernel/hostname"))
+py_call("dev_kvm_open", lambda: os.close(os.open("/dev/kvm", os.O_RDWR)) or "opened /dev/kvm")
+child_call("sethostname_syscall", lambda: errno_result(libc.sethostname(b"luc114-probe", 12)))
+cli("hostname_cli", ["hostname", "luc114-probe"])
+child_call("chroot_syscall", lambda: errno_result(libc.chroot(b"/tmp")))
+child_call("setuid_0", lambda: errno_result(libc.setuid(0)))
+py_call("mknod_char_device", lambda: os.mknod("/tmp/negnull", 0o20600, os.makedev(1, 3)) or "mknod succeeded")
+child_call("bpf_map_create", lambda: errno_result(libc.syscall(SYS_BPF, 0, ctypes.create_string_buffer(128), 128)))
+child_call("userfaultfd", syscall_fd(SYS_USERFAULTFD, 0))
+child_call("io_uring_setup", syscall_fd(SYS_IO_URING_SETUP, 1, ctypes.create_string_buffer(120)))
+py_call("klogctl_read_all", klog)
+py_call("dev_kmsg_open", lambda: os.close(os.open("/dev/kmsg", os.O_RDONLY)) or "opened /dev/kmsg")
+cli("dmesg_cli", ["dmesg"])
+print("@@DONE", flush=True)
