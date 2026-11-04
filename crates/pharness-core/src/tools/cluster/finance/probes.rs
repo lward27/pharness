@@ -238,7 +238,7 @@ fn matches_response(
                 ),
                 FinanceEnvironment::Production => (
                     "production",
-                    json!({"database":"https://finance-db.lucas.engineering","yfinance":"https://yfinance.lucas.engineering","scraper":null}),
+                    json!({"database":"/api/database","yfinance":"/api/yfinance","scraper":null}),
                 ),
             };
             status == 200

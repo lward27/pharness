@@ -90,7 +90,7 @@ fn healthy_body(e: &FinanceDeploymentExpectation, path: &str) -> (u16, &'static 
         "/runtime-config.json" => {
             let body=match e.environment {
                 FinanceEnvironment::Staging => json!({"schemaVersion":1,"environment":"staging","services":{"database":null,"yfinance":"/api/yfinance","scraper":null}}),
-                FinanceEnvironment::Production => json!({"schemaVersion":1,"environment":"production","services":{"database":"https://finance-db.lucas.engineering","yfinance":"https://yfinance.lucas.engineering","scraper":null}}),
+                FinanceEnvironment::Production => json!({"schemaVersion":1,"environment":"production","services":{"database":"/api/database","yfinance":"/api/yfinance","scraper":null}}),
             };(200,"application/json",body.to_string())
         },
         _=>panic!("unexpected test request"),
