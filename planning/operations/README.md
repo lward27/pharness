@@ -10,6 +10,8 @@ and effect boundary before it runs.
 
 - [Campus OIDC sessions and course authorization](campus-oidc-auth.md) configures the disabled-by-default `/api/campus/*` boundary, its cookies, CSRF, logout and IdP swap.
 
+- [Campus lab session journal](campus-session-journal.md) describes the lab-session states, fencing, crash recovery, provider contract and the restore procedure for migration `0058`.
+
 - [Exact-policy gateway preflight](ASTRA-M04-GATEWAY-PREFLIGHT.md) binds protocol evidence to the selected stage policy before diagnostics or qualification.
 
 - [Minisforum Windows local-model setup](ASTRA-MINISFORUM-WINDOWS-LOCAL-MODELS.md)
