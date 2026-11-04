@@ -2,6 +2,8 @@
 
 mod agent_execution;
 mod campus;
+mod campus_driver;
+mod campus_journal;
 mod data_lifecycle;
 mod hosted_controller;
 mod inference;
@@ -24,6 +26,15 @@ pub use campus::{
     ActiveCampusSession, CampusCourseRole, CampusIdentityKey, ConsumeCampusLoginState,
     CreateCampusSession, PutCampusMembership, StoredCampusIdentity, StoredCampusMembership,
     UpsertCampusIdentity,
+};
+pub use campus_driver::{
+    advance_campus_lab_session, retry_campus_lab_cleanup, CampusDriverContext, CampusStepOutcome,
+    CENTRAL_AUTHORITY_UNAVAILABLE,
+};
+pub use campus_journal::{
+    campus_operation_key, CampusJournalError, CampusLabOrphan, CampusLabTransition,
+    CampusLabTransitionOutcome, CampusOperationLease, CampusOrphanReason, CreateCampusLabSession,
+    StoredCampusLabEvent, StoredCampusLabOperation, StoredCampusLabSession, StoredCampusLabSlot,
 };
 pub use hosted_controller::{
     BeginWorkflowOperation, DatabaseSize, FinishWorkflowReconciliation, HostedControllerMetrics,

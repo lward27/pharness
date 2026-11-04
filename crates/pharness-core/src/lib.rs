@@ -2,6 +2,7 @@
 
 pub mod agent;
 pub mod agent_execution;
+pub mod campus_lab_session;
 pub mod campus_profile;
 pub mod events;
 pub mod execution;
@@ -30,6 +31,13 @@ pub use agent_execution::{
     AGENT_EXECUTION_REGISTRY_SCHEMA, CODEX_PROTOCOL_CASES, CODEX_PROTOCOL_EVALUATION_SCHEMA,
     CODEX_PROTOCOL_FIXTURE_REVISION, CODEX_PROTOCOL_SUITE_ID,
     RESOLVED_AGENT_EXECUTION_BINDING_SCHEMA,
+};
+pub use campus_lab_session::{
+    CampusDeleteOutcome, CampusExecutionProvider, CampusLabDesiredState, CampusLabObservedState,
+    CampusLabOperationKind, CampusLabOperationStatus, CampusLabSessionState,
+    CampusLabTransitionError, CampusObservation, CampusProviderError, CampusProvisionOutcome,
+    CampusProvisionSpec, CampusWorkloadRef, FakeCampusProvider, FakeFault, FakeFaultPoint,
+    OwnedCampusResource,
 };
 pub use campus_profile::{
     CampusAgentBudget, CampusCapabilityBinding, CampusCapabilityScope, CampusEgressDestination,

@@ -1455,6 +1455,7 @@ dependencies = [
 name = "pharness-store"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "pharness-core",
  "serde",
  "serde_json",
