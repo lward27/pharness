@@ -13,6 +13,7 @@ mod lab_provider;
 mod labs;
 mod login_cookie;
 mod routes;
+mod teardown;
 mod terminal;
 
 use super::config::CampusConfig;

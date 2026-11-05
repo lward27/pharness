@@ -126,7 +126,7 @@ pub(super) async fn workload(harness: &Harness, session_id: &str) -> CampusWorkl
         .unwrap()
 }
 
-async fn issue(harness: &Harness, session_id: &str, audience: Audience) -> String {
+pub(super) async fn issue(harness: &Harness, session_id: &str, audience: Audience) -> String {
     harness
         .broker_tokens
         .issue(&workload(harness, session_id).await, audience)

@@ -112,11 +112,21 @@ impl CampusRuntime {
     }
 
     /// Start the lab reconciler on this runtime's clock. Does nothing
-    /// without a lab catalog.
+    /// without a lab catalog. Attach terminals first: a sweep that moves a
+    /// session makes them re-check it.
     pub(crate) fn spawn_lab_reconciler(&self, store: Arc<SqliteStore>) {
         if let Some(labs) = &self.labs {
             let clock = self.clock.clone();
-            labs.clone().spawn_reconciler(store, move || clock.now());
+            let terminals = self.terminals.clone();
+            labs.clone().spawn_reconciler(
+                store,
+                move || clock.now(),
+                move || {
+                    if let Some(terminals) = &terminals {
+                        terminals.revalidate();
+                    }
+                },
+            );
         }
     }
 }

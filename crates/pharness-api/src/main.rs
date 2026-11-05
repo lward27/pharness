@@ -128,16 +128,19 @@ async fn main() -> anyhow::Result<()> {
                     app::campus::build_campus_labs(&runtime, &store, labs_config)
                         .context("failed to configure campus labs")?,
                 );
-                labs.register_slots(&store, now)
+                let slots = labs
+                    .register_slots(&store, now)
                     .await
                     .context("failed to register campus lab slots")?;
                 tracing::info!(
                     lab_slots = labs.slot_ids().len(),
+                    registered = ?slots.registered,
+                    retired = ?slots.retired,
+                    restored = ?slots.restored,
                     can_launch = labs.can_launch(),
                     "campus lab catalog loaded"
                 );
                 runtime = runtime.with_labs(labs);
-                runtime.spawn_lab_reconciler(store.clone());
             }
             if let Some(terminals) = app::campus::load_campus_terminals_from_env(
                 &runtime.config,
@@ -146,6 +149,7 @@ async fn main() -> anyhow::Result<()> {
                 tracing::info!("campus browser terminals enabled");
                 runtime = runtime.with_terminals(Arc::new(terminals));
             }
+            runtime.spawn_lab_reconciler(store.clone());
             app::campus::CampusMount::Enabled(Box::new(runtime))
         }
     };

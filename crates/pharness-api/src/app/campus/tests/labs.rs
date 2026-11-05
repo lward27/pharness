@@ -88,7 +88,12 @@ fn launch_path(course: &str, assignment: &str) -> String {
     format!("/api/campus/courses/{course}/assignments/{assignment}/launch")
 }
 
-async fn launch(harness: &Harness, session: &Session, assignment: &str, body: Value) -> Response {
+pub(super) async fn launch(
+    harness: &Harness,
+    session: &Session,
+    assignment: &str,
+    body: Value,
+) -> Response {
     harness
         .mutate("POST", &launch_path("cs101", assignment), session, body)
         .await
