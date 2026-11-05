@@ -388,7 +388,7 @@ fn profile_hash_is_canonical_and_content_bound() {
 // Changing this value means the canonical form of an existing profile moved;
 // recorded session hashes would no longer match their profile.
 const RESEARCH_PROFILE_HASH: &str =
-    "sha256:3446f702110bedcf821fbc7991d1e111c409357323560119deb25f0922f56d10";
+    "sha256:6ebb2f0098c68168f886418675e3e4dcd8f3d28ae619692d69b4deb7c2e00bc1";
 
 #[test]
 fn agent_profile_is_derived_only_from_the_envelope() {

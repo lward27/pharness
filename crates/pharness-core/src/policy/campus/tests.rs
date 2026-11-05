@@ -11,7 +11,7 @@ const SECURITY: &str = include_str!("../../campus_profile/fixtures/security.json
 // Changing this value means the canonical effective form of an unchanged
 // profile and layer set moved; recorded decisions would no longer match.
 const RESEARCH_SAMPLE_EFFECTIVE_POLICY_HASH: &str =
-    "sha256:fe5c6f9677e098c55156231367de188e022d89c801dda8f4796fddadfde13807";
+    "sha256:23071d947872d3463d4dfe17548a1432415829512c00682c18b28ebb974eb20b";
 
 const RESEARCH_TOOLS: [&str; 7] = [
     "environment_info",

@@ -4,7 +4,7 @@
   "version": "v1",
   "kind": "coding",
   "isolation": "gvisor",
-  "image": "registry.lucas.engineering/pharness-node-runner@sha256:0c306727ef835d47dad6f366a94416e33de0cd15c3ab1d932afe8a4b32f7f24f",
+  "image": "registry.lucas.engineering/pharness-node-runner@sha256:3cc3cd8dc39fc89e2cd443156a96b401d4da38caf5e0762d17f2fa2ec7345acd",
   "resources": {
     "cpu_millicores": 2000,
     "memory_mib": 4096,

@@ -104,8 +104,8 @@ node label and the swap setting.
 
 ## Residual risks
 
-- The LUC-121 allowlist is empty, so the real slots refuse every session
-  until an image digest is approved there.
+- The real slots admit only the two LUC-121 approved runner digests
+  (release `9761707`); the profile fixtures pin those digests.
 - Sessions with approved egress are refused: the slots are default-deny and
   there is no FQDN egress control yet.
 - Node 2 is shared with production. It has no kube/system reservations, no

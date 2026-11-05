@@ -4,7 +4,7 @@
   "version": "v1",
   "kind": "research",
   "isolation": "gvisor",
-  "image": "registry.lucas.engineering/pharness-python-runner@sha256:fba7af5624c6806d7401420f777915ea5afd5198408fa431ebb78be585806731",
+  "image": "registry.lucas.engineering/pharness-python-runner@sha256:bb5cc07a648ba4803a87aff4129cd21434b4364d098a2723b96d4952c0bb7400",
   "resources": {
     "cpu_millicores": 500,
     "memory_mib": 1024,
