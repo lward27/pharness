@@ -2,7 +2,9 @@ use super::config::CampusConfig;
 use super::labs::CampusLabs;
 use super::login_cookie::LoginCookieKey;
 use super::oidc::{IdTokenValidator, OidcHttp, ReqwestOidcHttp};
-use pharness_store::SqliteStore;
+use pharness_core::campus_broker_token::CampusBrokerTokenIssuer;
+use pharness_core::campus_capability::CampusBrokerClock;
+use pharness_store::{JournalCampusBrokerTokenIssuer, SqliteStore};
 use ring::rand::SystemRandom;
 use secrecy::ExposeSecret;
 use std::sync::Arc;
@@ -22,6 +24,14 @@ impl CampusClock for SystemClock {
             .duration_since(UNIX_EPOCH)
             .map(|elapsed| i64::try_from(elapsed.as_secs()).unwrap_or(i64::MAX))
             .unwrap_or_default()
+    }
+}
+
+struct BrokerClock(Arc<dyn CampusClock>);
+
+impl CampusBrokerClock for BrokerClock {
+    fn now(&self) -> i64 {
+        self.0.now()
     }
 }
 
@@ -63,6 +73,22 @@ impl CampusRuntime {
     pub(crate) fn with_labs(mut self, labs: Arc<CampusLabs>) -> Self {
         self.labs = Some(labs);
         self
+    }
+
+    /// The broker token issuer an execution provider uses to deliver a
+    /// token into each sandbox it provisions, on this runtime's clock. The
+    /// fake provider launches no sandbox and so delivers no token.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn broker_token_issuer(
+        &self,
+        store: &SqliteStore,
+        actor: &str,
+    ) -> Arc<dyn CampusBrokerTokenIssuer> {
+        Arc::new(JournalCampusBrokerTokenIssuer::new(
+            store.clone(),
+            Arc::new(BrokerClock(self.clock.clone())),
+            actor,
+        ))
     }
 
     /// Start the lab reconciler on this runtime's clock. Does nothing

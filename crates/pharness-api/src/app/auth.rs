@@ -4,6 +4,7 @@ use axum::extract::{Request, State};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::Extension;
+use pharness_core::campus_broker_token::is_campus_broker_token;
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 
@@ -17,6 +18,9 @@ pub(super) async fn require_worker_token(
     request: Request,
     next: Next,
 ) -> Response {
+    if presents_campus_broker_token(&request) {
+        return campus_broker_token_refused();
+    }
     let Some(expected) = state.worker_token.as_deref() else {
         return ApiError::conflict("worker ingest is disabled: no worker token is configured")
             .into_response();
@@ -32,6 +36,36 @@ pub(super) async fn require_worker_token(
         Some(token) if token_matches(token, expected) => next.run(request).await,
         _ => ApiError::unauthorized("invalid or missing worker token").into_response(),
     }
+}
+
+/// Whether any `Authorization` header carries a Campus broker token.
+///
+/// Broker tokens are held by lab sandboxes, so they are refused outright on
+/// every worker and operator route, including the open local-development
+/// mode with no operator tokens configured.
+fn presents_campus_broker_token(request: &Request) -> bool {
+    request
+        .headers()
+        .get_all(axum::http::header::AUTHORIZATION)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .filter_map(|value| value.trim().split_once(' '))
+        .any(|(scheme, token)| {
+            scheme.eq_ignore_ascii_case("bearer") && is_campus_broker_token(token.trim())
+        })
+}
+
+/// For routes that authenticate their own bearer credentials, such as agent
+/// hosts.
+pub(super) async fn refuse_campus_broker_tokens(request: Request, next: Next) -> Response {
+    if presents_campus_broker_token(&request) {
+        return campus_broker_token_refused();
+    }
+    next.run(request).await
+}
+
+fn campus_broker_token_refused() -> Response {
+    ApiError::unauthorized("campus broker tokens are not accepted on this route").into_response()
 }
 
 fn token_matches(provided: &str, expected: &str) -> bool {
@@ -91,6 +125,9 @@ pub(super) async fn require_operator_token(
     mut request: Request,
     next: Next,
 ) -> Response {
+    if presents_campus_broker_token(&request) {
+        return campus_broker_token_refused();
+    }
     if state.operator_tokens.is_empty() || request.uri().path() == "/health" {
         return next.run(request).await;
     }

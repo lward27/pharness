@@ -4,6 +4,7 @@ mod agent_execution;
 mod campus;
 mod campus_admission;
 mod campus_authority;
+mod campus_broker;
 mod campus_driver;
 mod campus_journal;
 mod data_lifecycle;
@@ -34,6 +35,9 @@ pub use campus_admission::{
     CampusLabSessionRecord, StoredCampusLab,
 };
 pub use campus_authority::{CampusAssignmentPolicies, JournalCampusAuthoritySource};
+pub use campus_broker::{
+    IssueCampusBrokerToken, JournalCampusBrokerTokenIssuer, StoredCampusBrokerToken,
+};
 pub use campus_driver::{
     advance_campus_lab_session, retry_campus_lab_cleanup, CampusDriverContext, CampusStepOutcome,
     CENTRAL_AUTHORITY_UNAVAILABLE,

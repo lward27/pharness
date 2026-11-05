@@ -596,7 +596,7 @@ async fn load_records(
     Ok(records)
 }
 
-async fn load_record(
+pub(super) async fn load_record(
     connection: &mut SqliteConnection,
     session_id: &str,
 ) -> CampusResult<Option<CampusLabSessionRecord>> {

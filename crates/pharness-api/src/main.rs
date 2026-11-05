@@ -27,6 +27,11 @@ async fn main() -> anyhow::Result<()> {
         Some(campus_config) => app::campus::load_campus_labs_from_env(campus_config)?,
         None => None,
     };
+    let other_listeners = std::iter::once(bind)
+        .chain(config.api.metrics_bind)
+        .collect::<Vec<_>>();
+    let campus_broker_bind =
+        app::campus::load_campus_broker_bind_from_env(campus_config.is_some(), &other_listeners)?;
     let db_path = config.storage.path.clone();
     let cluster_tools = config.cluster_tools();
     let policy = config.policy.clone();
@@ -189,7 +194,11 @@ async fn main() -> anyhow::Result<()> {
             "operator token auth enabled"
         );
     }
-    let app::AppRouters { app, metrics } = app::routers_with_campus(
+    let app::AppRouters {
+        app,
+        metrics,
+        campus_broker,
+    } = app::routers_with_campus(
         store,
         dispatcher,
         cluster_tools,
@@ -214,6 +223,17 @@ async fn main() -> anyhow::Result<()> {
         tokio::spawn(async move {
             if let Err(error) = axum::serve(metrics_listener, metrics).await {
                 tracing::error!(%error, "metrics listener stopped");
+            }
+        });
+    }
+    if let Some(broker_bind) = campus_broker_bind {
+        let broker_listener = tokio::net::TcpListener::bind(broker_bind)
+            .await
+            .with_context(|| format!("failed to bind campus broker listener on {broker_bind}"))?;
+        tracing::info!(%broker_bind, "campus broker listener enabled");
+        tokio::spawn(async move {
+            if let Err(error) = axum::serve(broker_listener, campus_broker).await {
+                tracing::error!(%error, "campus broker listener stopped");
             }
         });
     }

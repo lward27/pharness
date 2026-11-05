@@ -61,7 +61,7 @@ fn assignment(course: &str, assignment: &str, profile_id: &str) -> Value {
     })
 }
 
-fn catalog_value(lab_slots: i64) -> Value {
+pub(super) fn catalog_value(lab_slots: i64) -> Value {
     json!({
         "schema_version": CAMPUS_LAB_CATALOG_SCHEMA,
         "lab_slots": lab_slots,
@@ -76,11 +76,11 @@ fn catalog_value(lab_slots: i64) -> Value {
     })
 }
 
-fn parse(value: &Value) -> anyhow::Result<CampusLabCatalog> {
+pub(super) fn parse(value: &Value) -> anyhow::Result<CampusLabCatalog> {
     CampusLabCatalog::parse(TENANT, &value.to_string())
 }
 
-async fn labs_harness(lab_slots: i64) -> Harness {
+pub(super) async fn labs_harness(lab_slots: i64) -> Harness {
     Harness::with_labs(parse(&catalog_value(lab_slots)).unwrap(), true, false).await
 }
 
@@ -95,7 +95,7 @@ async fn launch(harness: &Harness, session: &Session, assignment: &str, body: Va
 }
 
 /// Launch and expect a new session; returns its view.
-async fn launched(harness: &Harness, session: &Session, assignment: &str) -> Value {
+pub(super) async fn launched(harness: &Harness, session: &Session, assignment: &str) -> Value {
     let response = launch(harness, session, assignment, json!({})).await;
     assert_eq!(response.status(), StatusCode::CREATED);
     let body = body_json(response).await;
@@ -117,7 +117,7 @@ async fn session_view(harness: &Harness, session: &Session, id: &str) -> Value {
     body["session"].clone()
 }
 
-async fn act(harness: &Harness, session: &Session, id: &str, action: &str) -> Response {
+pub(super) async fn act(harness: &Harness, session: &Session, id: &str, action: &str) -> Response {
     harness
         .mutate(
             "POST",
@@ -128,7 +128,7 @@ async fn act(harness: &Harness, session: &Session, id: &str, action: &str) -> Re
         .await
 }
 
-fn id(view: &Value) -> String {
+pub(super) fn id(view: &Value) -> String {
     view["session_id"].as_str().unwrap().to_string()
 }
 
@@ -155,7 +155,7 @@ fn assert_safe(body: &Value, secrets: &[&str]) {
     }
 }
 
-async fn enroll_students(harness: &Harness, course: &str, subjects: &[&str]) {
+pub(super) async fn enroll_students(harness: &Harness, course: &str, subjects: &[&str]) {
     for subject in subjects {
         harness.enroll(TENANT, course, subject, "student").await;
     }
