@@ -36,6 +36,7 @@ mod campus;
 mod campus_admission;
 mod campus_broker;
 mod campus_journal;
+mod campus_terminal;
 mod data_lifecycle;
 mod delivery;
 mod hosted_controller;

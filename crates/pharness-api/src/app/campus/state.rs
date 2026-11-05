@@ -2,6 +2,7 @@ use super::config::CampusConfig;
 use super::labs::CampusLabs;
 use super::login_cookie::LoginCookieKey;
 use super::oidc::{IdTokenValidator, OidcHttp, ReqwestOidcHttp};
+use super::terminal_registry::CampusTerminals;
 use pharness_core::campus_broker_token::CampusBrokerTokenIssuer;
 use pharness_core::campus_capability::CampusBrokerClock;
 use pharness_store::{JournalCampusBrokerTokenIssuer, SqliteStore};
@@ -44,6 +45,8 @@ pub(crate) struct CampusRuntime {
     pub(crate) login_cookie_key: LoginCookieKey,
     /// Absent when no lab catalog is configured.
     pub(crate) labs: Option<Arc<CampusLabs>>,
+    /// Absent unless browser terminals are configured.
+    pub(crate) terminals: Option<Arc<CampusTerminals>>,
 }
 
 impl CampusRuntime {
@@ -67,12 +70,25 @@ impl CampusRuntime {
             rng: SystemRandom::new(),
             login_cookie_key,
             labs: None,
+            terminals: None,
         }
     }
 
     pub(crate) fn with_labs(mut self, labs: Arc<CampusLabs>) -> Self {
         self.labs = Some(labs);
         self
+    }
+
+    pub(crate) fn with_terminals(mut self, terminals: Arc<CampusTerminals>) -> Self {
+        self.terminals = Some(terminals);
+        self
+    }
+
+    /// Make open terminals re-check their authorization now.
+    pub(crate) fn revalidate_terminals(&self) {
+        if let Some(terminals) = &self.terminals {
+            terminals.revalidate();
+        }
     }
 
     /// The broker token issuer an execution provider uses to deliver a

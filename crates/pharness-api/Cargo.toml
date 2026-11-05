@@ -18,7 +18,7 @@ ui-e2e = []
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
-axum.workspace = true
+axum = { workspace = true, features = ["ws"] }
 base64.workspace = true
 futures.workspace = true
 globset.workspace = true
@@ -49,4 +49,5 @@ uuid.workspace = true
 [dev-dependencies]
 # Test-only RSA key generation for the RS256 id_token round trip.
 rsa = { version = "0.9.10", default-features = false, features = ["std", "getrandom", "u64_digit"] }
+tokio-tungstenite = "0.24"
 tower = { version = "0.5", features = ["util"] }

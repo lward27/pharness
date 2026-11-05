@@ -48,10 +48,12 @@ pub(crate) struct LaunchRequest {
 pub(crate) struct EmptyRequest {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LabAccess {
+pub(crate) enum LabAccess {
     View,
     Stop,
     Reset,
+    /// Owner only.
+    Terminal,
 }
 
 fn labs(state: &CampusState) -> Result<&Arc<CampusLabs>, CampusError> {
@@ -81,7 +83,7 @@ fn assignment_not_found() -> CampusError {
 
 /// An empty body is an empty request. Unknown fields are refused without
 /// echoing them back.
-fn parse_body<T: DeserializeOwned + Default>(body: &Bytes) -> Result<T, CampusError> {
+pub(crate) fn parse_body<T: DeserializeOwned + Default>(body: &Bytes) -> Result<T, CampusError> {
     if body.iter().all(u8::is_ascii_whitespace) {
         return Ok(T::default());
     }
@@ -256,7 +258,7 @@ fn is_owner(record: &CampusLabSessionRecord, principal: &CampusPrincipal) -> boo
 
 /// Load a session the caller may act on. Anything else, including a session
 /// of another tenant, student or course, is reported as not found.
-async fn authorized_session(
+pub(crate) async fn authorized_session(
     state: &CampusState,
     principal: &CampusPrincipal,
     session_id: &str,
@@ -276,7 +278,7 @@ async fn authorized_session(
         return Err(session_not_found());
     }
     let allowed = is_owner(&record, principal)
-        || (access != LabAccess::Reset
+        || (matches!(access, LabAccess::View | LabAccess::Stop)
             && is_course_staff(state, principal, &record.session.course_id).await?);
     if allowed {
         Ok(record)
@@ -468,6 +470,7 @@ pub(crate) async fn stop_session(
             state.runtime.clock.now(),
         )
         .await?;
+    state.runtime.revalidate_terminals();
     let status = if stopped.session.state.is_terminal() {
         StatusCode::OK
     } else {
@@ -524,6 +527,7 @@ pub(crate) async fn reset_session(
             )
             .await?;
         labs.wake();
+        state.runtime.revalidate_terminals();
         tracing::info!(
             identity_id = %principal.identity_id,
             session_id = %session_id,
