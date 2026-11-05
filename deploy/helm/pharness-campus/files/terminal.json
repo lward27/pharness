@@ -1,0 +1,18 @@
+{
+  "kubectl": "/usr/local/bin/kubectl",
+  "global_args": [
+    "--kubeconfig=/etc/pharness-campus/kube/terminal-kubeconfig"
+  ],
+  "controller": "pharness-campus-controller",
+  "slots": {
+    "campus-lab-slot-1": "campus-lab-slot-1",
+    "campus-lab-slot-2": "campus-lab-slot-2",
+    "campus-lab-slot-3": "campus-lab-slot-3",
+    "campus-lab-slot-4": "campus-lab-slot-4",
+    "campus-lab-slot-5": "campus-lab-slot-5"
+  },
+  "shell": [
+    "/bin/bash",
+    "-l"
+  ]
+}

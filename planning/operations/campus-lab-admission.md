@@ -33,7 +33,9 @@ Migration `0059` adds the admission tables (see
   the next generation of the same lab. Every generation keeps the lab's
   `lab_id` and `budget_id`.
 - **Five slots by default** (`lab_slots`), registered at startup as
-  `<tenant>-lab-slot-NN`.
+  `<tenant>-lab-slot-NN`, or under the ids listed in `lab_slot_ids` (which
+  sets `lab_slots` to its length). The Kubernetes provider maps these ids
+  to slot namespaces; the Campus PoC lists `campus-lab-slot-1..5`.
 - **Static catalog.** Assignments come from a JSON file; there is no
   instructor UI, LMS sync or billing.
 
@@ -42,7 +44,8 @@ Migration `0059` adds the admission tables (see
 | Variable | Meaning |
 | --- | --- |
 | `PHARNESS_CAMPUS_LABS_FILE` | Path to the lab catalog. Unset disables the lab routes (`503 labs_unavailable`). |
-| `PHARNESS_CAMPUS_LAB_PROVIDER` | `none` (default) or `fake`. `fake` is accepted only with `PHARNESS_CAMPUS_DEV_ALLOW_INSECURE_LOOPBACK_HTTP=true` and launches nothing real. LUC-125 adds the Kubernetes provider. |
+| `PHARNESS_CAMPUS_LAB_PROVIDER` | `none` (default), `fake` or `kubernetes`. `fake` is accepted only with `PHARNESS_CAMPUS_DEV_ALLOW_INSECURE_LOOPBACK_HTTP=true` and launches nothing real. `kubernetes` runs session Jobs in the lab slots ([campus-session-jobs.md](campus-session-jobs.md)). |
+| `PHARNESS_CAMPUS_LAB_PROVIDER_CONFIG_FILE` | Required with, and only with, `kubernetes`: JSON `{"kubectl", "global_args", "provider"}`, where `global_args` selects the controller identity (for example `--kubeconfig=...`) and `provider` is a `KubernetesCampusProviderConfig`. Startup fails unless `provider.slots` maps exactly the catalog's slot ids and every assignment's effective policy fits a slot. Example: `deploy/helm/pharness-campus/files/lab-provider.json`. |
 
 Catalog (`pharness.dev/campus-lab-catalog/v1alpha1`, at most 1 MiB, unknown
 fields rejected):

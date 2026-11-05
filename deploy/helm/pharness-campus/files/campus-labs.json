@@ -1,0 +1,255 @@
+{
+  "schema_version": "pharness.dev/campus-lab-catalog/v1alpha1",
+  "lab_slot_ids": [
+    "campus-lab-slot-1",
+    "campus-lab-slot-2",
+    "campus-lab-slot-3",
+    "campus-lab-slot-4",
+    "campus-lab-slot-5"
+  ],
+  "max_active_per_course": 5,
+  "profiles": [
+    {
+      "schema_version": "pharness.dev/campus-profile/v1alpha1",
+      "id": "campus-research",
+      "version": "v1",
+      "kind": "research",
+      "isolation": "gvisor",
+      "image": "registry.lucas.engineering/pharness-python-runner@sha256:bb5cc07a648ba4803a87aff4129cd21434b4364d098a2723b96d4952c0bb7400",
+      "resources": {
+        "cpu_millicores": 500,
+        "memory_mib": 1024,
+        "ephemeral_storage_mib": 1024,
+        "pids": 128
+      },
+      "network": {
+        "mode": "denied",
+        "egress": []
+      },
+      "ttl_seconds": 1800,
+      "agent_budget": {
+        "initial_turns": 16,
+        "hard_turns": 24,
+        "initial_tokens": 100000,
+        "hard_tokens": 200000,
+        "active_execution_seconds": 1500
+      },
+      "model_policy": {
+        "model_aliases": [
+          "campus-default"
+        ],
+        "session_allocation_micro_usd": 500000,
+        "max_output_tokens": 4096,
+        "max_concurrent_requests": 2
+      },
+      "capabilities": [
+        {
+          "tool": "environment_info",
+          "scope": "session_workspace"
+        },
+        {
+          "tool": "list_dir",
+          "scope": "session_workspace"
+        },
+        {
+          "tool": "read_file",
+          "scope": "session_workspace"
+        },
+        {
+          "tool": "search_files",
+          "scope": "session_workspace"
+        },
+        {
+          "tool": "create_directory",
+          "scope": "session_workspace"
+        },
+        {
+          "tool": "write_file",
+          "scope": "session_workspace"
+        },
+        {
+          "tool": "finish",
+          "scope": "agent_control"
+        }
+      ],
+      "student_choices": {
+        "model_aliases": [
+          "campus-default"
+        ],
+        "min_ttl_seconds": 600
+      },
+      "launch_gate": "enabled"
+    },
+    {
+      "schema_version": "pharness.dev/campus-profile/v1alpha1",
+      "id": "campus-coding",
+      "version": "v1",
+      "kind": "coding",
+      "isolation": "gvisor",
+      "image": "registry.lucas.engineering/pharness-node-runner@sha256:3cc3cd8dc39fc89e2cd443156a96b401d4da38caf5e0762d17f2fa2ec7345acd",
+      "resources": {
+        "cpu_millicores": 2000,
+        "memory_mib": 4096,
+        "ephemeral_storage_mib": 4096,
+        "pids": 256
+      },
+      "network": {
+        "mode": "approved_egress",
+        "egress": [
+          {
+            "host": "pypi.org",
+            "port": 443
+          },
+          {
+            "host": "files.pythonhosted.org",
+            "port": 443
+          },
+          {
+            "host": "registry.npmjs.org",
+            "port": 443
+          },
+          {
+            "host": "github.com",
+            "port": 443
+          },
+          {
+            "host": "codeload.github.com",
+            "port": 443
+          }
+        ]
+      },
+      "ttl_seconds": 5400,
+      "agent_budget": {
+        "initial_turns": 48,
+        "hard_turns": 100,
+        "initial_tokens": 400000,
+        "hard_tokens": 1000000,
+        "active_execution_seconds": 3600
+      },
+      "model_policy": {
+        "model_aliases": [
+          "campus-default"
+        ],
+        "session_allocation_micro_usd": 2000000,
+        "max_output_tokens": 8192,
+        "max_concurrent_requests": 2
+      },
+      "capabilities": [
+        {
+          "tool": "environment_info",
+          "scope": "session_workspace"
+        },
+        {
+          "tool": "list_dir",
+          "scope": "session_workspace"
+        },
+        {
+          "tool": "read_file",
+          "scope": "session_workspace"
+        },
+        {
+          "tool": "search_files",
+          "scope": "session_workspace"
+        },
+        {
+          "tool": "create_directory",
+          "scope": "session_workspace"
+        },
+        {
+          "tool": "write_file",
+          "scope": "session_workspace"
+        },
+        {
+          "tool": "patch_file",
+          "scope": "session_workspace"
+        },
+        {
+          "tool": "apply_patch",
+          "scope": "session_workspace"
+        },
+        {
+          "tool": "git_diff",
+          "scope": "session_workspace"
+        },
+        {
+          "tool": "git_status",
+          "scope": "session_workspace"
+        },
+        {
+          "tool": "run_workspace_command",
+          "scope": "session_shell"
+        },
+        {
+          "tool": "finish",
+          "scope": "agent_control"
+        }
+      ],
+      "student_choices": {
+        "model_aliases": [
+          "campus-default"
+        ],
+        "min_ttl_seconds": 1800
+      },
+      "launch_gate": "enabled"
+    }
+  ],
+  "policy_layers": [
+    {
+      "schema_version": "pharness.dev/campus-policy-layer/v1alpha1",
+      "authority": "platform",
+      "id": "campus-poc-platform",
+      "version": "v1",
+      "constraints": {},
+      "mandatory_denies": {
+        "tools": [],
+        "egress_hosts": [],
+        "model_aliases": [],
+        "approval_kinds": []
+      }
+    },
+    {
+      "schema_version": "pharness.dev/campus-policy-layer/v1alpha1",
+      "authority": "institution",
+      "id": "campus-poc-institution",
+      "version": "v1",
+      "constraints": {},
+      "mandatory_denies": {
+        "tools": [],
+        "egress_hosts": [],
+        "model_aliases": [],
+        "approval_kinds": []
+      }
+    }
+  ],
+  "assignments": [
+    {
+      "course_id": "cs101",
+      "assignment_id": "research-lab",
+      "title": "Research lab",
+      "profile_id": "campus-research"
+    },
+    {
+      "course_id": "cs101",
+      "assignment_id": "coding-lab",
+      "title": "Coding lab",
+      "profile_id": "campus-coding",
+      "assignment_layer": {
+        "schema_version": "pharness.dev/campus-policy-layer/v1alpha1",
+        "authority": "assignment",
+        "id": "cs101-coding-lab",
+        "version": "v1",
+        "constraints": {
+          "cpu_millicores": 1500,
+          "memory_mib": 1536,
+          "ephemeral_storage_mib": 1024
+        },
+        "mandatory_denies": {
+          "tools": [],
+          "egress_hosts": [],
+          "model_aliases": [],
+          "approval_kinds": []
+        }
+      }
+    }
+  ]
+}

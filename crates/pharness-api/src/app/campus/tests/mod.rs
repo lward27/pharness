@@ -9,6 +9,7 @@ mod broker_live;
 mod config;
 mod flow;
 mod id_token;
+mod lab_provider;
 mod labs;
 mod login_cookie;
 mod routes;

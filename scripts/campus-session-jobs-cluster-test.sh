@@ -25,7 +25,7 @@ CHART="${CAMPUS_LAB_CHART:-}"
 SLOTS=5
 REAL_SLOT="campus-lab-slot-1"
 NODE="ubuntu-lucas-engineering-2"
-CONTROLLER_SA="system:serviceaccount:pharness:pharness-campus-controller"
+CONTROLLER_SA="system:serviceaccount:campus-poc:pharness-campus-controller"
 PROBE_PREFIX="campus-lab-probe-"
 PROBE_LABEL="pharness.dev/campus-lab-probe"
 GUARD="pharness-campus-lab-session-guard"
@@ -237,6 +237,8 @@ can no patch networkpolicies -n "$REAL_SLOT"
 can no create serviceaccounts/token -n "$REAL_SLOT"
 can no create jobs.batch -n default
 can no create jobs.batch -n pharness
+can no create jobs.batch -n campus-poc
+can no get secrets -n campus-poc
 can no patch namespaces/"$REAL_SLOT"
 can no patch resourcequotas -n "$REAL_SLOT"
 can no delete networkpolicies -n "$REAL_SLOT"

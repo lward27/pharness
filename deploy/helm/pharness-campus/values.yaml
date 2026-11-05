@@ -1,0 +1,117 @@
+# PHarness Campus proof of concept (LUC-137): the Campus API, with its
+# in-process lab reconciler, broker listener and browser terminals, and the
+# Campus page, in namespace campus-poc. It runs apart from the operator
+# PHarness in namespace pharness and shares nothing with it but the release
+# images. Runbook: planning/operations/campus-poc-deployment.md.
+#
+# Admin-owned prerequisites, not rendered here:
+#   - charts/campus-lab (GitOps): the campus-poc Namespace, the controller and
+#     terminal ServiceAccounts, their slot RBAC, the terminal token Secret,
+#     the lab slots and the egress proxy.
+#   - charts/campus-idp (GitOps): the Keycloak test IdP.
+#   - Secret pharness-campus-secrets in campus-poc, created out-of-band:
+#       oidc-client-secret  the pharness-campus client secret from Keycloak
+#       login-cookie-key    32 random bytes, base64
+#       operator-tokens     <name>=<token>; the operator API is never routed
+#                           publicly, but PHarness requires it on a
+#                           non-loopback bind
+
+namespace: campus-poc
+
+# Release-pinned by scripts/pharness-release-pin.sh together with
+# deploy/helm/pharness/values.yaml, so Campus always runs the same release
+# images as the operator PHarness. The Campus page and the Kubernetes lab
+# provider need a release built from LUC-137 or later.
+api:
+  image:
+    repository: registry.lucas.engineering/pharness-runtime
+    digest: sha256:781f0198fc3ca7fcddb00d481c3a3f35ad0a1ef1750eeb27da86cc3239a65547
+    pullPolicy: IfNotPresent
+    revision: 9761707332da8f6558d5c35e50af73bbe731734b
+  tenantId: campus-poc
+  publicOrigin: https://campus.lucas.engineering
+  oidc:
+    issuer: https://campus-idp.lucas.engineering/realms/campus
+    clientId: pharness-campus
+    scopes: openid email profile
+    # The Campus API reaches the issuer host at the Keycloak Service's pinned
+    # ClusterIP, which serves the same publicly trusted certificate, so the
+    # issuer, endpoints and certificate are byte-identical for the browser
+    # and for the back channel.
+    issuerAddress: 10.43.130.32
+  # issuer|subject; Keycloak user ids are fixed in charts/campus-idp.
+  bootstrapAdmins:
+    - https://campus-idp.lucas.engineering/realms/campus|3a039679-77a7-4e38-a134-55da25580176
+  secretName: pharness-campus-secrets
+  organization:
+    id: org_campus_poc
+    key: campus-poc
+    displayName: Campus PoC
+  databaseGeneration:
+    id: dbgen_campus_poc_20261105
+    purpose: campus-poc-demonstration
+  persistence:
+    claimName: pharness-campus-data
+    storageClass: local-path
+    size: 1Gi
+  # The pinned ClusterIP lab sessions reach the broker at (provider
+  # broker_url in files/lab-provider.json), so they need no DNS.
+  broker:
+    port: 4790
+    clusterIP: 10.43.130.31
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+      ephemeral-storage: 64Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+      ephemeral-storage: 512Mi
+
+# Serves only campus.html and its assets; there is no API proxy and no
+# operator credential in this Pod.
+ui:
+  image:
+    repository: registry.lucas.engineering/pharness-ui
+    digest: sha256:1307ec1332468a20c7bdc8e2e9036ffa5cd2b12e704ce3482a312d3956ada545
+    pullPolicy: IfNotPresent
+    revision: 9761707332da8f6558d5c35e50af73bbe731734b
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+      ephemeral-storage: 16Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+      ephemeral-storage: 64Mi
+
+kubernetes:
+  # The API server by ClusterIP (in its certificate), so kubectl needs no
+  # DNS; NetworkPolicy sees the post-DNAT endpoint below.
+  server: https://10.43.0.1:443
+  apiServerEndpoint:
+    cidr: 192.168.20.192/32
+    port: 6443
+  controllerServiceAccount: pharness-campus-controller
+  terminalTokenSecretName: pharness-campus-terminal-token
+  # Namespaces whose Pods may reach the broker port.
+  labNamespaceLabel:
+    key: pharness.dev/campus-lab
+    value: "true"
+
+keycloak:
+  namespace: campus-idp
+  podLabels:
+    app: keycloak
+  port: 8443
+
+# Off until the Cloudflare tunnel routes campus.lucas.engineering to Traefik.
+ingress:
+  enabled: false
+  host: campus.lucas.engineering
+  className: traefik
+  controllerNamespace: traefik
+  clusterIssuer: letsencrypt-prod
+  tlsSecretName: campus-lucas-engineering-tls

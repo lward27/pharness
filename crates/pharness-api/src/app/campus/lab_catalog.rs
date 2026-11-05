@@ -9,6 +9,9 @@
 
 use super::config::CampusConfig;
 use anyhow::{bail, Context};
+use pharness_core::campus_lab_session::kubernetes::{
+    is_label_value, CampusSessionSizing, KubernetesCampusProviderConfig,
+};
 use pharness_core::{CampusPolicyLayer, CampusProfile, CampusProfileKind, EffectiveCampusPolicy};
 use pharness_store::{CampusAssignmentPolicies, CampusLabLimits};
 use serde::Deserialize;
@@ -17,6 +20,7 @@ use std::io::Read;
 
 pub(crate) const ENV_LABS_FILE: &str = "PHARNESS_CAMPUS_LABS_FILE";
 pub(crate) const ENV_LAB_PROVIDER: &str = "PHARNESS_CAMPUS_LAB_PROVIDER";
+pub(crate) const ENV_LAB_PROVIDER_CONFIG_FILE: &str = "PHARNESS_CAMPUS_LAB_PROVIDER_CONFIG_FILE";
 pub(crate) const CAMPUS_LAB_CATALOG_SCHEMA: &str = "pharness.dev/campus-lab-catalog/v1alpha1";
 
 /// Milestone 1 capacity: five concurrent lab slots per tenant.
@@ -28,6 +32,7 @@ pub(crate) const MAX_ACTIVE_PER_IDENTITY: i64 = 1;
 pub(crate) const MAX_SESSION_SECONDS: i64 = 2 * 60 * 60;
 const MIN_SESSION_SECONDS: i64 = 5 * 60;
 const MAX_CATALOG_BYTES: u64 = 1024 * 1024;
+const MAX_PROVIDER_CONFIG_BYTES: u64 = 256 * 1024;
 const MAX_ASSIGNMENTS: usize = 500;
 const MAX_TITLE_CHARS: usize = 200;
 pub(crate) const MAX_LAB_ID_CHARS: usize = 128;
@@ -38,6 +43,10 @@ struct CatalogDocument {
     schema_version: String,
     #[serde(default)]
     lab_slots: Option<i64>,
+    /// Journal ids of the lab slots, which the execution provider maps to
+    /// its slot namespaces. Defaults to `<tenant>-lab-slot-NN`.
+    #[serde(default)]
+    lab_slot_ids: Option<Vec<String>>,
     #[serde(default)]
     max_active_per_course: Option<i64>,
     #[serde(default)]
@@ -73,6 +82,10 @@ pub(crate) struct CampusLabAssignment {
 pub(crate) struct CampusLabCatalog {
     pub(crate) tenant_id: String,
     pub(crate) limits: CampusLabLimits,
+    /// One per lab slot, in order.
+    pub(crate) slot_ids: Vec<String>,
+    /// Every listed profile; an execution provider launches only these.
+    pub(crate) profiles: Vec<CampusProfile>,
     assignments: BTreeMap<(String, String), CampusLabAssignment>,
 }
 
@@ -85,11 +98,27 @@ pub(crate) enum CampusLabProviderKind {
     /// The in-memory fake provider. It creates nothing real and is accepted
     /// only together with the loopback development flag.
     Fake,
+    /// Session Jobs in admin-precreated lab slot namespaces, configured by
+    /// `PHARNESS_CAMPUS_LAB_PROVIDER_CONFIG_FILE`.
+    Kubernetes,
+}
+
+/// The Kubernetes provider configuration file.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct KubernetesLabProviderFile {
+    pub(crate) kubectl: String,
+    /// Arguments before every kubectl command, selecting the controller
+    /// identity, e.g. `--kubeconfig=/etc/pharness/campus-controller/kubeconfig`.
+    pub(crate) global_args: Vec<String>,
+    pub(crate) provider: KubernetesCampusProviderConfig,
 }
 
 pub(crate) struct CampusLabsConfig {
     pub(crate) catalog: CampusLabCatalog,
     pub(crate) provider: CampusLabProviderKind,
+    /// Present exactly when `provider` is `Kubernetes`.
+    pub(crate) kubernetes: Option<KubernetesLabProviderFile>,
 }
 
 pub(crate) fn is_lab_identifier(value: &str) -> bool {
@@ -124,26 +153,82 @@ pub(crate) fn load_campus_labs(
         Some("fake") => bail!(
             "{ENV_LAB_PROVIDER}=fake is only accepted for local development with PHARNESS_CAMPUS_DEV_ALLOW_INSECURE_LOOPBACK_HTTP=true"
         ),
-        Some(other) => bail!("{ENV_LAB_PROVIDER} must be none or fake, not {other}"),
+        Some("kubernetes") => CampusLabProviderKind::Kubernetes,
+        Some(other) => bail!("{ENV_LAB_PROVIDER} must be none, fake or kubernetes, not {other}"),
     };
+    let provider_file = value(ENV_LAB_PROVIDER_CONFIG_FILE);
+    if provider_file.is_some() != (provider == CampusLabProviderKind::Kubernetes) {
+        bail!("{ENV_LAB_PROVIDER_CONFIG_FILE} is required with, and only with, {ENV_LAB_PROVIDER}=kubernetes");
+    }
     let Some(path) = value(ENV_LABS_FILE) else {
         if provider != CampusLabProviderKind::None {
             bail!("{ENV_LAB_PROVIDER} requires {ENV_LABS_FILE}");
         }
         return Ok(None);
     };
-    let mut document = String::new();
-    std::fs::File::open(&path)
-        .with_context(|| format!("failed to open {ENV_LABS_FILE} at {path}"))?
-        .take(MAX_CATALOG_BYTES + 1)
-        .read_to_string(&mut document)
-        .with_context(|| format!("failed to read {ENV_LABS_FILE} at {path}"))?;
-    if document.len() as u64 > MAX_CATALOG_BYTES {
-        bail!("{ENV_LABS_FILE} at {path} is larger than {MAX_CATALOG_BYTES} bytes");
-    }
+    let document = read_bounded(ENV_LABS_FILE, &path, MAX_CATALOG_BYTES)?;
     let catalog = CampusLabCatalog::parse(&config.tenant_id, &document)
         .with_context(|| format!("{ENV_LABS_FILE} at {path} is invalid"))?;
-    Ok(Some(CampusLabsConfig { catalog, provider }))
+    let kubernetes = match provider_file {
+        Some(path) => {
+            let document = read_bounded(
+                ENV_LAB_PROVIDER_CONFIG_FILE,
+                &path,
+                MAX_PROVIDER_CONFIG_BYTES,
+            )?;
+            let file = KubernetesLabProviderFile::parse(&document, &catalog)
+                .with_context(|| format!("{ENV_LAB_PROVIDER_CONFIG_FILE} at {path} is invalid"))?;
+            Some(file)
+        }
+        None => None,
+    };
+    Ok(Some(CampusLabsConfig {
+        catalog,
+        provider,
+        kubernetes,
+    }))
+}
+
+fn read_bounded(name: &str, path: &str, max_bytes: u64) -> anyhow::Result<String> {
+    let mut document = String::new();
+    std::fs::File::open(path)
+        .with_context(|| format!("failed to open {name} at {path}"))?
+        .take(max_bytes + 1)
+        .read_to_string(&mut document)
+        .with_context(|| format!("failed to read {name} at {path}"))?;
+    if document.len() as u64 > max_bytes {
+        bail!("{name} at {path} is larger than {max_bytes} bytes");
+    }
+    Ok(document)
+}
+
+impl KubernetesLabProviderFile {
+    /// Parse and check the file against the catalog: the provider must map
+    /// exactly the catalog's lab slots, and every assignment must fit a
+    /// slot, so a misconfiguration fails at startup rather than at launch.
+    pub(crate) fn parse(document: &str, catalog: &CampusLabCatalog) -> anyhow::Result<Self> {
+        let file: Self = serde_json::from_str(document)
+            .context("the provider configuration is not valid JSON")?;
+        if file.kubectl.trim().is_empty() {
+            bail!("kubectl is required");
+        }
+        file.provider.validate()?;
+        let configured = file.provider.slots.keys().collect::<BTreeSet<_>>();
+        let listed = catalog.slot_ids.iter().collect::<BTreeSet<_>>();
+        if configured != listed {
+            bail!("provider.slots must map exactly the catalog's lab slot ids");
+        }
+        for assignment in catalog.assignments.values() {
+            CampusSessionSizing::derive(assignment.policy.constraints(), &file.provider)
+                .with_context(|| {
+                    format!(
+                        "assignment {}/{} does not fit a lab slot",
+                        assignment.course_id, assignment.assignment_id
+                    )
+                })?;
+        }
+        Ok(file)
+    }
 }
 
 fn bounded(
@@ -167,13 +252,32 @@ impl CampusLabCatalog {
         if document.schema_version != CAMPUS_LAB_CATALOG_SCHEMA {
             bail!("schema_version must be {CAMPUS_LAB_CATALOG_SCHEMA}");
         }
+        let listed_slots = document
+            .lab_slot_ids
+            .as_ref()
+            .map(|ids| i64::try_from(ids.len()).unwrap_or(i64::MAX));
         let lab_slots = bounded(
             "lab_slots",
-            document.lab_slots,
+            document.lab_slots.or(listed_slots),
             DEFAULT_LAB_SLOTS,
             1,
             MAX_LAB_SLOTS,
         )?;
+        let slot_ids = match document.lab_slot_ids {
+            Some(ids) => {
+                if listed_slots != Some(lab_slots) {
+                    bail!("lab_slots must equal the number of lab_slot_ids");
+                }
+                let unique = ids.iter().collect::<BTreeSet<_>>().len() == ids.len();
+                if !unique || !ids.iter().all(|id| is_label_value(id) && !id.is_empty()) {
+                    bail!("lab_slot_ids must be distinct, non-empty Kubernetes label values");
+                }
+                ids
+            }
+            None => (1..=lab_slots)
+                .map(|index| format!("{tenant_id}-lab-slot-{index:02}"))
+                .collect(),
+        };
         let max_active_per_course = bounded(
             "max_active_per_course",
             document.max_active_per_course,
@@ -265,6 +369,8 @@ impl CampusLabCatalog {
                 max_active_per_identity: MAX_ACTIVE_PER_IDENTITY,
                 max_active_per_course,
             },
+            slot_ids,
+            profiles: profiles.into_values().collect(),
             assignments,
         })
     }

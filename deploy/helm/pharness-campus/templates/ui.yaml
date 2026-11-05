@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pharness-campus-ui
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: pharness-campus-ui
+    {{- include "pharness-campus.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pharness-campus-ui
+  template:
+    metadata:
+      labels:
+        app: pharness-campus-ui
+        {{- include "pharness-campus.labels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ui
+          image: "{{ .Values.ui.image.repository }}@{{ .Values.ui.image.digest }}"
+          imagePullPolicy: {{ .Values.ui.image.pullPolicy }}
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /campus.html
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: templates
+              mountPath: /etc/nginx/templates
+              readOnly: true
+            - name: conf
+              mountPath: /etc/nginx/conf.d
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            {{- toYaml .Values.ui.resources | nindent 12 }}
+      volumes:
+        - name: templates
+          configMap:
+            name: pharness-campus-ui
+        - name: conf
+          emptyDir:
+            sizeLimit: 1Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pharness-campus-ui
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: pharness-campus-ui
+    {{- include "pharness-campus.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: pharness-campus-ui
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

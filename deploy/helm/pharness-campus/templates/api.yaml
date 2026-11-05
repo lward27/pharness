@@ -1,0 +1,259 @@
+{{- $issuerHost := (urlParse .Values.api.oidc.issuer).host -}}
+{{- $issuer := trimSuffix "/" .Values.api.oidc.issuer -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.api.persistence.claimName }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "pharness-campus.labels" . | nindent 4 }}
+  annotations:
+    # The lab journal: deleting it orphans live sessions' records.
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: {{ .Values.api.persistence.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.api.persistence.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pharness-campus-api
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: pharness-campus-api
+    {{- include "pharness-campus.labels" . | nindent 4 }}
+spec:
+  # SQLite single writer, and one lab reconciler per journal.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: pharness-campus-api
+  template:
+    metadata:
+      labels:
+        app: pharness-campus-api
+        {{- include "pharness-campus.labels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+    spec:
+      # The Pod runs as the controller identity, but its token is projected
+      # only into the path its kubeconfig names, not the default location.
+      serviceAccountName: {{ .Values.kubernetes.controllerServiceAccount }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      hostAliases:
+        - ip: {{ .Values.api.oidc.issuerAddress | quote }}
+          hostnames:
+            - {{ $issuerHost | quote }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: "{{ .Values.api.image.repository }}@{{ .Values.api.image.digest }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          ports:
+            - containerPort: 4777
+              name: http
+            - containerPort: {{ .Values.api.broker.port }}
+              name: broker
+          env:
+            - name: HOME
+              value: /tmp
+            - name: PHARNESS_BIND
+              value: "0.0.0.0:4777"
+            - name: PHARNESS_DB_PATH
+              value: /data/pharness-campus.db
+            - name: PHARNESS_DATABASE_GENERATION_ID
+              value: {{ .Values.api.databaseGeneration.id | quote }}
+            - name: PHARNESS_DATABASE_GENERATION_PURPOSE
+              value: {{ .Values.api.databaseGeneration.purpose | quote }}
+            - name: PHARNESS_BUILD_REVISION
+              value: {{ .Values.api.image.revision | quote }}
+            - name: PHARNESS_OPERATIONAL_MODE
+              value: normal
+            - name: PHARNESS_ORGANIZATION_ID
+              value: {{ .Values.api.organization.id | quote }}
+            - name: PHARNESS_ORGANIZATION_KEY
+              value: {{ .Values.api.organization.key | quote }}
+            - name: PHARNESS_ORGANIZATION_NAME
+              value: {{ .Values.api.organization.displayName | quote }}
+            # Campus only: no agent runs, model providers or delivery work.
+            - name: PHARNESS_WORKER_MODE
+              value: local
+            - name: PHARNESS_INFERENCE_GATEWAY_ENABLED
+              value: "false"
+            - name: PHARNESS_DIRECT_FIREWORKS_ENABLED
+              value: "false"
+            - name: PHARNESS_MODEL_GRANT_SIGNER_ENABLED
+              value: "false"
+            - name: PHARNESS_CODEX_AGENT_BACKEND_ENABLED
+              value: "false"
+            - name: PHARNESS_RETENTION_SCHEDULED_ENABLED
+              value: "false"
+            - name: PHARNESS_OPERATOR_TOKENS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.api.secretName }}
+                  key: operator-tokens
+            - name: PHARNESS_CAMPUS_ENABLED
+              value: "true"
+            - name: PHARNESS_CAMPUS_TENANT_ID
+              value: {{ .Values.api.tenantId | quote }}
+            - name: PHARNESS_CAMPUS_PUBLIC_ORIGIN
+              value: {{ .Values.api.publicOrigin | quote }}
+            - name: PHARNESS_CAMPUS_OIDC_ISSUER
+              value: {{ .Values.api.oidc.issuer | quote }}
+            - name: PHARNESS_CAMPUS_OIDC_CLIENT_ID
+              value: {{ .Values.api.oidc.clientId | quote }}
+            - name: PHARNESS_CAMPUS_OIDC_CLIENT_SECRET_FILE
+              value: /var/run/pharness-campus/secrets/oidc-client-secret
+            - name: PHARNESS_CAMPUS_LOGIN_COOKIE_KEY_FILE
+              value: /var/run/pharness-campus/secrets/login-cookie-key
+            - name: PHARNESS_CAMPUS_OIDC_AUTHORIZATION_ENDPOINT
+              value: "{{ $issuer }}/protocol/openid-connect/auth"
+            - name: PHARNESS_CAMPUS_OIDC_TOKEN_ENDPOINT
+              value: "{{ $issuer }}/protocol/openid-connect/token"
+            - name: PHARNESS_CAMPUS_OIDC_JWKS_URI
+              value: "{{ $issuer }}/protocol/openid-connect/certs"
+            - name: PHARNESS_CAMPUS_OIDC_REDIRECT_URI
+              value: "{{ trimSuffix "/" .Values.api.publicOrigin }}/api/campus/auth/callback"
+            - name: PHARNESS_CAMPUS_OIDC_SCOPES
+              value: {{ .Values.api.oidc.scopes | quote }}
+            - name: PHARNESS_CAMPUS_BOOTSTRAP_ADMINS
+              value: {{ join "," .Values.api.bootstrapAdmins | quote }}
+            - name: PHARNESS_CAMPUS_POST_LOGIN_PATH
+              value: /campus.html
+            - name: PHARNESS_CAMPUS_LABS_FILE
+              value: /etc/pharness-campus/campus-labs.json
+            - name: PHARNESS_CAMPUS_LAB_PROVIDER
+              value: kubernetes
+            - name: PHARNESS_CAMPUS_LAB_PROVIDER_CONFIG_FILE
+              value: /etc/pharness-campus/lab-provider.json
+            - name: PHARNESS_CAMPUS_BROKER_BIND
+              value: "0.0.0.0:{{ .Values.api.broker.port }}"
+            - name: PHARNESS_CAMPUS_TERMINAL
+              value: kubectl
+            - name: PHARNESS_CAMPUS_TERMINAL_CONFIG_FILE
+              value: /etc/pharness-campus/terminal.json
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+            - name: config
+              mountPath: /etc/pharness-campus
+              readOnly: true
+            - name: secrets
+              mountPath: /var/run/pharness-campus/secrets
+              readOnly: true
+            - name: controller-token
+              mountPath: /var/run/pharness-campus/controller
+              readOnly: true
+            - name: terminal-token
+              mountPath: /var/run/pharness-campus/terminal
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.api.persistence.claimName }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: config
+          configMap:
+            name: pharness-campus-config
+            items:
+              - { key: campus-labs.json, path: campus-labs.json }
+              - { key: lab-provider.json, path: lab-provider.json }
+              - { key: terminal.json, path: terminal.json }
+              - { key: controller-kubeconfig, path: kube/controller-kubeconfig }
+              - { key: terminal-kubeconfig, path: kube/terminal-kubeconfig }
+        - name: secrets
+          secret:
+            secretName: {{ .Values.api.secretName }}
+            defaultMode: 0440
+            items:
+              - { key: oidc-client-secret, path: oidc-client-secret }
+              - { key: login-cookie-key, path: login-cookie-key }
+        - name: controller-token
+          projected:
+            defaultMode: 0440
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - { key: ca.crt, path: ca.crt }
+        - name: terminal-token
+          secret:
+            secretName: {{ .Values.kubernetes.terminalTokenSecretName }}
+            defaultMode: 0440
+            items:
+              - { key: token, path: token }
+              - { key: ca.crt, path: ca.crt }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pharness-campus-api
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: pharness-campus-api
+    {{- include "pharness-campus.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: pharness-campus-api
+  ports:
+    - name: http
+      port: 4777
+      targetPort: http
+---
+# Lab sessions only; never routed by an Ingress.
+apiVersion: v1
+kind: Service
+metadata:
+  name: pharness-campus-broker
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: pharness-campus-api
+    {{- include "pharness-campus.labels" . | nindent 4 }}
+spec:
+  clusterIP: {{ .Values.api.broker.clusterIP }}
+  selector:
+    app: pharness-campus-api
+  ports:
+    - name: broker
+      port: {{ .Values.api.broker.port }}
+      targetPort: broker

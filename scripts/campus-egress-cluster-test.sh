@@ -33,7 +33,7 @@ BROKER_SLOT="campus-lab-slot-5"
 # tenant-a-lab-slot-01, so it gets a probe namespace carrying that slot label.
 BROKER_NS="campus-egress-broker-1"
 BROKER_SLOT_ID="tenant-a-lab-slot-01"
-CONTROLLER_SA="system:serviceaccount:pharness:pharness-campus-controller"
+CONTROLLER_SA="system:serviceaccount:campus-poc:pharness-campus-controller"
 PROXY_SA="system:serviceaccount:campus-egress:campus-egress-proxy"
 PROXY_NS="campus-egress"
 PROBE_SLOT="campus-egress-probe-1"

@@ -91,10 +91,14 @@ impl CampusRuntime {
         }
     }
 
+    /// This runtime's clock, for the broker and execution provider.
+    pub(crate) fn broker_clock(&self) -> Arc<dyn CampusBrokerClock> {
+        Arc::new(BrokerClock(self.clock.clone()))
+    }
+
     /// The broker token issuer an execution provider uses to deliver a
     /// token into each sandbox it provisions, on this runtime's clock. The
     /// fake provider launches no sandbox and so delivers no token.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn broker_token_issuer(
         &self,
         store: &SqliteStore,
@@ -102,7 +106,7 @@ impl CampusRuntime {
     ) -> Arc<dyn CampusBrokerTokenIssuer> {
         Arc::new(JournalCampusBrokerTokenIssuer::new(
             store.clone(),
-            Arc::new(BrokerClock(self.clock.clone())),
+            self.broker_clock(),
             actor,
         ))
     }

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: pharness-campus
+description: PHarness Campus proof of concept - the Campus API with its lab reconciler, broker listener and browser terminals, and the Campus page
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
