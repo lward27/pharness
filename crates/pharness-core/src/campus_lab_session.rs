@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 mod fake;
+pub mod kubernetes;
 
 pub use fake::{FakeCampusProvider, FakeFault, FakeFaultPoint};
 

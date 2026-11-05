@@ -12,6 +12,8 @@ and effect boundary before it runs.
 
 - [Campus lab session journal](campus-session-journal.md) describes the lab-session states, fencing, crash recovery, provider contract and the restore procedure for migration `0058`.
 
+- [Campus session Jobs in lab slots](campus-session-jobs.md) describes the Kubernetes provider, the slot guardrails, session limits, the cluster qualification script and residual risks.
+
 - [Exact-policy gateway preflight](ASTRA-M04-GATEWAY-PREFLIGHT.md) binds protocol evidence to the selected stage policy before diagnostics or qualification.
 
 - [Minisforum Windows local-model setup](ASTRA-MINISFORUM-WINDOWS-LOCAL-MODELS.md)
