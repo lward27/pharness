@@ -18,6 +18,8 @@ and effect boundary before it runs.
 
 - [Campus broker tokens and the sandbox credential boundary](campus-broker-tokens.md) describes the scoped broker tokens, their TTL, rotation and per-request revocation, the broker listener and fake inference route, the sandbox Pod-spec contract, the provider integration contract and the restore procedure for migration `0060`.
 
+- [Campus session Jobs in lab slots](campus-session-jobs.md) describes the Kubernetes provider, the slot guardrails, session limits, the cluster qualification script and residual risks.
+
 - [Exact-policy gateway preflight](ASTRA-M04-GATEWAY-PREFLIGHT.md) binds protocol evidence to the selected stage policy before diagnostics or qualification.
 
 - [Minisforum Windows local-model setup](ASTRA-MINISFORUM-WINDOWS-LOCAL-MODELS.md)
