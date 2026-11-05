@@ -184,7 +184,12 @@ async fn schema_58_data_survives_0059_and_the_previous_release_refuses_it() {
         .is_empty());
 
     // The journal-only session is not a lab session, but it still counts
-    // against the tenant's single slot.
+    // against the tenant's single slot. The current code runs on the latest
+    // schema, as a deployed release does.
+    sqlx::migrate!("./migrations")
+        .run(&upgraded.pool)
+        .await
+        .unwrap();
     assert!(upgraded
         .get_campus_lab_session_record("journal-only")
         .await

@@ -20,7 +20,7 @@ use std::fmt;
 mod fake;
 pub mod kubernetes;
 
-pub use fake::{FakeCampusProvider, FakeFault, FakeFaultPoint};
+pub use fake::{FakeCampusProvider, FakeFault, FakeFaultPoint, FakeTeardownHook};
 
 /// Lifecycle state of a Campus lab session.
 ///
@@ -425,6 +425,30 @@ pub trait CampusExecutionProvider: Send + Sync {
     ) -> Result<CampusDeleteOutcome, CampusProviderError>;
 
     async fn list_owned(&self) -> Result<Vec<OwnedCampusResource>, CampusProviderError>;
+}
+
+/// Cleanup of something a session used outside its execution provider, such
+/// as an interactive attachment or an external volume.
+///
+/// Hooks run after the provider confirmed that the workload is gone and
+/// before the session becomes terminal; a hook that has not succeeded keeps
+/// the session (and its slot) out of `Terminated`. The journal records each
+/// hook that succeeded, so a replay skips it. A crash between a hook's effect
+/// and that record repeats the call, so `release` must be idempotent per
+/// workload.
+#[async_trait]
+pub trait CampusTeardownHook: Send + Sync {
+    /// Stable name recorded in the journal: 1 to 64 characters.
+    fn name(&self) -> &str;
+
+    /// Release what the workload held. `Unreachable` quarantines the
+    /// session's cleanup like an unreachable provider; any other error is
+    /// retried on the next step.
+    async fn release(
+        &self,
+        op_key: &str,
+        workload: &CampusWorkloadRef,
+    ) -> Result<(), CampusProviderError>;
 }
 
 #[cfg(test)]

@@ -825,6 +825,7 @@ async fn reset_of_a_blocked_cleanup_waits_for_the_retry() {
         now: harness.now(),
         lease_seconds: 60,
         central_authority: true,
+        teardown_hooks: &[],
     };
     retry_campus_lab_cleanup(
         &harness.store,

@@ -41,8 +41,8 @@ pub use campus_lab_session::{
     CampusDeleteOutcome, CampusExecutionProvider, CampusLabDesiredState, CampusLabObservedState,
     CampusLabOperationKind, CampusLabOperationStatus, CampusLabSessionState,
     CampusLabTransitionError, CampusObservation, CampusProviderError, CampusProvisionOutcome,
-    CampusProvisionSpec, CampusWorkloadRef, FakeCampusProvider, FakeFault, FakeFaultPoint,
-    OwnedCampusResource,
+    CampusProvisionSpec, CampusTeardownHook, CampusWorkloadRef, FakeCampusProvider, FakeFault,
+    FakeFaultPoint, FakeTeardownHook, OwnedCampusResource,
 };
 pub use campus_profile::{
     CampusAgentBudget, CampusCapabilityBinding, CampusCapabilityScope, CampusEgressDestination,

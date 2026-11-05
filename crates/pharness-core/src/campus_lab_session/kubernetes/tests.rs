@@ -732,6 +732,60 @@ async fn a_newer_occupancy_prunes_older_tombstones() {
 }
 
 #[tokio::test]
+async fn a_retried_partial_create_gets_only_the_remaining_lifetime() {
+    let harness = Harness::new();
+    harness.admit("session-a", compose(RESEARCH, json!({})));
+    let spec = harness.spec("session-a", "campus-lab-slot-1", 1);
+    // The anchor and token exist, then the API server goes away before the
+    // Job is created: a partial create.
+    harness.kube.state().fail_next_create = Some(CampusKubeKind::Job);
+    assert!(matches!(
+        harness.provider.provision(OP, &spec).await,
+        Err(CampusProviderError::Unreachable(_))
+    ));
+    assert_eq!(harness.kube.state().count(CampusKubeKind::Job), 0);
+    assert_eq!(harness.kube.state().count(CampusKubeKind::ConfigMap), 1);
+
+    // A restarted controller retries 2000 s later. The Job only gets what is
+    // left of the absolute expiry fixed at launch (START + 3600).
+    harness.clock.0.store(START + 2_000, Ordering::SeqCst);
+    harness.provider.provision(OP, &spec).await.expect("retry");
+    let job = harness.job();
+    assert_eq!(job["spec"]["activeDeadlineSeconds"], 1_600);
+    assert_eq!(
+        job["spec"]["template"]["spec"]["activeDeadlineSeconds"],
+        1_600
+    );
+
+    // Later replays never re-create or extend the Job.
+    harness.clock.0.store(START + 2_500, Ordering::SeqCst);
+    harness.provider.provision(OP, &spec).await.expect("replay");
+    let replayed = harness.job();
+    assert_eq!(replayed["metadata"]["uid"], job["metadata"]["uid"]);
+    assert_eq!(replayed["spec"]["activeDeadlineSeconds"], 1_600);
+    let job_creates = harness
+        .kube
+        .state()
+        .creates
+        .iter()
+        .filter(|create| create.starts_with("Job/"))
+        .count();
+    assert_eq!(job_creates, 2, "the failed attempt and one create");
+
+    // At the absolute expiry nothing is launched any more.
+    harness.clock.0.store(START + 3_600, Ordering::SeqCst);
+    let refused = rejected(
+        harness
+            .provider
+            .provision(OP, &spec)
+            .await
+            .expect("expired"),
+    );
+    assert!(refused.contains("expired"), "{refused}");
+    assert_eq!(harness.job()["metadata"]["uid"], job["metadata"]["uid"]);
+}
+
+#[tokio::test]
 async fn unconfirmed_deletion_is_never_reported_as_deleted() {
     let harness = Harness::new();
     harness.admit("session-a", compose(RESEARCH, json!({})));

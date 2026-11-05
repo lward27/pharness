@@ -25,15 +25,17 @@ use crate::{
 use pharness_core::{
     CampusDeleteOutcome, CampusExecutionProvider, CampusLabDesiredState, CampusLabObservedState,
     CampusLabOperationKind, CampusLabSessionState, CampusObservation, CampusProviderError,
-    CampusProvisionOutcome, CampusProvisionSpec,
+    CampusProvisionOutcome, CampusProvisionSpec, CampusTeardownHook, CampusWorkloadRef,
 };
 use serde_json::json;
+use std::fmt;
+use std::sync::Arc;
 
 /// Failure reason recorded when a launch is denied without central authority.
 pub const CENTRAL_AUTHORITY_UNAVAILABLE: &str =
     "central authority is unavailable; new launches are denied";
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct CampusDriverContext<'a> {
     /// Unique per worker process; a restarted process must use a new id.
     pub worker_id: &'a str,
@@ -43,6 +45,28 @@ pub struct CampusDriverContext<'a> {
     /// new launch is admitted, but sessions that already hold a slot keep
     /// running until they expire.
     pub central_authority: bool,
+    /// Run, in order, once the provider confirmed a workload is gone.
+    pub teardown_hooks: &'a [Arc<dyn CampusTeardownHook>],
+}
+
+impl fmt::Debug for CampusDriverContext<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CampusDriverContext")
+            .field("worker_id", &self.worker_id)
+            .field("now", &self.now)
+            .field("lease_seconds", &self.lease_seconds)
+            .field("central_authority", &self.central_authority)
+            .field(
+                "teardown_hooks",
+                &self
+                    .teardown_hooks
+                    .iter()
+                    .map(|hook| hook.name())
+                    .collect::<Vec<_>>(),
+            )
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,7 +90,8 @@ pub enum CampusStepOutcome {
     Observed {
         observed: CampusLabObservedState,
     },
-    /// Cleanup is blocked. Only an explicit retry moves the session on.
+    /// Cleanup is blocked. Only a retry ([`retry_campus_lab_cleanup`])
+    /// moves the session on; the reconciler schedules one with backoff.
     Quarantined {
         reason: String,
     },
@@ -394,34 +419,25 @@ async fn delete(
 ) -> Result<CampusStepOutcome, CampusJournalError> {
     let workload = operation.workload();
     let blocked = match provider.delete(&operation.op_key, &workload).await {
-        Ok(CampusDeleteOutcome::Deleted) => match provider.list_owned().await {
-            Ok(owned) => {
-                let remaining = owned
-                    .iter()
-                    .filter(|resource| resource.workload == workload)
-                    .count();
-                if remaining > 0 {
-                    return release(
-                        store,
-                        context,
-                        session,
-                        operation,
-                        format!("{remaining} owned resources remain after delete"),
-                    )
-                    .await;
+        Ok(CampusDeleteOutcome::Deleted) => {
+            match confirm_teardown(store, provider, context, session, operation, &workload).await? {
+                Teardown::Done => {
+                    let to = if session.failure_reason.is_some() {
+                        CampusLabSessionState::Failed
+                    } else {
+                        CampusLabSessionState::Terminated
+                    };
+                    let mut done = transition_for(session, to, context);
+                    done.lease = operation.lease();
+                    done.result = json!({ "deleted": true, "remaining": 0 });
+                    return transition(store, done).await;
                 }
-                let to = if session.failure_reason.is_some() {
-                    CampusLabSessionState::Failed
-                } else {
-                    CampusLabSessionState::Terminated
-                };
-                let mut done = transition_for(session, to, context);
-                done.lease = operation.lease();
-                done.result = json!({ "deleted": true, "remaining": 0 });
-                return transition(store, done).await;
+                Teardown::Retry(reason) => {
+                    return release(store, context, session, operation, reason).await
+                }
+                Teardown::Blocked(reason) => reason,
             }
-            Err(error) => format!("deletion could not be confirmed: {error}"),
-        },
+        }
         Ok(CampusDeleteOutcome::InProgress) => {
             return release(
                 store,
@@ -442,6 +458,78 @@ async fn delete(
     quarantine.result = json!({ "blocked": blocked });
     quarantine.reason = Some(blocked);
     transition(store, quarantine).await
+}
+
+enum Teardown {
+    Done,
+    Retry(String),
+    Blocked(String),
+}
+
+/// After the provider reported the workload deleted: confirm it from the
+/// owned-resource inventory, then run every teardown hook that has not yet
+/// succeeded for the session.
+async fn confirm_teardown(
+    store: &SqliteStore,
+    provider: &dyn CampusExecutionProvider,
+    context: &CampusDriverContext<'_>,
+    session: &StoredCampusLabSession,
+    operation: &StoredCampusLabOperation,
+    workload: &CampusWorkloadRef,
+) -> Result<Teardown, CampusJournalError> {
+    let owned = match provider.list_owned().await {
+        Ok(owned) => owned,
+        Err(error) => {
+            return Ok(Teardown::Blocked(format!(
+                "deletion could not be confirmed: {error}"
+            )))
+        }
+    };
+    let remaining = owned
+        .iter()
+        .filter(|resource| &resource.workload == workload)
+        .count();
+    if remaining > 0 {
+        return Ok(Teardown::Retry(format!(
+            "{remaining} owned resources remain after delete"
+        )));
+    }
+    if context.teardown_hooks.is_empty() {
+        return Ok(Teardown::Done);
+    }
+    let done = store
+        .list_campus_teardown_hook_runs(&session.session_id)
+        .await?;
+    for hook in context.teardown_hooks {
+        let name = hook.name();
+        if done.iter().any(|run| run == name) {
+            continue;
+        }
+        match hook.release(&operation.op_key, workload).await {
+            Ok(()) => {
+                store
+                    .record_campus_teardown_hook_run(
+                        &session.session_id,
+                        name,
+                        &operation.op_key,
+                        workload,
+                        context.now,
+                    )
+                    .await?;
+            }
+            Err(CampusProviderError::Unreachable(reason)) => {
+                return Ok(Teardown::Blocked(format!(
+                    "teardown hook {name} unreachable: {reason}"
+                )))
+            }
+            Err(error) => {
+                return Ok(Teardown::Retry(format!(
+                    "teardown hook {name} failed: {error}"
+                )))
+            }
+        }
+    }
+    Ok(Teardown::Done)
 }
 
 #[cfg(test)]

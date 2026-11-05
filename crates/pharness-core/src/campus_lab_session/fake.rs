@@ -3,7 +3,8 @@
 
 use super::{
     CampusDeleteOutcome, CampusExecutionProvider, CampusObservation, CampusProviderError,
-    CampusProvisionOutcome, CampusProvisionSpec, CampusWorkloadRef, OwnedCampusResource,
+    CampusProvisionOutcome, CampusProvisionSpec, CampusTeardownHook, CampusWorkloadRef,
+    OwnedCampusResource,
 };
 use async_trait::async_trait;
 use std::collections::{BTreeMap, BTreeSet};
@@ -326,5 +327,57 @@ impl CampusExecutionProvider for FakeCampusProvider {
             Some(fault) => return Err(unexpected(&fault, FakeFaultPoint::ListOwned)),
         }
         Ok(self.resources())
+    }
+}
+
+/// A [`CampusTeardownHook`] that records every call and fails with queued
+/// errors first.
+pub struct FakeTeardownHook {
+    name: String,
+    failures: Mutex<Vec<CampusProviderError>>,
+    calls: Mutex<Vec<String>>,
+}
+
+impl FakeTeardownHook {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.into(),
+            failures: Mutex::default(),
+            calls: Mutex::default(),
+        }
+    }
+
+    /// Fail the next call with `error`. Queued failures fire in order.
+    pub fn fail_next(&self, error: CampusProviderError) {
+        self.failures.lock().expect("hook failures").push(error);
+    }
+
+    /// Every call in order, as `op_key:session_id:slot_generation`.
+    pub fn calls(&self) -> Vec<String> {
+        self.calls.lock().expect("hook calls").clone()
+    }
+}
+
+#[async_trait]
+impl CampusTeardownHook for FakeTeardownHook {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    async fn release(
+        &self,
+        op_key: &str,
+        workload: &CampusWorkloadRef,
+    ) -> Result<(), CampusProviderError> {
+        self.calls.lock().expect("hook calls").push(format!(
+            "{op_key}:{}:{}",
+            workload.session_id, workload.slot_generation
+        ));
+        let mut failures = self.failures.lock().expect("hook failures");
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(failures.remove(0))
+        }
     }
 }

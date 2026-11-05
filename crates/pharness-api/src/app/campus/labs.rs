@@ -143,6 +143,7 @@ impl CampusLabs {
             now,
             lease_seconds: LEASE_SECONDS,
             central_authority: true,
+            teardown_hooks: &[],
         };
         let tenant_id = &self.catalog.tenant_id;
         match store

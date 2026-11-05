@@ -95,6 +95,7 @@ async fn settle(store: &SqliteStore, provider: &FakeCampusProvider, session_id: 
         now,
         lease_seconds: 60,
         central_authority: true,
+        teardown_hooks: &[],
     };
     for _ in 0..8 {
         advance_campus_lab_session(store, provider, &context, session_id)

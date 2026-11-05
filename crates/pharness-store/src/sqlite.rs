@@ -36,6 +36,7 @@ mod campus;
 mod campus_admission;
 mod campus_broker;
 mod campus_journal;
+mod campus_teardown;
 mod campus_terminal;
 mod data_lifecycle;
 mod delivery;
@@ -7064,7 +7065,7 @@ mod tests {
             .fetch_one(&store.pool)
             .await
             .unwrap();
-        assert_eq!(latest, 60);
+        assert_eq!(latest, 61);
         store.pool.close().await;
         for suffix in ["", "-wal", "-shm"] {
             let _ = std::fs::remove_file(format!("{}{}", database_path.display(), suffix));
