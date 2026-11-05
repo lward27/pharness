@@ -20,6 +20,8 @@ and effect boundary before it runs.
 
 - [Campus session Jobs in lab slots](campus-session-jobs.md) describes the Kubernetes provider, the slot guardrails, session limits, the cluster qualification script and residual risks.
 
+- [Campus browser terminals](campus-browser-terminal.md) describes the terminal ticket and WebSocket routes, the single-use ticket design, revocation and measured close latency, limits, audit events, configuration, the terminal RBAC, ingress needs and accessibility.
+
 - [Exact-policy gateway preflight](ASTRA-M04-GATEWAY-PREFLIGHT.md) binds protocol evidence to the selected stage policy before diagnostics or qualification.
 
 - [Minisforum Windows local-model setup](ASTRA-MINISFORUM-WINDOWS-LOCAL-MODELS.md)

@@ -17,6 +17,9 @@ mod login_cookie;
 mod oidc;
 mod session;
 mod state;
+mod terminal;
+mod terminal_registry;
+mod terminal_socket;
 mod tokens;
 
 #[cfg(test)]
@@ -27,6 +30,7 @@ pub(crate) use config::{load_campus_config_from_env, validate_campus_startup};
 pub(crate) use lab_catalog::{load_campus_labs_from_env, CampusLabProviderKind};
 pub(crate) use labs::CampusLabs;
 pub(crate) use state::{CampusMount, CampusRuntime};
+pub(crate) use terminal::load_campus_terminals_from_env;
 
 use axum::body::Body;
 use axum::http::{header, HeaderValue, Request, StatusCode};
@@ -141,6 +145,14 @@ fn enabled_router(state: CampusState) -> Router {
         .route(
             "/api/campus/lab-sessions/:session_id/reset",
             post(lab_handlers::reset_session),
+        )
+        .route(
+            "/api/campus/lab-sessions/:session_id/terminal-ticket",
+            post(terminal::issue_ticket),
+        )
+        .route(
+            "/api/campus/lab-sessions/:session_id/terminal",
+            get(terminal_socket::terminal_socket),
         )
         .route_layer(from_fn_with_state(
             state.clone(),

@@ -122,8 +122,11 @@ node label and the swap setting.
 - Node 2 is shared with production. It has no kube/system reservations, no
   taint for the pool, `podPidsLimit` unset, about 10 GiB of free disk and
   4 GiB swap (now closed to Pods).
-- The 128-process limit is an rlimit set by PID 1. Processes started through
-  `kubectl exec` (operators only; the controller has no `pods/exec`) are not
-  under it. gVisor still costs host threads per blocked sandbox task.
+- The 128-process limit is an rlimit set by PID 1. Browser terminals
+  ([campus-browser-terminal.md](campus-browser-terminal.md)) set the same
+  limit before their shell starts and refuse to start without it, but an
+  operator's own `kubectl exec` is not under it (the controller has no
+  `pods/exec`; the separate terminal identity does). gVisor still costs
+  host threads per blocked sandbox task.
 - gVisor charges the whole sandbox to the Pod cgroup, so a session can use
   its container limit plus the 128 MiB overhead.

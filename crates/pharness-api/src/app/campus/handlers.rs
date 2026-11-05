@@ -276,6 +276,7 @@ pub(crate) async fn logout(
         .store
         .revoke_campus_session(&principal.session_id_hash, state.runtime.clock.now())
         .await?;
+    state.runtime.revalidate_terminals();
     tracing::info!(identity_id = %principal.identity_id, "campus session revoked by logout");
     let mut response = no_store(Json(json!({ "logged_out": true })).into_response());
     response
@@ -500,6 +501,7 @@ pub(crate) async fn delete_member(
         .store
         .delete_campus_course_membership(&key, &course_id)
         .await?;
+    state.runtime.revalidate_terminals();
     tracing::info!(
         actor = %principal.identity_id,
         course_id = %course_id,

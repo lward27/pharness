@@ -8,6 +8,7 @@ pub mod campus_egress;
 pub mod campus_lab_session;
 pub mod campus_profile;
 pub mod campus_sandbox_pod;
+pub mod campus_terminal;
 pub mod events;
 pub mod execution;
 pub mod hosted_sdlc;

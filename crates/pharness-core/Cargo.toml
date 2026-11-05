@@ -15,6 +15,8 @@ base64.workspace = true
 camino.workspace = true
 hmac.workspace = true
 ignore.workspace = true
+# A local pty for `kubectl exec --tty` behind the Campus browser terminal.
+pty-process = { version = "0.5.4", features = ["async"] }
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true

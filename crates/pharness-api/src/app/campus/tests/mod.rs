@@ -12,6 +12,7 @@ mod id_token;
 mod labs;
 mod login_cookie;
 mod routes;
+mod terminal;
 
 use super::config::CampusConfig;
 use super::lab_catalog::CampusLabCatalog;
@@ -19,6 +20,7 @@ use super::labs::{CampusLabSweep, CampusLabs};
 use super::login_cookie::LOGIN_COOKIE_KEY_BYTES;
 use super::oidc::{IdTokenResponse, OidcHttp, OidcHttpError, TokenExchange};
 use super::state::{CampusClock, CampusMount, CampusRuntime};
+use super::terminal_registry::CampusTerminals;
 use super::tokens::{pkce_challenge, sha256_hex};
 use async_trait::async_trait;
 use axum::body::Body;
@@ -376,7 +378,7 @@ impl Harness {
 
     pub(super) async fn with_config(config: CampusConfig) -> Self {
         let store = SqliteStore::connect_in_memory().await.unwrap();
-        Self::build(config, store, None, None)
+        Self::build(config, store, None, None, None)
     }
 
     /// A harness whose labs run on a [`FakeCampusProvider`]; the reconciler
@@ -386,6 +388,16 @@ impl Harness {
         catalog: CampusLabCatalog,
         with_provider: bool,
         on_disk: bool,
+    ) -> Self {
+        Self::with_labs_and_terminals(catalog, with_provider, on_disk, None).await
+    }
+
+    /// [`Self::with_labs`] with browser terminals.
+    pub(super) async fn with_labs_and_terminals(
+        catalog: CampusLabCatalog,
+        with_provider: bool,
+        on_disk: bool,
+        terminals: Option<Arc<CampusTerminals>>,
     ) -> Self {
         let (store, disk) = if on_disk {
             let path = disk_path();
@@ -403,7 +415,7 @@ impl Harness {
                 .then(|| provider.clone() as Arc<dyn pharness_core::CampusExecutionProvider>),
         ));
         labs.register_slots(&store, START).await.unwrap();
-        let mut harness = Self::build(test_config(), store, disk, Some(labs));
+        let mut harness = Self::build(test_config(), store, disk, Some(labs), terminals);
         harness.provider = provider;
         harness
     }
@@ -422,7 +434,39 @@ impl Harness {
     pub(super) async fn on_disk() -> Self {
         let path = disk_path();
         let store = SqliteStore::connect(&path).await.unwrap();
-        Self::build(test_config(), store, Some(DiskDatabase(path)), None)
+        Self::build(test_config(), store, Some(DiskDatabase(path)), None, None)
+    }
+
+    fn runtime_for(
+        config: &CampusConfig,
+        idp: &Arc<MockIdp>,
+        clock: &Arc<TestClock>,
+        labs: Option<&Arc<CampusLabs>>,
+        terminals: Option<&Arc<CampusTerminals>>,
+    ) -> CampusRuntime {
+        let mut runtime = CampusRuntime::new(config.clone(), idp.clone(), clock.clone());
+        if let Some(labs) = labs {
+            runtime = runtime.with_labs(labs.clone());
+        }
+        if let Some(terminals) = terminals {
+            runtime = runtime.with_terminals(terminals.clone());
+        }
+        runtime
+    }
+
+    /// What another API process sharing this harness's IdP, clock and lab
+    /// catalog needs to serve the same Campus.
+    pub(super) fn process_parts(&self) -> ProcessParts {
+        ProcessParts {
+            config: self.config.clone(),
+            idp: self.idp.clone(),
+            clock: self.clock.clone(),
+            labs: self.labs.clone(),
+        }
+    }
+
+    pub(super) fn disk_path(&self) -> Option<PathBuf> {
+        self.disk.as_ref().map(|disk| disk.0.clone())
     }
 
     fn build(
@@ -430,15 +474,13 @@ impl Harness {
         store: SqliteStore,
         disk: Option<DiskDatabase>,
         labs: Option<Arc<CampusLabs>>,
+        terminals: Option<Arc<CampusTerminals>>,
     ) -> Self {
         let store = Arc::new(store);
         let key = EcKey::generate("campus-key-1");
         let idp = MockIdp::with_keys(&[key.jwk()]);
         let clock = Arc::new(TestClock(AtomicI64::new(START)));
-        let mut runtime = CampusRuntime::new(config.clone(), idp.clone(), clock.clone());
-        if let Some(labs) = &labs {
-            runtime = runtime.with_labs(labs.clone());
-        }
+        let runtime = Self::runtime_for(&config, &idp, &clock, labs.as_ref(), terminals.as_ref());
         let broker_tokens = runtime.broker_token_issuer(&store, "test-provider");
         let routers = full_routers(
             store.clone(),
@@ -653,6 +695,29 @@ impl Harness {
             })
             .await
             .unwrap();
+    }
+}
+
+#[derive(Clone)]
+pub(super) struct ProcessParts {
+    config: CampusConfig,
+    idp: Arc<MockIdp>,
+    clock: Arc<TestClock>,
+    labs: Option<Arc<CampusLabs>>,
+}
+
+impl ProcessParts {
+    /// The application of that process on `store`, with its own terminal
+    /// registry.
+    pub(super) fn app(&self, store: Arc<SqliteStore>, terminals: Arc<CampusTerminals>) -> Router {
+        let runtime = Harness::runtime_for(
+            &self.config,
+            &self.idp,
+            &self.clock,
+            self.labs.as_ref(),
+            Some(&terminals),
+        );
+        full_app(store, CampusMount::Enabled(Box::new(runtime)))
     }
 }
 

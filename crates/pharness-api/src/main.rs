@@ -146,6 +146,13 @@ async fn main() -> anyhow::Result<()> {
                 runtime = runtime.with_labs(labs);
                 runtime.spawn_lab_reconciler(store.clone());
             }
+            if let Some(terminals) = app::campus::load_campus_terminals_from_env(
+                &runtime.config,
+                runtime.labs.is_some(),
+            )? {
+                tracing::info!("campus browser terminals enabled");
+                runtime = runtime.with_terminals(Arc::new(terminals));
+            }
             app::campus::CampusMount::Enabled(Box::new(runtime))
         }
     };

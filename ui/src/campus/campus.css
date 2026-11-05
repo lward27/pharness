@@ -1,0 +1,148 @@
+:root {
+  color-scheme: dark;
+  --campus-bg: #070b16;
+  --campus-surface: #0f1628;
+  --campus-border: #2a3654;
+  --campus-text: #e6e9f2;
+  --campus-muted: #b4bdd3;
+  --campus-accent: #9ecbff;
+  --campus-accent-text: #07121f;
+  --campus-focus: #ffd166;
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  background: var(--campus-bg);
+  color: var(--campus-text);
+}
+
+body {
+  margin: 0;
+}
+
+.campus-terminal {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 72rem;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+.campus-terminal__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+}
+
+.campus-terminal h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.campus-terminal__lab,
+.campus-terminal__help {
+  margin: 0;
+  color: var(--campus-muted);
+}
+
+.campus-terminal__status {
+  margin: 0;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--campus-border);
+  border-radius: 0.5rem;
+  background: var(--campus-surface);
+}
+
+.campus-terminal__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.campus-button {
+  min-height: 2.5rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--campus-border);
+  border-radius: 0.5rem;
+  background: var(--campus-surface);
+  color: var(--campus-text);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+}
+
+.campus-button--primary {
+  border-color: var(--campus-accent);
+  background: var(--campus-accent);
+  color: var(--campus-accent-text);
+  font-weight: 600;
+}
+
+.campus-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.campus-terminal__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2.5rem;
+}
+
+.campus-terminal__toggle input {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.campus-terminal kbd {
+  padding: 0 0.25rem;
+  border: 1px solid var(--campus-border);
+  border-radius: 0.25rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.campus-terminal__screen {
+  flex: 1;
+  min-height: 20rem;
+  padding: 0.5rem;
+  border: 1px solid var(--campus-border);
+  border-radius: 0.5rem;
+  background: #0b1020;
+}
+
+.campus-terminal__screen:focus-within {
+  outline: 3px solid var(--campus-focus);
+  outline-offset: 2px;
+}
+
+.campus-terminal__xterm {
+  height: 100%;
+  min-height: 19rem;
+}
+
+.campus-terminal [hidden] {
+  display: none;
+}
+
+:focus-visible {
+  outline: 3px solid var(--campus-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 40rem) {
+  .campus-terminal {
+    padding: 0.75rem;
+  }
+
+  .campus-terminal__screen {
+    min-height: 16rem;
+  }
+}

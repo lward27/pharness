@@ -84,6 +84,16 @@ const CAMPUS_ROUTES: &[(&str, &str, CampusRouteClass)] = &[
         "/api/campus/lab-sessions/:session_id/reset",
         CampusRouteClass::Session,
     ),
+    (
+        "POST",
+        "/api/campus/lab-sessions/:session_id/terminal-ticket",
+        CampusRouteClass::Session,
+    ),
+    (
+        "GET",
+        "/api/campus/lab-sessions/:session_id/terminal",
+        CampusRouteClass::Session,
+    ),
 ];
 
 const OPERATOR_INVENTORY: &str = include_str!("../../../../tests/fixtures/app-route-inventory.tsv");
