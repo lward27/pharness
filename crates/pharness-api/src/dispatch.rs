@@ -5352,6 +5352,73 @@ mod tests {
         }));
     }
 
+    /// SDLC worker Jobs carry the worker token and a service account; the
+    /// Campus sandbox contract must refuse any Pod spec shaped like them, and
+    /// refuse the worker token reference even inside an otherwise compliant
+    /// sandbox spec.
+    #[tokio::test]
+    async fn sdlc_worker_pod_specs_never_pass_the_campus_sandbox_contract() {
+        use pharness_core::campus_sandbox_pod::{
+            check_campus_sandbox_pod_spec, CampusPodSpecRule, CampusSandboxBrokerBinding,
+        };
+        use pharness_core::CampusWorkloadRef;
+
+        let dispatcher = test_dispatcher(None).await;
+        let binding = CampusSandboxBrokerBinding::new(
+            &url::Url::parse("http://campus-broker.pharness.svc:4790").unwrap(),
+            &CampusWorkloadRef {
+                session_id: "cls_1".into(),
+                slot_id: "tenant-a-lab-slot-01".into(),
+                slot_generation: 1,
+            },
+        )
+        .unwrap();
+        let request = GitDeliveryExecutionRequest {
+            change_set_id: "cset_123".to_string(),
+            execution_id: "gexec_123".to_string(),
+        };
+        let manifests = [
+            dispatcher.job_manifest(&test_run(), None),
+            dispatcher
+                .git_writer_job_manifest(&request, &git_writer_job_name(&request.execution_id)),
+        ];
+        let mut worker_token_entry = None;
+        for manifest in &manifests {
+            let spec = manifest.pointer("/spec/template/spec").unwrap();
+            assert!(check_campus_sandbox_pod_spec(spec, &binding).is_err());
+            worker_token_entry = spec["containers"][0]["env"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|entry| entry["name"] == "PHARNESS_WORKER_TOKEN")
+                .cloned();
+            assert!(worker_token_entry.is_some());
+        }
+
+        let sandbox = |extra_env: Option<serde_json::Value>| {
+            let mut env = binding.env();
+            env.extend(extra_env);
+            json!({
+                "automountServiceAccountToken": false,
+                "containers": [{
+                    "name": "lab",
+                    "image": "registry.example/campus/coding@sha256:0000",
+                    "env": env,
+                    "volumeMounts": [binding.volume_mount()],
+                    "securityContext": { "allowPrivilegeEscalation": false },
+                }],
+                "volumes": [binding.volume()],
+            })
+        };
+        check_campus_sandbox_pod_spec(&sandbox(None), &binding).unwrap();
+        let violation =
+            check_campus_sandbox_pod_spec(&sandbox(worker_token_entry), &binding).unwrap_err();
+        assert_eq!(violation.rule, CampusPodSpecRule::EnvValueFrom);
+        let literal = json!({ "name": "PHARNESS_WORKER_TOKEN", "value": "worker-secret" });
+        let violation =
+            check_campus_sandbox_pod_spec(&sandbox(Some(literal)), &binding).unwrap_err();
+        assert_eq!(violation.rule, CampusPodSpecRule::Environment);
+    }
     #[tokio::test]
     async fn worker_manifest_omits_affinity_when_not_configured() {
         let dispatcher = test_dispatcher(None).await;

@@ -4,6 +4,7 @@
 //! No private key material is committed; every signing key is generated when
 //! a test runs.
 
+mod broker;
 mod config;
 mod flow;
 mod id_token;
@@ -26,6 +27,7 @@ use axum::Router;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use jsonwebtoken::Algorithm;
+use pharness_core::campus_broker_token::CampusBrokerTokenIssuer;
 use pharness_core::FakeCampusProvider;
 use pharness_store::SqliteStore;
 use ring::rand::{SecureRandom, SystemRandom};
@@ -279,6 +281,10 @@ fn disk_path() -> PathBuf {
 
 pub(super) struct Harness {
     pub(super) app: Router,
+    /// The broker listener's router.
+    pub(super) broker: Router,
+    /// The issuer a real execution provider would use for this harness.
+    pub(super) broker_tokens: Arc<dyn CampusBrokerTokenIssuer>,
     pub(super) store: Arc<SqliteStore>,
     pub(super) idp: Arc<MockIdp>,
     pub(super) clock: Arc<TestClock>,
@@ -291,20 +297,34 @@ pub(super) struct Harness {
 }
 
 pub(super) fn full_app(store: Arc<SqliteStore>, campus: CampusMount) -> Router {
+    full_routers(
+        store,
+        campus,
+        Some(WORKER_TOKEN.to_string()),
+        vec![("lucas".to_string(), OPERATOR_TOKEN.to_string())],
+    )
+    .app
+}
+
+pub(super) fn full_routers(
+    store: Arc<SqliteStore>,
+    campus: CampusMount,
+    worker_token: Option<String>,
+    operator_tokens: Vec<(String, String)>,
+) -> crate::app::AppRouters {
     crate::app::routers_with_campus(
         store,
         crate::dispatch::RunDispatcher::Disabled,
         pharness_core::ReadOnlyClusterTools::default(),
         pharness_core::SafetyPolicy::default(),
-        Some(WORKER_TOKEN.to_string()),
-        vec![("lucas".to_string(), OPERATOR_TOKEN.to_string())],
+        worker_token,
+        operator_tokens,
         crate::workspace::WorkspaceProvisioner::new(std::env::temp_dir(), Vec::new()),
         pharness_config::InferenceGatewayConfig::legacy_default(),
         pharness_config::AgentExecutionBackendConfig::disabled_default(),
         pharness_core::hosted_sdlc::HostedWorkflowConfig::default(),
         campus,
     )
-    .app
 }
 
 pub(super) async fn send(app: &Router, request: Request<Body>) -> Response {
@@ -418,9 +438,17 @@ impl Harness {
         if let Some(labs) = &labs {
             runtime = runtime.with_labs(labs.clone());
         }
-        let app = full_app(store.clone(), CampusMount::Enabled(Box::new(runtime)));
+        let broker_tokens = runtime.broker_token_issuer(&store, "test-provider");
+        let routers = full_routers(
+            store.clone(),
+            CampusMount::Enabled(Box::new(runtime)),
+            Some(WORKER_TOKEN.to_string()),
+            vec![("lucas".to_string(), OPERATOR_TOKEN.to_string())],
+        );
         Self {
-            app,
+            app: routers.app,
+            broker: routers.campus_broker,
+            broker_tokens,
             store,
             idp,
             clock,

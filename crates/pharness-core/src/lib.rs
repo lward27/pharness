@@ -2,9 +2,11 @@
 
 pub mod agent;
 pub mod agent_execution;
+pub mod campus_broker_token;
 pub mod campus_capability;
 pub mod campus_lab_session;
 pub mod campus_profile;
+pub mod campus_sandbox_pod;
 pub mod events;
 pub mod execution;
 pub mod hosted_sdlc;

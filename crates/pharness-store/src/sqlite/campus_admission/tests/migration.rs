@@ -113,6 +113,18 @@ async fn latest(pool: &SqlitePool) -> i64 {
         .unwrap()
 }
 
+/// Upgrade to exactly schema 59, as the release that introduced 0059 did.
+/// Later migrations have their own upgrade tests.
+async fn at_schema_59(path: &Path) -> SqliteStore {
+    let pool = pool_at(path).await;
+    migrator_through(59).run(&pool).await.unwrap();
+    sqlx::query("PRAGMA foreign_keys = ON")
+        .execute(&pool)
+        .await
+        .unwrap();
+    SqliteStore { pool }
+}
+
 /// A database at schema 58 with a lab session already in the journal.
 async fn schema_58(path: &Path) -> SqliteStore {
     let pool = pool_at(path).await;
@@ -149,7 +161,7 @@ async fn schema_58_data_survives_0059_and_the_previous_release_refuses_it() {
     let before_schema = schema(&old.pool).await;
     old.pool.close().await;
 
-    let upgraded = SqliteStore::connect(&database).await.unwrap();
+    let upgraded = at_schema_59(&database).await;
     assert_eq!(latest(&upgraded.pool).await, 59);
     assert_eq!(all_rows(&upgraded.pool, &old_tables).await, before_rows);
     let after_schema = schema(&upgraded.pool).await;
@@ -230,7 +242,7 @@ async fn an_interrupted_0059_rolls_back_and_can_be_retried() {
     assert_eq!(latest(&old.pool).await, 58);
     old.pool.close().await;
 
-    let retried = SqliteStore::connect(&database).await.unwrap();
+    let retried = at_schema_59(&database).await;
     assert_eq!(latest(&retried.pool).await, 59);
     assert_eq!(all_rows(&retried.pool, &old_tables).await, before_rows);
     retried.pool.close().await;

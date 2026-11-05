@@ -1,3 +1,4 @@
+use super::auth::refuse_campus_broker_tokens;
 use super::clock::current_millis;
 use super::identifiers::new_prefixed_id;
 use super::runs;
@@ -240,6 +241,7 @@ pub(super) fn internal_router(state: AppState) -> Router<AppState> {
             state.clone(),
             enforce_operational_mode,
         ))
+        .route_layer(middleware::from_fn(refuse_campus_broker_tokens))
         .with_state(state)
 }
 

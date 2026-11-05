@@ -6,6 +6,7 @@
 //! to them. Campus is disabled unless `PHARNESS_CAMPUS_ENABLED` is true.
 
 mod authz;
+mod broker;
 mod config;
 mod error;
 mod handlers;
@@ -21,6 +22,7 @@ mod tokens;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use broker::load_campus_broker_bind_from_env;
 pub(crate) use config::{load_campus_config_from_env, validate_campus_startup};
 pub(crate) use lab_catalog::{load_campus_labs_from_env, CampusLabProviderKind};
 pub(crate) use labs::CampusLabs;
@@ -39,15 +41,38 @@ use std::sync::Arc;
 use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
-pub(crate) fn router(store: Arc<SqliteStore>, mount: CampusMount) -> Router {
-    let routes = match mount {
-        CampusMount::Disabled => closed_router(StatusCode::NOT_FOUND, "campus is disabled"),
-        CampusMount::Unavailable(reason) => closed_router(StatusCode::SERVICE_UNAVAILABLE, reason),
-        CampusMount::Enabled(runtime) => enabled_router(CampusState {
-            store,
-            runtime: Arc::from(runtime),
-        }),
+/// The browser-facing Campus routes, merged into the main application, and
+/// the broker routes, served only on the broker listener.
+pub(crate) struct CampusRouters {
+    pub(crate) app: Router,
+    pub(crate) broker: Router,
+}
+
+pub(crate) fn routers(store: Arc<SqliteStore>, mount: CampusMount) -> CampusRouters {
+    let (routes, broker) = match mount {
+        CampusMount::Disabled => (
+            closed_router(StatusCode::NOT_FOUND, "campus is disabled"),
+            broker::closed_router(StatusCode::NOT_FOUND, "campus is disabled"),
+        ),
+        CampusMount::Unavailable(reason) => (
+            closed_router(StatusCode::SERVICE_UNAVAILABLE, reason),
+            broker::closed_router(StatusCode::SERVICE_UNAVAILABLE, reason),
+        ),
+        CampusMount::Enabled(runtime) => {
+            let state = CampusState {
+                store,
+                runtime: Arc::from(runtime),
+            };
+            (enabled_router(state.clone()), broker::router(state))
+        }
     };
+    CampusRouters {
+        app: traced(routes),
+        broker: broker.layer(map_response(no_store)),
+    }
+}
+
+fn traced(routes: Router) -> Router {
     // The callback URL carries the authorization code and state, so the span
     // records only the path, never the query.
     routes.layer(map_response(no_store)).layer(

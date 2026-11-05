@@ -216,10 +216,12 @@ pub fn router_with_inference(
 }
 
 /// The operator/worker application plus the unauthenticated metrics router
-/// that must only be served on a private listener.
+/// that must only be served on a private listener, and the Campus broker
+/// router that is served only on the broker listener lab sandboxes reach.
 pub struct AppRouters {
     pub app: Router,
     pub metrics: Router,
+    pub campus_broker: Router,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -298,7 +300,7 @@ pub(crate) fn routers_with_campus(
     hosted_workflow: pharness_core::hosted_sdlc::HostedWorkflowConfig,
     campus: campus::CampusMount,
 ) -> AppRouters {
-    let campus_routes = campus::router(store.clone(), campus);
+    let campus_routes = campus::routers(store.clone(), campus);
     let state = AppState {
         store,
         worker,
@@ -356,8 +358,12 @@ pub(crate) fn routers_with_campus(
                 .on_response(DefaultOnResponse::new().level(Level::INFO)),
         )
         .with_state(state)
-        .merge(campus_routes);
-    AppRouters { app, metrics }
+        .merge(campus_routes.app);
+    AppRouters {
+        app,
+        metrics,
+        campus_broker: campus_routes.broker,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
