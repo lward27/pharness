@@ -509,6 +509,22 @@ async fn authority_mismatches_are_refused_before_any_effect() {
 }
 
 #[tokio::test]
+async fn a_session_still_provisioning_is_launched() {
+    let harness = Harness::new();
+    harness.admit("session-a", compose(RESEARCH, json!({})));
+    harness
+        .authority
+        .set_status("session-a", CampusAuthorityStatus::Provisioning);
+    let spec = harness.spec("session-a", "campus-lab-slot-1", 1);
+    let outcome = harness.provider.provision(OP, &spec).await.expect("call");
+    assert!(
+        matches!(outcome, CampusProvisionOutcome::InProgress { .. }),
+        "{outcome:?}"
+    );
+    harness.job();
+}
+
+#[tokio::test]
 async fn an_unlisted_profile_version_is_not_launchable() {
     let kube = Arc::new(FakeKube::with_runtime_class("runsc", POOL));
     let authority = Arc::new(InMemoryCampusAuthoritySource::default());

@@ -781,6 +781,37 @@ async fn journal_authority_is_active_only_while_the_session_is_ready_and_unexpir
         status(source.session(&id).await.unwrap()),
         Some(CampusAuthorityStatus::Revoked)
     );
+    // While the workload is launched the provider may start it, but the
+    // capability broker grants nothing yet.
+    provider.inject(
+        pharness_core::FakeFaultPoint::AfterProvision,
+        pharness_core::FakeFault::InProgress,
+    );
+    let context = CampusDriverContext {
+        worker_id: "test-worker",
+        now: NOW,
+        lease_seconds: 60,
+        central_authority: true,
+        teardown_hooks: &[],
+    };
+    for _ in 0..2 {
+        advance_campus_lab_session(&store, &provider, &context, &id)
+            .await
+            .unwrap();
+    }
+    assert_eq!(
+        store
+            .get_campus_lab_session(&id)
+            .await
+            .unwrap()
+            .unwrap()
+            .state,
+        State::Provisioning
+    );
+    assert_eq!(
+        status(source.session(&id).await.unwrap()),
+        Some(CampusAuthorityStatus::Provisioning)
+    );
     settle(&store, &provider, &id, NOW).await;
     let snapshot = source.session(&id).await.unwrap().unwrap();
     assert_eq!(snapshot.status, CampusAuthorityStatus::Active);

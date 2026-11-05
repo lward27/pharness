@@ -236,8 +236,8 @@ impl CampusCapabilityBroker {
             }
             _ => {}
         }
-        if snapshot.status == CampusAuthorityStatus::Revoked {
-            return deny(R::SessionRevoked, "the Campus lab session was revoked");
+        if snapshot.status != CampusAuthorityStatus::Active {
+            return deny(R::SessionRevoked, "the Campus lab session is not active");
         }
         if self.clock.now() >= authority.expires_at {
             return deny(R::SessionExpired, "the Campus lab session has expired");

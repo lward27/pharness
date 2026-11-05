@@ -451,7 +451,10 @@ impl KubernetesCampusProvider {
                 "no trusted authority is recorded for the session".into()
             ));
         };
-        if snapshot.status != CampusAuthorityStatus::Active {
+        if !matches!(
+            snapshot.status,
+            CampusAuthorityStatus::Provisioning | CampusAuthorityStatus::Active
+        ) {
             return Ok(Err("the session authority is revoked".into()));
         }
         let authority = snapshot.authority;

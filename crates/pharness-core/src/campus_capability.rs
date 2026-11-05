@@ -165,7 +165,11 @@ impl CampusSessionAuthority {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CampusAuthorityStatus {
+    /// The session is ready: its capabilities may be used.
     Active,
+    /// The session is admitted and its workload is being launched. The
+    /// execution provider may start it, but no capability is granted yet.
+    Provisioning,
     Revoked,
 }
 

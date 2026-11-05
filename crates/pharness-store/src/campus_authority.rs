@@ -4,7 +4,9 @@
 //! answers from the journal and lab admission rows, so stopping, resetting,
 //! expiring or failing a session revokes its authority on the very next
 //! call, and a session whose assignment policy changed since launch has no
-//! authority at all.
+//! authority at all. A session that is still being launched reports
+//! `Provisioning`: the execution provider may start its workload, but the
+//! capability broker grants nothing until it is ready.
 
 use crate::SqliteStore;
 use async_trait::async_trait;
@@ -12,7 +14,9 @@ use pharness_core::campus_capability::{
     CampusActorRef, CampusAuthorityError, CampusAuthoritySnapshot, CampusAuthoritySource,
     CampusAuthorityStatus, CampusBrokerClock, CampusSessionAuthority, CampusTrustedApproval,
 };
-use pharness_core::{ActionId, CampusLabDesiredState, EffectiveCampusPolicy};
+use pharness_core::{
+    ActionId, CampusLabDesiredState, CampusLabSessionState, EffectiveCampusPolicy,
+};
 use std::sync::Arc;
 
 /// The effective policy each assignment is configured with now.
@@ -72,10 +76,16 @@ impl CampusAuthoritySource for JournalCampusAuthoritySource {
         {
             return Ok(None);
         }
-        let active = session.state.grants_access()
-            && session.desired_state == CampusLabDesiredState::Ready
+        let authorized = session.desired_state == CampusLabDesiredState::Ready
             && session.revoked_at.is_none()
             && self.clock.now() < session.expires_at;
+        let status = match session.state {
+            CampusLabSessionState::Ready if authorized => CampusAuthorityStatus::Active,
+            CampusLabSessionState::Provisioning if authorized => {
+                CampusAuthorityStatus::Provisioning
+            }
+            _ => CampusAuthorityStatus::Revoked,
+        };
         Ok(Some(CampusAuthoritySnapshot {
             authority: Arc::new(CampusSessionAuthority {
                 session_id: session.session_id.clone(),
@@ -87,11 +97,7 @@ impl CampusAuthoritySource for JournalCampusAuthoritySource {
                 policy,
                 expires_at: session.expires_at,
             }),
-            status: if active {
-                CampusAuthorityStatus::Active
-            } else {
-                CampusAuthorityStatus::Revoked
-            },
+            status,
         }))
     }
 

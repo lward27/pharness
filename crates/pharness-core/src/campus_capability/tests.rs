@@ -774,6 +774,21 @@ async fn revocation_and_expiry_take_effect_on_the_next_call() {
 }
 
 #[tokio::test]
+async fn a_session_still_provisioning_is_granted_nothing() {
+    let fixture = Fixture::new(RESEARCH);
+    fixture
+        .source
+        .set_status(SESSION, CampusAuthorityStatus::Provisioning);
+    let action = read("notes.md");
+    assert_eq!(
+        fixture.run(fixture.direct(&action)).await.decision.reason,
+        R::SessionRevoked
+    );
+    assert!(denied_reason(fixture.tools().execute(&action).await).starts_with("session_revoked"));
+    assert_eq!(fixture.effects(), 0);
+}
+
+#[tokio::test]
 async fn tool_and_direct_paths_reach_the_same_decision() {
     let fixture = Fixture::new(CODING);
     let tools = fixture.tools();
