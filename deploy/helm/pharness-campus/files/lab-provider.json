@@ -1,0 +1,57 @@
+{
+  "kubectl": "/usr/local/bin/kubectl",
+  "global_args": [
+    "--kubeconfig=/etc/pharness-campus/kube/controller-kubeconfig"
+  ],
+  "provider": {
+    "controller": "pharness-campus-controller",
+    "slots": {
+      "campus-lab-slot-1": "campus-lab-slot-1",
+      "campus-lab-slot-2": "campus-lab-slot-2",
+      "campus-lab-slot-3": "campus-lab-slot-3",
+      "campus-lab-slot-4": "campus-lab-slot-4",
+      "campus-lab-slot-5": "campus-lab-slot-5"
+    },
+    "runtime": {
+      "class_name": "gvisor",
+      "handler": "runsc",
+      "node_selector": {
+        "pharness.dev/campus-lab-runtime": "gvisor"
+      },
+      "overhead": {
+        "cpu_millicores": 50,
+        "memory_mib": 128
+      }
+    },
+    "slot_capacity": {
+      "cpu_millicores": 2000,
+      "memory_mib": 3072,
+      "ephemeral_storage_mib": 256
+    },
+    "workspace_command": [
+      "sleep",
+      "2147483647"
+    ],
+    "environment": {},
+    "log_storage_mib": 128,
+    "finished_job_ttl_seconds": 300,
+    "stuck_termination_seconds": 120,
+    "broker_url": "http://10.43.130.31:4790/",
+    "required_network_policies": [
+      "campus-lab-default-deny",
+      "campus-lab-session-broker"
+    ],
+    "egress": {
+      "proxy_url": "http://10.43.130.30:3128",
+      "ca_certificate_pem": "-----BEGIN CERTIFICATE-----\nMIIBjTCCATKgAwIBAgIUDz4zFvdtt7IKSQ17XQGE7db9hU0wCgYIKoZIzj0EAwIw\nJDEiMCAGA1UEAxMZUEhhcm5lc3MgQ2FtcHVzIGVncmVzcyBDQTAeFw0yNjExMDUw\nMzMyMTZaFw0zNjExMDIwMzMyMTZaMCQxIjAgBgNVBAMTGVBIYXJuZXNzIENhbXB1\ncyBlZ3Jlc3MgQ0EwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASXV6N88k45Hy9a\nuZuBsiNtKVguHkYZiJ53WrcvVyDS+ta4+FoXC0wHwB9WjzFCcxaaDWAQ5/UO9ulG\nVOTntNN7o0IwQDAOBgNVHQ8BAf8EBAMCAqQwDwYDVR0TAQH/BAUwAwEB/zAdBgNV\nHQ4EFgQUI0RzRNnoltQkWxiet+SHWRTmSmUwCgYIKoZIzj0EAwIDSQAwRgIhAOvk\nPxbAp+vSoB+IyKbsMeDzKquYrOLElGLS7GhPOvSiAiEAptfWMj1bOr5bQKEre3ng\nMX+BOYbN+jpzR1/gIGedPA8=\n-----END CERTIFICATE-----\n",
+      "network_policy": "campus-lab-session-egress"
+    },
+    "network_gate": {
+      "canaries": [
+        "10.43.0.1:443",
+        "1.1.1.1:443"
+      ],
+      "timeout_seconds": 60
+    }
+  }
+}

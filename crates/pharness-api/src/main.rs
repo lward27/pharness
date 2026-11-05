@@ -124,17 +124,10 @@ async fn main() -> anyhow::Result<()> {
             let mut runtime = app::campus::CampusRuntime::production(campus_config)
                 .context("failed to configure campus OIDC client")?;
             if let Some(labs_config) = campus_labs {
-                let provider: Option<Arc<dyn pharness_core::CampusExecutionProvider>> =
-                    match labs_config.provider {
-                        app::campus::CampusLabProviderKind::None => None,
-                        app::campus::CampusLabProviderKind::Fake => {
-                            tracing::warn!(
-                                "campus labs use the in-memory fake provider; nothing real is launched"
-                            );
-                            Some(Arc::new(pharness_core::FakeCampusProvider::new()))
-                        }
-                    };
-                let labs = Arc::new(app::campus::CampusLabs::new(labs_config.catalog, provider));
+                let labs = Arc::new(
+                    app::campus::build_campus_labs(&runtime, &store, labs_config)
+                        .context("failed to configure campus labs")?,
+                );
                 labs.register_slots(&store, now)
                     .await
                     .context("failed to register campus lab slots")?;

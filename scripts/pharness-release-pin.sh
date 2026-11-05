@@ -17,6 +17,8 @@ MODEL_GATEWAY_DIGEST="${6:-}"
 EVAL_RUNNER_DIGEST="${7:-}"
 CODEX_HOST_DIGEST="${8:-}"
 VALUES_FILE="deploy/helm/pharness/values.yaml"
+# The Campus PoC chart runs the same runtime and UI images (LUC-137).
+CAMPUS_VALUES_FILE="deploy/helm/pharness-campus/values.yaml"
 AGENT_EXECUTION_REGISTRY="deploy/helm/pharness/files/agent-execution-registry.json"
 
 [[ "$REVISION" =~ ^[0-9a-f]{40}$ ]] || {
@@ -84,6 +86,15 @@ perl -i -pe '
   if ($section eq "environment_profiles" && $profile eq "node-24" && /^    image:/) { $_ = "    image: registry.lucas.engineering/pharness-node-runner\@$ENV{PHARNESS_NODE_RUNNER_DIGEST}\n" }
   if ($section eq "environment_profiles" && $profile eq "node-24" && /^    revision:/) { $_ = "    revision: \"$ENV{PHARNESS_RELEASE_REVISION}\"\n" }
 ' "$VALUES_FILE"
+perl -i -pe '
+  if (/^api:/) { $section = "api" }
+  elsif (/^ui:/) { $section = "ui" }
+  elsif (/^[a-zA-Z]/) { $section = "" }
+  if ($section eq "api" && /^    digest:/) { $_ = "    digest: $ENV{PHARNESS_RUNTIME_DIGEST}\n" }
+  if ($section eq "api" && /^    revision:/) { $_ = "    revision: $ENV{PHARNESS_RELEASE_REVISION}\n" }
+  if ($section eq "ui" && /^    digest:/) { $_ = "    digest: $ENV{PHARNESS_UI_DIGEST}\n" }
+  if ($section eq "ui" && /^    revision:/) { $_ = "    revision: $ENV{PHARNESS_RELEASE_REVISION}\n" }
+' "$CAMPUS_VALUES_FILE"
 
 scripts/pharness-agent-execution-registry.py "$AGENT_EXECUTION_REGISTRY" \
   --python-runner-digest "$PYTHON_RUNNER_DIGEST" \
@@ -121,6 +132,18 @@ grep -Fq "active: true" <<<"$NODE_RUNNER_PROFILE"
 grep -Fq "image: registry.lucas.engineering/pharness-node-runner@${NODE_RUNNER_DIGEST}" <<<"$NODE_RUNNER_PROFILE"
 grep -Fq "revision: \"${REVISION}\"" <<<"$NODE_RUNNER_PROFILE"
 
+helm lint deploy/helm/pharness-campus
+helm template pharness-campus deploy/helm/pharness-campus >"$RENDERED"
+grep -Fq "registry.lucas.engineering/pharness-runtime@${RUNTIME_DIGEST}" "$RENDERED"
+grep -Fq "registry.lucas.engineering/pharness-ui@${UI_DIGEST}" "$RENDERED"
+grep -Fq "value: \"${REVISION}\"" "$RENDERED"
+UNPINNED_CAMPUS_IMAGES="$(grep -E 'registry\.lucas\.engineering/pharness-(runtime|ui)@' "$RENDERED" | grep -Fv -e "@${RUNTIME_DIGEST}" -e "@${UI_DIGEST}" || true)"
+[[ -z "$UNPINNED_CAMPUS_IMAGES" ]] || {
+  echo "rendered Campus release contains an image other than the pinned runtime and UI" >&2
+  exit 1
+}
+
 echo "Prepared digest-pinning release values for ${REVISION}."
 echo "Review the diff, commit it on a separate release branch, and merge it manually before Argo sync."
-git diff -- "$VALUES_FILE" "$AGENT_EXECUTION_REGISTRY"
+echo "The Campus egress proxy runs the runtime image from GitOps charts/campus-lab; pin it with scripts/campus-egress-release-pin.sh."
+git diff -- "$VALUES_FILE" "$CAMPUS_VALUES_FILE" "$AGENT_EXECUTION_REGISTRY"

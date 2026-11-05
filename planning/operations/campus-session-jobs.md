@@ -21,7 +21,7 @@ The slots and their guardrails are Argo-managed from `lucas_engineering`
 | LimitRange, NetworkPolicy `campus-lab-default-deny` | default limits; no ingress or egress |
 | NetworkPolicies `campus-lab-session-broker`, `campus-lab-session-egress` | the broker port, and the Campus egress proxy for Pods labelled for egress ([campus-egress.md](campus-egress.md)) |
 | default ServiceAccount | `automountServiceAccountToken: false` |
-| Role/RoleBinding `pharness-campus-controller` | `pharness/pharness-campus-controller` may create/get/list/watch/delete Jobs, create/get/list/delete ConfigMaps, get/list/watch/delete Pods, create/get/list/update/delete Secrets and get/list NetworkPolicies in the slot; nothing else (no exec, patch, watch on Secrets, or policy changes) |
+| Role/RoleBinding `pharness-campus-controller` | `campus-poc/pharness-campus-controller` may create/get/list/watch/delete Jobs, create/get/list/delete ConfigMaps, get/list/watch/delete Pods, create/get/list/update/delete Secrets and get/list NetworkPolicies in the slot; nothing else (no exec, patch, watch on Secrets, or policy changes) |
 | ClusterRole `pharness-campus-controller-runtime` | get on `runtimeclasses/gvisor` only |
 | VAP `pharness-campus-lab-session-guard` | independent admission for Pods and Jobs in `pharness.dev/campus-lab=true` namespaces (below) |
 | VAP `pharness-campus-lab-secret-guard` | slot Secrets may only be the session's broker token Secret ([campus-egress.md](campus-egress.md#cluster-objects-chartscampus-lab)) |
@@ -71,10 +71,12 @@ quota refuses a duplicate create before the API reports AlreadyExists.
 slot id = namespace name (`campus-lab-slot-N`). Journal slot ids are
 free-form (`register_campus_lab_slot`), so register the M1 slots under those
 names. The slot label on every object must equal the namespace's
-`pharness.dev/campus-slot` label, or admission refuses it. Note that the
-pharness-api lab catalog currently registers `<tenant>-lab-slot-NN`. The
-wiring that constructs this provider in the API must map those ids, or
-register `campus-lab-slot-N`, before Campus is enabled.
+`pharness.dev/campus-slot` label, or admission refuses it. The API builds
+this provider when `PHARNESS_CAMPUS_LAB_PROVIDER=kubernetes`
+([campus-lab-admission.md](campus-lab-admission.md#configuration)); its
+catalog lists `lab_slot_ids` `campus-lab-slot-1..5` so the journal ids
+equal the namespace labels, and startup refuses a provider whose slot map
+differs from the catalog. Deployment: [campus-poc-deployment.md](campus-poc-deployment.md).
 
 ## Session limits (research profile)
 
@@ -102,9 +104,9 @@ creates five temporary probe slots (`campus-lab-probe-N`) from the same
 chart, plus a test-only image allowlist that admits only the research
 profile digest. It also checks that an Argo-managed slot admits the
 provider's session Job and refuses an unapproved digest. The provider runs as the controller identity
-(`kubectl --as system:serviceaccount:pharness:pharness-campus-controller`)
+(`kubectl --as system:serviceaccount:campus-poc:pharness-campus-controller`)
 through the ignored test `crates/pharness-core/tests/campus_session_jobs_live.rs`.
-Phases: preconditions and versions, controller RBAC (25 `can-i` checks),
+Phases: preconditions and versions, controller RBAC (30 `can-i` checks),
 provider provision, stress, provider delete, admission matrix. The probe
 namespaces and policies are deleted on exit, and the script prints what
 remains.

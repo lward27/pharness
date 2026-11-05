@@ -14,7 +14,7 @@ connections to exactly two things outside its own Pod:
 
 | Destination | Who | Opened by |
 | --- | --- | --- |
-| Campus broker, `pharness/app=pharness-api` port 4790 (pinned Service IP `10.43.130.31` in the provider) | every session | slot NetworkPolicy `campus-lab-session-broker` |
+| Campus broker, `campus-poc/app=pharness-campus-api` port 4790 (Service `pharness-campus-broker`, pinned ClusterIP `10.43.130.31` in the provider) | every session | slot NetworkPolicy `campus-lab-session-broker` |
 | Campus egress proxy, `campus-egress/campus-egress-proxy` port 3128 (ClusterIP `10.43.130.30`) | Pods labelled `pharness.dev/campus-egress=proxy` | slot NetworkPolicy `campus-lab-session-egress` |
 
 There is no DNS in a slot. Session tools use `HTTPS_PROXY`, and the proxy

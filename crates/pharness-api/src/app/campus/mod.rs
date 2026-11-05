@@ -12,6 +12,7 @@ mod error;
 mod handlers;
 mod lab_catalog;
 mod lab_handlers;
+mod lab_provider;
 mod labs;
 mod login_cookie;
 mod oidc;
@@ -27,8 +28,8 @@ mod tests;
 
 pub(crate) use broker::load_campus_broker_bind_from_env;
 pub(crate) use config::{load_campus_config_from_env, validate_campus_startup};
-pub(crate) use lab_catalog::{load_campus_labs_from_env, CampusLabProviderKind};
-pub(crate) use labs::CampusLabs;
+pub(crate) use lab_catalog::load_campus_labs_from_env;
+pub(crate) use lab_provider::build_campus_labs;
 pub(crate) use state::{CampusMount, CampusRuntime};
 pub(crate) use terminal::load_campus_terminals_from_env;
 

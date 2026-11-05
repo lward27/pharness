@@ -198,18 +198,19 @@ match, never from the browser.
 ### Kubernetes identity
 
 The terminal identity is separate from the controller, so the controller
-keeps no `pods/exec`. On the unmerged `lucas_engineering` branch
-`lucas/luc-134-campus-terminal-rbac` (`charts/campus-lab`):
+keeps no `pods/exec`. In `charts/campus-lab` (GitOps):
 
-- ServiceAccount `pharness/pharness-campus-terminal`
+- ServiceAccount `campus-poc/pharness-campus-terminal`
   (`automountServiceAccountToken: false`), no cluster-wide permissions.
 - In each slot (and each probe namespace) Role and RoleBinding
   `pharness-campus-terminal`: `pods` get, list; `pods/exec` get, create.
   Exec over WebSocket needs `create` from Kubernetes 1.31, `get` before.
 
-Delivering that identity's credential to the API (a kubeconfig whose
-`tokenFile` is a bound token for the ServiceAccount) is part of deploying
-the Campus API, which is not in GitOps yet.
+The Campus API Pod runs as the controller and can only project its own
+ServiceAccount's token, so the terminal credential is the ServiceAccount
+token Secret `campus-poc/pharness-campus-terminal-token`, mounted
+read-only into the API container and named by a separate kubeconfig
+(`deploy/helm/pharness-campus`, [campus-poc-deployment.md](campus-poc-deployment.md)).
 
 ### Ingress and the browser page
 
@@ -260,9 +261,10 @@ the Campus API, which is not in GitOps yet.
 
 ## Live verification still needed
 
-1. Merge the RBAC branch, then confirm with
-   `kubectl auth can-i create pods/exec -n campus-lab-slot-1 --as system:serviceaccount:pharness:pharness-campus-terminal`
-   (yes) and the same for `-n pharness`, Secrets and Jobs (no).
+1. Done (LUC-137, RBAC merged as lucas_engineering PR #130):
+   `kubectl auth can-i create pods --subresource=exec -n campus-lab-slot-1 --as system:serviceaccount:campus-poc:pharness-campus-terminal`
+   answers yes; the same in `pharness`, and Pod creation and Secrets in
+   the slot, answer no.
 2. With an approved runner image (LUC-121), attach to a real session through the
    kubectl attacher: `ulimit -u` shows the policy limit, `codex --version`
    answers, and stop closes the terminal and ends the exec process in the

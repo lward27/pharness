@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pharness-campus-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "pharness-campus.labels" . | nindent 4 }}
+data:
+  # Checked against each other at startup; crates/pharness-api tests load
+  # these exact files.
+  campus-labs.json: |
+    {{- .Files.Get "files/campus-labs.json" | nindent 4 }}
+  lab-provider.json: |
+    {{- .Files.Get "files/lab-provider.json" | nindent 4 }}
+  terminal.json: |
+    {{- .Files.Get "files/terminal.json" | nindent 4 }}
+  # The two identities are separate credentials: the controller's projected
+  # token never reaches the terminal path, and the terminal token never
+  # reaches the reconciler.
+  controller-kubeconfig: |
+    apiVersion: v1
+    kind: Config
+    clusters:
+      - name: in-cluster
+        cluster:
+          server: {{ .Values.kubernetes.server }}
+          certificate-authority: /var/run/pharness-campus/controller/ca.crt
+    users:
+      - name: controller
+        user:
+          tokenFile: /var/run/pharness-campus/controller/token
+    contexts:
+      - name: controller
+        context:
+          cluster: in-cluster
+          user: controller
+    current-context: controller
+  terminal-kubeconfig: |
+    apiVersion: v1
+    kind: Config
+    clusters:
+      - name: in-cluster
+        cluster:
+          server: {{ .Values.kubernetes.server }}
+          certificate-authority: /var/run/pharness-campus/terminal/ca.crt
+    users:
+      - name: terminal
+        user:
+          tokenFile: /var/run/pharness-campus/terminal/token
+    contexts:
+      - name: terminal
+        context:
+          cluster: in-cluster
+          user: terminal
+    current-context: terminal
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pharness-campus-ui
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "pharness-campus.labels" . | nindent 4 }}
+data:
+  # Replaces the operator console template: only the Campus page and its
+  # assets are served, and nothing is proxied. /api/campus/ is routed to
+  # the Campus API by the Ingress, so its WebSocket and Origin header reach
+  # the API unchanged.
+  default.conf.template: |
+    server {
+        listen 8080;
+        server_name _;
+        root /usr/share/nginx/html;
+        absolute_redirect off;
+        server_tokens off;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Referrer-Policy no-referrer always;
+        add_header X-Frame-Options DENY always;
+
+        location = / {
+            return 302 /campus.html;
+        }
+        location = /campus.html {
+            add_header Cache-Control no-store always;
+            add_header X-Content-Type-Options nosniff always;
+            add_header Referrer-Policy no-referrer always;
+            add_header X-Frame-Options DENY always;
+        }
+        location /assets/ {
+        }
+        location / {
+            return 404;
+        }
+    }

@@ -58,12 +58,22 @@ fn new_id(prefix: &str) -> String {
 }
 
 impl CampusLabs {
+    #[cfg(test)]
     pub(crate) fn new(
         catalog: CampusLabCatalog,
         provider: Option<Arc<dyn CampusExecutionProvider>>,
     ) -> Self {
+        Self::with_shared_catalog(Arc::new(catalog), provider)
+    }
+
+    /// For a provider that itself reads the catalog, such as the Kubernetes
+    /// provider's authority source.
+    pub(crate) fn with_shared_catalog(
+        catalog: Arc<CampusLabCatalog>,
+        provider: Option<Arc<dyn CampusExecutionProvider>>,
+    ) -> Self {
         Self {
-            catalog: Arc::new(catalog),
+            catalog,
             provider,
             worker_id: new_id("campus-api"),
             wake: Notify::new(),
@@ -80,9 +90,7 @@ impl CampusLabs {
     }
 
     pub(crate) fn slot_ids(&self) -> Vec<String> {
-        (1..=self.catalog.limits.lab_slots)
-            .map(|index| format!("{}-lab-slot-{index:02}", self.catalog.tenant_id))
-            .collect()
+        self.catalog.slot_ids.clone()
     }
 
     /// Register the configured lab slots. Re-registering is a no-op.

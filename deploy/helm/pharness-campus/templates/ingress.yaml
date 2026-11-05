@@ -1,0 +1,37 @@
+{{- if .Values.ingress.enabled }}
+# Only the Campus page and /api/campus/ are public. The operator API of this
+# instance, /health and the broker are never routed.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pharness-campus
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "pharness-campus.labels" . | nindent 4 }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host }}
+      secretName: {{ .Values.ingress.tlsSecretName }}
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /api/campus/
+            pathType: Prefix
+            backend:
+              service:
+                name: pharness-campus-api
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pharness-campus-ui
+                port:
+                  name: http
+{{- end }}
