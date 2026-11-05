@@ -12,6 +12,8 @@ and effect boundary before it runs.
 
 - [Campus lab session journal](campus-session-journal.md) describes the lab-session states, fencing, crash recovery, provider contract and the restore procedure for migration `0058`.
 
+- [Campus image, dependency and installer gates](campus-image-approval.md) approves lab template image digests through SBOM, vulnerability and signing evidence, enforces the digest allowlist at admission, and pins package indexes and per-session caches.
+
 - [Exact-policy gateway preflight](ASTRA-M04-GATEWAY-PREFLIGHT.md) binds protocol evidence to the selected stage policy before diagnostics or qualification.
 
 - [Minisforum Windows local-model setup](ASTRA-MINISFORUM-WINDOWS-LOCAL-MODELS.md)
