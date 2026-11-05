@@ -33,6 +33,7 @@ use thiserror::Error;
 
 mod agent_execution;
 mod campus;
+mod campus_admission;
 mod campus_journal;
 mod data_lifecycle;
 mod delivery;

@@ -23,7 +23,7 @@ impl SqliteStore {
     /// single write lock before anything is read. A read-validate-write
     /// sequence therefore cannot interleave with another writer, and a
     /// concurrent writer waits instead of failing a lock upgrade.
-    async fn begin_campus_write(&self) -> CampusResult<Transaction<'static, Sqlite>> {
+    pub(super) async fn begin_campus_write(&self) -> CampusResult<Transaction<'static, Sqlite>> {
         Ok(self.pool.begin_with("BEGIN IMMEDIATE").await?)
     }
 
@@ -73,90 +73,10 @@ impl SqliteStore {
         &self,
         request: CreateCampusLabSession,
     ) -> CampusResult<(StoredCampusLabSession, bool)> {
-        if request.session_id.is_empty() || request.actor.trim().is_empty() {
-            return Err(CampusJournalError::Invalid(
-                "a lab session needs an id and an actor".into(),
-            ));
-        }
-        if request.expires_at <= request.now {
-            return Err(CampusJournalError::Invalid(
-                "a lab session must expire in the future".into(),
-            ));
-        }
         let mut tx = self.begin_campus_write().await?;
-        let known_identity: Option<i64> = sqlx::query_scalar(
-            "SELECT 1 FROM campus_identities WHERE tenant_id = ?1 AND issuer = ?2 AND subject = ?3",
-        )
-        .bind(&request.tenant_id)
-        .bind(&request.issuer)
-        .bind(&request.subject)
-        .fetch_optional(&mut *tx)
-        .await?;
-        if known_identity.is_none() {
-            return Err(CampusJournalError::Invalid(
-                "the student has no Campus identity in this tenant".into(),
-            ));
-        }
-        let created = sqlx::query(
-            "INSERT INTO campus_sessions_journal (
-               session_id, tenant_id, course_id, issuer, subject,
-               profile_id, profile_version, profile_hash,
-               created_by, created_at, updated_at, expires_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10, ?11)
-             ON CONFLICT (session_id) DO NOTHING",
-        )
-        .bind(&request.session_id)
-        .bind(&request.tenant_id)
-        .bind(&request.course_id)
-        .bind(&request.issuer)
-        .bind(&request.subject)
-        .bind(&request.profile.id)
-        .bind(&request.profile.version)
-        .bind(&request.profile.profile_hash)
-        .bind(&request.actor)
-        .bind(request.now)
-        .bind(request.expires_at)
-        .execute(&mut *tx)
-        .await?
-        .rows_affected()
-            == 1;
-        let session = load_session(&mut tx, &request.session_id)
-            .await?
-            .ok_or_else(|| CampusJournalError::NotFound(request.session_id.clone()))?;
-        if created {
-            insert_event(
-                &mut tx,
-                NewEvent {
-                    session_id: &session.session_id,
-                    kind: "campus.session.requested",
-                    from: None,
-                    to: Some(CampusLabSessionState::Requested),
-                    generation: session.generation,
-                    op_key: None,
-                    actor: &request.actor,
-                    payload: json!({
-                        "course_id": session.course_id,
-                        "profile": session.profile(),
-                        "expires_at": session.expires_at,
-                    }),
-                    now: request.now,
-                },
-            )
-            .await?;
-        } else if session.tenant_id != request.tenant_id
-            || session.course_id != request.course_id
-            || session.issuer != request.issuer
-            || session.subject != request.subject
-            || session.profile() != request.profile
-            || session.expires_at != request.expires_at
-        {
-            return Err(CampusJournalError::Conflict(format!(
-                "lab session {} already exists with different content",
-                request.session_id
-            )));
-        }
+        let created = insert_campus_lab_session(&mut tx, &request).await?;
         tx.commit().await?;
-        Ok((session, created))
+        Ok(created)
     }
 
     pub async fn get_campus_lab_session(
@@ -177,50 +97,11 @@ impl SqliteStore {
         reason: &str,
         now: i64,
     ) -> CampusResult<StoredCampusLabSession> {
-        if actor.trim().is_empty() || reason.trim().is_empty() {
-            return Err(CampusJournalError::Invalid(
-                "a stop needs an actor and a reason".into(),
-            ));
-        }
         let mut tx = self.begin_campus_write().await?;
-        let session = load_session(&mut tx, session_id)
-            .await?
-            .ok_or_else(|| CampusJournalError::NotFound(session_id.into()))?;
-        if session.state.is_terminal() || session.desired_state == CampusLabDesiredState::Terminated
-        {
-            return Ok(session);
-        }
-        sqlx::query(
-            "UPDATE campus_sessions_journal SET desired_state = 'terminated', updated_at = ?1
-             WHERE session_id = ?2 AND generation = ?3",
-        )
-        .bind(now)
-        .bind(session_id)
-        .bind(session.generation)
-        .execute(&mut *tx)
-        .await?;
-        insert_event(
-            &mut tx,
-            NewEvent {
-                session_id,
-                kind: "campus.session.stop_requested",
-                from: Some(session.state),
-                to: None,
-                generation: session.generation,
-                op_key: None,
-                actor,
-                payload: json!({ "reason": reason }),
-                now,
-            },
-        )
-        .await?;
-        let session = load_session(&mut tx, session_id)
-            .await?
-            .ok_or_else(|| CampusJournalError::NotFound(session_id.into()))?;
+        let session = request_campus_lab_stop_in(&mut tx, session_id, actor, reason, now).await?;
         tx.commit().await?;
         Ok(session)
     }
-
     /// Record a provider observation at an exact generation. Observations do
     /// not advance the generation.
     pub async fn record_campus_lab_observation(
@@ -760,19 +641,161 @@ impl SqliteStore {
     }
 }
 
-struct NewEvent<'a> {
-    session_id: &'a str,
-    kind: &'a str,
-    from: Option<CampusLabSessionState>,
-    to: Option<CampusLabSessionState>,
-    generation: i64,
-    op_key: Option<&'a str>,
-    actor: &'a str,
-    payload: serde_json::Value,
-    now: i64,
+/// Insert a requested lab session and its first audit event inside the
+/// caller's write transaction. A duplicate with identical content returns the
+/// existing session and `false`.
+pub(super) async fn insert_campus_lab_session(
+    connection: &mut SqliteConnection,
+    request: &CreateCampusLabSession,
+) -> CampusResult<(StoredCampusLabSession, bool)> {
+    if request.session_id.is_empty() || request.actor.trim().is_empty() {
+        return Err(CampusJournalError::Invalid(
+            "a lab session needs an id and an actor".into(),
+        ));
+    }
+    if request.expires_at <= request.now {
+        return Err(CampusJournalError::Invalid(
+            "a lab session must expire in the future".into(),
+        ));
+    }
+    let known_identity: Option<i64> = sqlx::query_scalar(
+        "SELECT 1 FROM campus_identities WHERE tenant_id = ?1 AND issuer = ?2 AND subject = ?3",
+    )
+    .bind(&request.tenant_id)
+    .bind(&request.issuer)
+    .bind(&request.subject)
+    .fetch_optional(&mut *connection)
+    .await?;
+    if known_identity.is_none() {
+        return Err(CampusJournalError::Invalid(
+            "the student has no Campus identity in this tenant".into(),
+        ));
+    }
+    let created = sqlx::query(
+        "INSERT INTO campus_sessions_journal (
+           session_id, tenant_id, course_id, issuer, subject,
+           profile_id, profile_version, profile_hash,
+           created_by, created_at, updated_at, expires_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10, ?11)
+         ON CONFLICT (session_id) DO NOTHING",
+    )
+    .bind(&request.session_id)
+    .bind(&request.tenant_id)
+    .bind(&request.course_id)
+    .bind(&request.issuer)
+    .bind(&request.subject)
+    .bind(&request.profile.id)
+    .bind(&request.profile.version)
+    .bind(&request.profile.profile_hash)
+    .bind(&request.actor)
+    .bind(request.now)
+    .bind(request.expires_at)
+    .execute(&mut *connection)
+    .await?
+    .rows_affected()
+        == 1;
+    let session = load_session(connection, &request.session_id)
+        .await?
+        .ok_or_else(|| CampusJournalError::NotFound(request.session_id.clone()))?;
+    if created {
+        insert_event(
+            connection,
+            NewEvent {
+                session_id: &session.session_id,
+                kind: "campus.session.requested",
+                from: None,
+                to: Some(CampusLabSessionState::Requested),
+                generation: session.generation,
+                op_key: None,
+                actor: &request.actor,
+                payload: json!({
+                    "course_id": session.course_id,
+                    "profile": session.profile(),
+                    "expires_at": session.expires_at,
+                }),
+                now: request.now,
+            },
+        )
+        .await?;
+    } else if session.tenant_id != request.tenant_id
+        || session.course_id != request.course_id
+        || session.issuer != request.issuer
+        || session.subject != request.subject
+        || session.profile() != request.profile
+        || session.expires_at != request.expires_at
+    {
+        return Err(CampusJournalError::Conflict(format!(
+            "lab session {} already exists with different content",
+            request.session_id
+        )));
+    }
+    Ok((session, created))
 }
 
-async fn insert_event(connection: &mut SqliteConnection, event: NewEvent<'_>) -> CampusResult<i64> {
+/// Set a session's desired state to `Terminated` inside the caller's write
+/// transaction. A terminal or already stopping session is returned unchanged.
+pub(super) async fn request_campus_lab_stop_in(
+    connection: &mut SqliteConnection,
+    session_id: &str,
+    actor: &str,
+    reason: &str,
+    now: i64,
+) -> CampusResult<StoredCampusLabSession> {
+    if actor.trim().is_empty() || reason.trim().is_empty() {
+        return Err(CampusJournalError::Invalid(
+            "a stop needs an actor and a reason".into(),
+        ));
+    }
+    let session = load_session(connection, session_id)
+        .await?
+        .ok_or_else(|| CampusJournalError::NotFound(session_id.into()))?;
+    if session.state.is_terminal() || session.desired_state == CampusLabDesiredState::Terminated {
+        return Ok(session);
+    }
+    sqlx::query(
+        "UPDATE campus_sessions_journal SET desired_state = 'terminated', updated_at = ?1
+         WHERE session_id = ?2 AND generation = ?3",
+    )
+    .bind(now)
+    .bind(session_id)
+    .bind(session.generation)
+    .execute(&mut *connection)
+    .await?;
+    insert_event(
+        connection,
+        NewEvent {
+            session_id,
+            kind: "campus.session.stop_requested",
+            from: Some(session.state),
+            to: None,
+            generation: session.generation,
+            op_key: None,
+            actor,
+            payload: json!({ "reason": reason }),
+            now,
+        },
+    )
+    .await?;
+    load_session(connection, session_id)
+        .await?
+        .ok_or_else(|| CampusJournalError::NotFound(session_id.into()))
+}
+pub(super) struct NewEvent<'a> {
+    pub(super) session_id: &'a str,
+    pub(super) kind: &'a str,
+    pub(super) from: Option<CampusLabSessionState>,
+    pub(super) to: Option<CampusLabSessionState>,
+    pub(super) generation: i64,
+    pub(super) op_key: Option<&'a str>,
+    pub(super) actor: &'a str,
+    pub(super) payload: serde_json::Value,
+    pub(super) now: i64,
+}
+
+pub(super) async fn insert_event(
+    connection: &mut SqliteConnection,
+    event: NewEvent<'_>,
+) -> CampusResult<i64> {
     Ok(sqlx::query_scalar(
         "INSERT INTO campus_session_events (
            session_id, kind, from_state, to_state, generation, op_key, actor, payload_json,
@@ -997,7 +1020,7 @@ async fn stale(
     }
 }
 
-async fn load_session(
+pub(super) async fn load_session(
     connection: &mut SqliteConnection,
     session_id: &str,
 ) -> CampusResult<Option<StoredCampusLabSession>> {
@@ -1051,7 +1074,7 @@ fn parse<T>(value: &str, parser: fn(&str) -> Option<T>, what: &str) -> CampusRes
     })
 }
 
-fn session_from_row(row: &SqliteRow) -> CampusResult<StoredCampusLabSession> {
+pub(super) fn session_from_row(row: &SqliteRow) -> CampusResult<StoredCampusLabSession> {
     Ok(StoredCampusLabSession {
         session_id: row.try_get("session_id")?,
         tenant_id: row.try_get("tenant_id")?,
