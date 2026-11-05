@@ -1,0 +1,72 @@
+# Automatic RDB saves are disabled. A manual SAVE takes a snapshot; "SHUTDOWN NOSAVE" then restarts
+# the container on the same emptyDir, so Redis comes back with that older (stale) snapshot.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: campus-litellm-spike
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis
+          image: docker.io/library/redis:7.4.6-alpine@sha256:3b73847e72874be07e6657b129a94761662b79bc0f679273757d4218573b2a98
+          command: [/bin/sh, -c]
+          args:
+            - printf 'requirepass %s\nsave ""\nappendonly no\ndir /data\nport 6379\n' "$REDIS_PASSWORD" > /conf/redis.conf && exec redis-server /conf/redis.conf
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: spike-redis
+                  key: password
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: [/bin/sh, -c, 'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping | grep -q PONG']
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 100m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: conf, mountPath: /conf}
+      volumes:
+        - {name: data, emptyDir: {sizeLimit: 256Mi}}
+        - {name: conf, emptyDir: {medium: Memory, sizeLimit: 1Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: campus-litellm-spike
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379

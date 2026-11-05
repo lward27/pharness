@@ -1,0 +1,98 @@
+# litellm-non_root is the official same-release variant built to run as uid 65534, which is what
+# Pod Security "restricted" needs; litellm-database runs as root. Both are built from commit
+# b48077ff9ef6b14dd3f188d020ee7f40e2c5ebca (tag v1.108.0).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  namespace: campus-litellm-spike
+  labels:
+    app: litellm
+spec:
+  # replicas is left unset so "kubectl scale" (one versus two replicas) survives re-applying.
+  selector:
+    matchLabels:
+      app: litellm
+  template:
+    metadata:
+      labels:
+        app: litellm
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: litellm
+          image: ghcr.io/berriai/litellm-non_root:v1.108.0@sha256:08d313a00c46509c875d84f60c1448a260c478f399ade3c2abb940d358d5b724
+          args: [--port, "4000", --config, /etc/litellm/config.yaml, --num_workers, "1"]
+          env:
+            - name: LITELLM_MASTER_KEY
+              valueFrom:
+                secretKeyRef: {name: spike-litellm, key: master-key}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: {name: spike-postgres, key: database-url}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: spike-redis, key: password}
+            - {name: LITELLM_LOCAL_MODEL_COST_MAP, value: "True"}
+            - {name: LITELLM_TELEMETRY, value: "False"}
+            - {name: STORE_MODEL_IN_DB, value: "False"}
+            - {name: LITELLM_LOG, value: INFO}
+          ports:
+            - containerPort: 4000
+          readinessProbe:
+            httpGet: {path: /health/readiness, port: 4000}
+            periodSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet: {path: /health/liveliness, port: 4000}
+            periodSeconds: 5
+            failureThreshold: 60
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {cpu: "1500m", memory: 2Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - {name: config, mountPath: /etc/litellm, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: config
+          configMap:
+            name: spike-litellm-config
+        - {name: tmp, emptyDir: {sizeLimit: 512Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm
+  namespace: campus-litellm-spike
+spec:
+  selector:
+    app: litellm
+  ports:
+    - port: 4000
+      targetPort: 4000
+---
+# Headless service so the driver can address each replica directly (revocation latency per pod).
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm-pods
+  namespace: campus-litellm-spike
+spec:
+  clusterIP: None
+  selector:
+    app: litellm
+  ports:
+    - port: 4000
+      targetPort: 4000
