@@ -20,6 +20,8 @@ and effect boundary before it runs.
 
 - [Campus session Jobs in lab slots](campus-session-jobs.md) describes the Kubernetes provider, the slot guardrails, session limits, the cluster qualification script and residual risks.
 
+- [Campus teardown, expiry and orphan quarantine](campus-teardown.md) describes absolute expiry, revoke-first teardown, blocked-cleanup backoff, the orphan janitor and slot quarantine, the `campus-lab-slot-N` slot ids, the metrics and alerts with their runbook, the cluster qualification and the restore procedure for migration `0061`.
+
 - [Campus browser terminals](campus-browser-terminal.md) describes the terminal ticket and WebSocket routes, the single-use ticket design, revocation and measured close latency, limits, audit events, configuration, the terminal RBAC, ingress needs and accessibility.
 
 - [Exact-policy gateway preflight](ASTRA-M04-GATEWAY-PREFLIGHT.md) binds protocol evidence to the selected stage policy before diagnostics or qualification.

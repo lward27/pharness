@@ -77,6 +77,8 @@ this provider when `PHARNESS_CAMPUS_LAB_PROVIDER=kubernetes`
 catalog lists `lab_slot_ids` `campus-lab-slot-1..5` so the journal ids
 equal the namespace labels, and startup refuses a provider whose slot map
 differs from the catalog. Deployment: [campus-poc-deployment.md](campus-poc-deployment.md).
+Registered ids the catalog no longer lists are retired at startup
+([campus-teardown.md](campus-teardown.md#slot-ids)).
 
 ## Session limits (research profile)
 
