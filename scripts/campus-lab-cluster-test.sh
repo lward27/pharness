@@ -299,8 +299,15 @@ expect_reject "tag-only image under the committed policy" "${TEMP_ROOT}/tag.json
 expect_reject "Job with a tag-only image under the committed policy" "${TEMP_ROOT}/job-bad.json" "$PIN_MESSAGE"
 
 echo "== Scope: unlabelled namespaces are unaffected"
-labelled="$(k get namespaces -l "${REAL_LABEL}=true" -o jsonpath='{.items[*].metadata.name}')"
-[[ "$labelled" == "$NAMESPACE" ]] && pass "only ${NAMESPACE} carries ${REAL_LABEL}=true" || fail "unexpected labelled namespaces: ${labelled}"
+# The Argo-managed Campus lab slots (charts/campus-lab) carry the label too.
+labelled="$(k get namespaces -l "${REAL_LABEL}=true,!pharness.dev/campus-slot" -o jsonpath='{.items[*].metadata.name}')"
+[[ "$labelled" == "$NAMESPACE" ]] && pass "only ${NAMESPACE} and the lab slots carry ${REAL_LABEL}=true" || fail "unexpected labelled namespaces: ${labelled}"
+slots="$(k get namespaces -l "${REAL_LABEL}=true,pharness.dev/campus-slot" -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
+if [[ -z "$(grep -vxE 'campus-lab-slot-[0-9]+' <<<"$slots" | grep . || true)" ]]; then
+  pass "lab slot namespaces: $(echo $slots)"
+else
+  fail "unexpected lab slot namespaces: $(echo $slots)"
+fi
 jq --arg ns "$SCOPE_NAMESPACE" '.metadata.namespace = $ns' "${TEMP_ROOT}/tag.json" >"${TEMP_ROOT}/scope.json"
 if output="$(k create --dry-run=server -f "${TEMP_ROOT}/scope.json" -o name 2>&1)"; then
   pass "admitted (dry-run): tag-only Pod in unlabelled namespace ${SCOPE_NAMESPACE}"
