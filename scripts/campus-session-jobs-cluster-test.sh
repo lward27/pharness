@@ -80,7 +80,7 @@ cleanup() {
   fi
   echo "== Cleanup"
   for ns in "${PROBES[@]}"; do k delete namespace "$ns" --ignore-not-found --wait=false >/dev/null 2>&1; done
-  k delete validatingadmissionpolicybinding "$TEST_POLICY" "${GUARD}-probe" --ignore-not-found >/dev/null 2>&1
+  k delete validatingadmissionpolicybinding "$TEST_POLICY" "${GUARD}-probe" pharness-campus-lab-secret-guard-probe --ignore-not-found >/dev/null 2>&1
   k delete validatingadmissionpolicy "$TEST_POLICY" --ignore-not-found >/dev/null 2>&1
   k -n "$REAL_SLOT" delete configmaps,secrets,jobs.batch -l pharness.dev/campus-tenant=tenant-probe --ignore-not-found >/dev/null 2>&1
   for _ in $(seq 1 60); do
@@ -89,7 +89,7 @@ cleanup() {
     sleep 3
   done
   echo "remaining probe namespaces: ${remaining:-none}"
-  echo "remaining probe policies: $(k get validatingadmissionpolicies,validatingadmissionpolicybindings -o name 2>/dev/null | grep -E "${TEST_POLICY}|${GUARD}-probe" || echo none)"
+  echo "remaining probe policies: $(k get validatingadmissionpolicies,validatingadmissionpolicybindings -o name 2>/dev/null | grep -E "${TEST_POLICY}|-probe$" || echo none)"
   echo "evidence: ${OUT}"
 }
 trap cleanup EXIT

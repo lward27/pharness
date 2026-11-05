@@ -100,6 +100,11 @@ cleanup() {
   fi
   for ns in "${EGRESS_SLOTS[@]}" "$MATRIX_SLOT" "$BROKER_SLOT"; do
     k -n "$ns" delete jobs.batch,configmaps,secrets -l pharness.dev/campus-tenant=tenant-probe --ignore-not-found >/dev/null 2>&1
+    # A delete of a session that was never provisioned leaves a tombstone
+    # without a tenant.
+    k -n "$ns" get configmaps -l pharness.dev/campus-tenant=unknown -o json 2>/dev/null |
+      jq -r --arg run "probe-${RUN}-" '.items[] | select(.metadata.labels["pharness.dev/campus-session"] | startswith($run)) | .metadata.name' |
+      xargs -r kubectl --context "$CONTEXT" -n "$ns" delete configmap --ignore-not-found >/dev/null 2>&1
   done
   for ns in "$PROBE_SLOT" "$RACE_NS" "$OPEN_NS" "$BROKER_NS"; do k delete namespace "$ns" --ignore-not-found --wait=false >/dev/null 2>&1; done
   k delete validatingadmissionpolicybinding "${GUARD}-probe" "${SECRET_GUARD}-probe" --ignore-not-found >/dev/null 2>&1
@@ -110,7 +115,7 @@ cleanup() {
   done
   left=""
   for ns in "${EGRESS_SLOTS[@]}" "$MATRIX_SLOT" "$BROKER_SLOT"; do
-    left+="$(k -n "$ns" get jobs.batch,pods,secrets -o name 2>/dev/null | sed "s|^|${ns}/|")"
+    left+="$(k -n "$ns" get jobs.batch,pods,secrets,configmaps -o name 2>/dev/null | grep -v kube-root-ca | sed "s|^|${ns}/|")"
   done
   echo "remaining probe namespaces: ${remaining:-none}"
   echo "remaining slot workloads: ${left:-none}"
