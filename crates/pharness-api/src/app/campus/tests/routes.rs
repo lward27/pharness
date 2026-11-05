@@ -53,6 +53,37 @@ const CAMPUS_ROUTES: &[(&str, &str, CampusRouteClass)] = &[
         "/api/campus/courses/:course_id/members",
         CampusRouteClass::Session,
     ),
+    (
+        "GET",
+        "/api/campus/courses/:course_id/assignments",
+        CampusRouteClass::Session,
+    ),
+    (
+        "POST",
+        "/api/campus/courses/:course_id/assignments/:assignment_id/launch",
+        CampusRouteClass::Session,
+    ),
+    (
+        "GET",
+        "/api/campus/courses/:course_id/lab-sessions",
+        CampusRouteClass::Session,
+    ),
+    ("GET", "/api/campus/lab-sessions", CampusRouteClass::Session),
+    (
+        "GET",
+        "/api/campus/lab-sessions/:session_id",
+        CampusRouteClass::Session,
+    ),
+    (
+        "POST",
+        "/api/campus/lab-sessions/:session_id/stop",
+        CampusRouteClass::Session,
+    ),
+    (
+        "POST",
+        "/api/campus/lab-sessions/:session_id/reset",
+        CampusRouteClass::Session,
+    ),
 ];
 
 const OPERATOR_INVENTORY: &str = include_str!("../../../../tests/fixtures/app-route-inventory.tsv");

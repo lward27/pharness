@@ -175,7 +175,7 @@ async fn schema_53_history_and_foreign_keys_survive_upgrade_and_reopen() {
             .fetch_one(&reopened.pool)
             .await
             .unwrap(),
-        58
+        59
     );
     clean(reopened, &path).await;
 }

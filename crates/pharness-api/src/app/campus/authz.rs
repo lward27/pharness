@@ -10,6 +10,10 @@ pub(crate) enum CampusAction {
     ViewCourse,
     ViewRoster,
     ManageMembers,
+    /// Launch or reset one's own lab session for a course assignment.
+    LaunchLab,
+    /// See and stop any lab session of the course.
+    ManageLabs,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,6 +68,12 @@ pub(crate) fn authorize(
             CampusAction::ManageMembers,
             Standing::Instructor | Standing::Student | Standing::Outsider,
         ) => false,
+        (CampusAction::ManageLabs, Standing::TenantAdmin | Standing::Instructor) => true,
+        (CampusAction::ManageLabs, Standing::Student | Standing::Outsider) => false,
+        // A lab runs as the launching member and uses course capacity, so
+        // only members launch; administration alone does not make one a
+        // student.
+        (CampusAction::LaunchLab, _) => actor.course_role.is_some(),
     };
     if allowed {
         CampusDecision::Allow
@@ -96,7 +106,7 @@ mod tests {
 
     #[test]
     fn matrix_matches_the_documented_roles() {
-        use CampusAction::{ManageMembers, ViewCourse, ViewRoster};
+        use CampusAction::{LaunchLab, ManageLabs, ManageMembers, ViewCourse, ViewRoster};
         use CampusCourseRole::{Instructor, Student};
         use CampusDecision::{Allow, Deny};
         let cases = [
@@ -113,6 +123,15 @@ mod tests {
             (true, None, ViewRoster, Allow),
             (true, None, ManageMembers, Allow),
             (true, Some(Student), ManageMembers, Allow),
+            (false, None, LaunchLab, Deny),
+            (false, Some(Student), LaunchLab, Allow),
+            (false, Some(Instructor), LaunchLab, Allow),
+            (true, None, LaunchLab, Deny),
+            (true, Some(Student), LaunchLab, Allow),
+            (false, None, ManageLabs, Deny),
+            (false, Some(Student), ManageLabs, Deny),
+            (false, Some(Instructor), ManageLabs, Allow),
+            (true, None, ManageLabs, Allow),
         ];
         for (admin, role, action, expected) in cases {
             assert_eq!(
@@ -135,6 +154,8 @@ mod tests {
                     CampusAction::ViewCourse,
                     CampusAction::ViewRoster,
                     CampusAction::ManageMembers,
+                    CampusAction::LaunchLab,
+                    CampusAction::ManageLabs,
                 ] {
                     assert_eq!(
                         decide(admin, role, "tenant-b", action),

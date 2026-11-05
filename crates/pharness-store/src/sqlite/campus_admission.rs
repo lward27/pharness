@@ -215,11 +215,6 @@ impl SqliteStore {
         .bind(&lab.lab_id)
         .fetch_one(&mut *tx)
         .await?;
-        if course_live >= limits.max_active_per_course {
-            return Ok(CampusLabAdmission::Rejected(
-                CampusLabRejection::CourseCapacityReached,
-            ));
-        }
         let tenant_live: i64 = sqlx::query_scalar(&format!(
             "SELECT (SELECT COUNT(*) FROM campus_sessions_journal
                      WHERE tenant_id = ?1 AND state NOT IN ('terminated', 'failed'))
@@ -239,6 +234,13 @@ impl SqliteStore {
         if tenant_live >= limits.lab_slots.min(registered_slots) {
             return Ok(CampusLabAdmission::Rejected(
                 CampusLabRejection::NoSlotsAvailable,
+            ));
+        }
+        // Checked after the tenant so that a full tenant is always reported as
+        // having no slots, whichever course asks.
+        if course_live >= limits.max_active_per_course {
+            return Ok(CampusLabAdmission::Rejected(
+                CampusLabRejection::CourseCapacityReached,
             ));
         }
 
