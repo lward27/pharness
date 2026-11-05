@@ -82,7 +82,7 @@ cleanup() {
   for ns in "${PROBES[@]}"; do k delete namespace "$ns" --ignore-not-found --wait=false >/dev/null 2>&1; done
   k delete validatingadmissionpolicybinding "$TEST_POLICY" "${GUARD}-probe" --ignore-not-found >/dev/null 2>&1
   k delete validatingadmissionpolicy "$TEST_POLICY" --ignore-not-found >/dev/null 2>&1
-  k -n "$REAL_SLOT" delete configmaps,jobs.batch -l pharness.dev/campus-tenant=tenant-probe --ignore-not-found >/dev/null 2>&1
+  k -n "$REAL_SLOT" delete configmaps,secrets,jobs.batch -l pharness.dev/campus-tenant=tenant-probe --ignore-not-found >/dev/null 2>&1
   for _ in $(seq 1 60); do
     remaining="$(k get namespaces -l "${PROBE_LABEL}=true" -o name 2>/dev/null)"
     [[ -z "$remaining" ]] && break
@@ -181,8 +181,8 @@ spec:
         ${PROBE_LABEL}: "true"
 POLICY
 k apply -f "${OUT}/test-policy.yaml" >/dev/null
-# A Pod that passes Pod Security and the LimitRange, so only the two
-# policies can refuse it: one variant per policy.
+# A Pod that passes Pod Security, the LimitRange and the guard's network-gate
+# rule, so only the two policies can refuse it: one variant per policy.
 probe_pod() {
   jq -n --arg ns "$1" --arg image "$2" '{apiVersion: "v1", kind: "Pod",
     metadata: {name: "campus-binding-check", namespace: $ns, labels: {
@@ -192,6 +192,9 @@ probe_pod() {
     spec: {runtimeClassName: "gvisor", nodeSelector: {"pharness.dev/campus-lab-runtime": "gvisor"},
       restartPolicy: "Never", activeDeadlineSeconds: 60, automountServiceAccountToken: false,
       securityContext: {runAsNonRoot: true, runAsUser: 65532, seccompProfile: {type: "RuntimeDefault"}},
+      initContainers: [{name: "network-gate", image: $image,
+        securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}},
+        resources: {limits: {cpu: "100m", memory: "64Mi", "ephemeral-storage": "16Mi"}}}],
       containers: [{name: "c", image: $image,
         securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}},
         resources: {limits: {cpu: "100m", memory: "64Mi", "ephemeral-storage": "16Mi"}}}]}}'
@@ -508,9 +511,14 @@ grep -qF "forbidden" <<<"$output" && pass "controller cannot create bare Pods (R
 jq --arg slot "${REAL_SLOT}" '.metadata.namespace = $slot | .metadata.labels["pharness.dev/campus-slot"] = $slot
   | .spec.template.metadata.labels["pharness.dev/campus-slot"] = $slot' "${OUT}/base.json" >"${OUT}/case.json"
 output="$(kc create --dry-run=server -f "${OUT}/case.json" -o name 2>&1 || true)"
-grep -qF "pharness-campus-lab-image-allowlist" <<<"$output" &&
-  pass "Argo-managed slot ${REAL_SLOT} refuses the session image (empty LUC-121 allowlist)" ||
+grep -q '^job.batch/' <<<"$output" &&
+  pass "Argo-managed slot ${REAL_SLOT} admits the provider's session Job (LUC-121 allowlist, network gate, token volume)" ||
   fail "real slot: ${output}"
+jq --arg image "$ALT_IMAGE" '.spec.template.spec.containers[0].image = $image' "${OUT}/case.json" >"${OUT}/case-alt.json"
+output="$(kc create --dry-run=server -f "${OUT}/case-alt.json" -o name 2>&1 || true)"
+grep -qF "pharness-campus-lab-image-allowlist" <<<"$output" &&
+  pass "Argo-managed slot ${REAL_SLOT} refuses an unapproved image digest" ||
+  fail "real slot alternate image: ${output}"
 jq --arg ns "$REAL_SLOT" '.metadata.namespace = $ns' "${OUT}/binding-check.json" >"${OUT}/case.json"
 output="$(k create --dry-run=server -f "${OUT}/case.json" -o name 2>&1 || true)"
 grep -qF "ValidatingAdmissionPolicy" <<<"$output" && pass "Argo-managed slot rejects a Pod without a tenant label" || fail "real slot Pod: ${output}"

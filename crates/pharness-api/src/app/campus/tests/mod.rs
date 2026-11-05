@@ -5,6 +5,7 @@
 //! a test runs.
 
 mod broker;
+mod broker_live;
 mod config;
 mod flow;
 mod id_token;
