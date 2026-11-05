@@ -3,11 +3,24 @@
 //! Each session occupancy runs as one Job in an admin-precreated slot
 //! namespace (`charts/campus-lab` in the GitOps repository). The slots carry
 //! the guardrails the controller cannot change: Pod Security `restricted`, a
-//! ResourceQuota and LimitRange, a default-deny NetworkPolicy, a default
+//! ResourceQuota and LimitRange, a default-deny NetworkPolicy plus the
+//! policies that open only the broker and the Campus egress proxy, a default
 //! ServiceAccount without a token, the LUC-121 image allowlist and the
 //! independent `pharness-campus-lab-session-guard` admission policy. The
-//! controller's RBAC is limited to Jobs, Pods and ConfigMaps in the slots and
-//! read access to the qualified RuntimeClass.
+//! controller's RBAC is limited to Jobs, Pods, ConfigMaps and the session
+//! token Secrets in the slots, read access to the slot NetworkPolicies and the
+//! qualified RuntimeClass.
+//!
+//! Network: a launch is refused unless the slot's admin-owned NetworkPolicies
+//! exist ([`KubernetesCampusProviderConfig::required_network_policies`]), and
+//! a session with approved egress is refused unless every destination is an
+//! approved Campus egress route and the egress proxy is configured. Every
+//! session Pod starts behind a network gate init container that holds the
+//! workspace back until the policies are in force for the Pod.
+//!
+//! Broker token: each occupancy gets a scoped LUC-131 inference token in a
+//! Secret owned by the anchor, mounted read-only into the workspace container
+//! only. A repeated provision replaces it once it is due for rotation.
 //!
 //! Fencing: every occupancy has an anchor ConfigMap with a deterministic name.
 //! The Job is owned by the anchor. `delete` replaces the anchor with a
@@ -29,9 +42,10 @@ pub use kube_api::{
     CampusKubeKind, KubectlCampusKubeApi,
 };
 pub use template::{
-    check_launchable_in_slot, is_label_value, op_label, record_selector, render_anchor,
-    render_session_job, render_tombstone, session_command, session_resource_name, sha256_hex,
-    workload_selector, CampusJobTemplateInput, CampusSessionSizing, CampusTemplateError,
+    approved_egress_hosts, broker_token_labels, check_launchable_in_slot, is_label_value,
+    network_gate_command, op_label, record_selector, render_anchor, render_session_job,
+    render_tombstone, session_command, session_resource_name, sha256_hex, workload_selector,
+    CampusJobTemplateInput, CampusSessionSizing, CampusTemplateError, NETWORK_GATE_CONTAINER,
     SESSION_CONTAINER, SESSION_UID, TMP_MOUNT, WORKSPACE_MOUNT,
 };
 
@@ -39,8 +53,13 @@ use super::{
     CampusDeleteOutcome, CampusExecutionProvider, CampusObservation, CampusProviderError,
     CampusProvisionOutcome, CampusProvisionSpec, CampusWorkloadRef, OwnedCampusResource,
 };
+use crate::campus_broker_token::{CampusBrokerTokenError, CampusBrokerTokenIssuer};
 use crate::campus_capability::{
     check_sandbox_environment, CampusAuthoritySource, CampusAuthorityStatus, CampusBrokerClock,
+};
+use crate::campus_sandbox_pod::{
+    CampusSandboxBrokerBinding, CampusSandboxEgress, CAMPUS_BROKER_TOKEN_ROTATE_AT_ANNOTATION,
+    CAMPUS_SANDBOX_AUDIENCE,
 };
 use crate::{canonical_json_sha256, CampusProfile};
 use async_trait::async_trait;
@@ -48,6 +67,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
+use url::Url;
 
 pub const LABEL_CONTROLLER: &str = "pharness.dev/campus-controller";
 pub const LABEL_TENANT: &str = "pharness.dev/campus-tenant";
@@ -68,6 +88,10 @@ pub const ANNOTATION_EXPIRES_AT: &str = "pharness.dev/campus-expires-at";
 pub const RECORD_ANCHOR: &str = "anchor";
 pub const RECORD_WORKLOAD: &str = "workload";
 pub const RECORD_TOMBSTONE: &str = "tombstone";
+/// The session's broker token Secret.
+pub const RECORD_BROKER_TOKEN: &str = "broker-token";
+/// The slot policy every launch requires: deny all ingress and egress.
+pub const DEFAULT_DENY_NETWORK_POLICY: &str = "campus-lab-default-deny";
 
 /// Container waiting reasons that will not resolve on their own.
 const FATAL_WAITING_REASONS: &[&str] = &[
@@ -100,6 +124,29 @@ pub struct CampusRuntimeConfig {
     pub overhead: CampusRuntimeOverhead,
 }
 
+/// The Campus egress proxy, as session Pods reach it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CampusEgressProxyConfig {
+    /// `http://<address>:<port>`; an address, so the session needs no DNS.
+    pub proxy_url: Url,
+    /// The public certificate of the Campus egress CA.
+    pub ca_certificate_pem: String,
+    /// The slot NetworkPolicy that admits egress-labelled Pods to the proxy.
+    /// A session with approved egress is refused when it is missing.
+    pub network_policy: String,
+}
+
+/// The startup network gate.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CampusNetworkGateConfig {
+    /// `address:port` destinations the slot policy denies and that always
+    /// accept connections otherwise, such as the API server's ClusterIP.
+    pub canaries: Vec<String>,
+    pub timeout_seconds: u32,
+}
+
 /// Mirrors the slot ResourceQuota and LimitRange.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -130,6 +177,16 @@ pub struct KubernetesCampusProviderConfig {
     pub finished_job_ttl_seconds: u32,
     /// A Pod still terminating after this long is reported as unreachable.
     pub stuck_termination_seconds: i64,
+    /// Where session Pods reach the Campus broker. Not loopback: the broker
+    /// is never inside the Pod.
+    pub broker_url: Url,
+    /// Slot NetworkPolicies that must exist before any launch, starting with
+    /// the default deny.
+    pub required_network_policies: Vec<String>,
+    /// Without it, sessions with approved egress are refused.
+    #[serde(default)]
+    pub egress: Option<CampusEgressProxyConfig>,
+    pub network_gate: CampusNetworkGateConfig,
 }
 
 impl KubernetesCampusProviderConfig {
@@ -165,7 +222,30 @@ impl KubernetesCampusProviderConfig {
             log_storage_mib: 128,
             finished_job_ttl_seconds: 300,
             stuck_termination_seconds: 120,
+            // The pinned ClusterIP of the broker Service, so the session needs
+            // no DNS.
+            broker_url: Url::parse("http://10.43.130.31:4790/").expect("static URL"),
+            required_network_policies: vec![
+                DEFAULT_DENY_NETWORK_POLICY.into(),
+                "campus-lab-session-broker".into(),
+            ],
+            egress: None,
+            network_gate: CampusNetworkGateConfig {
+                canaries: vec!["10.43.0.1:443".into(), "1.1.1.1:443".into()],
+                timeout_seconds: 60,
+            },
         }
+    }
+
+    /// The egress proxy binding for session Pods, when one is configured.
+    pub fn sandbox_egress(&self) -> Result<Option<CampusSandboxEgress>, CampusProviderConfigError> {
+        self.egress
+            .as_ref()
+            .map(|egress| {
+                CampusSandboxEgress::new(&egress.proxy_url, &egress.ca_certificate_pem)
+                    .map_err(|error| CampusProviderConfigError(error.to_string()))
+            })
+            .transpose()
     }
 
     pub fn validate(&self) -> Result<(), CampusProviderConfigError> {
@@ -228,6 +308,40 @@ impl KubernetesCampusProviderConfig {
         if self.stuck_termination_seconds < 1 {
             return invalid("stuck_termination_seconds must be positive".into());
         }
+        let probe = crate::CampusWorkloadRef {
+            session_id: "probe".into(),
+            slot_id: "probe".into(),
+            slot_generation: 1,
+        };
+        CampusSandboxBrokerBinding::new(&self.broker_url, &probe)
+            .map_err(|error| CampusProviderConfigError(error.to_string()))?;
+        if !self
+            .required_network_policies
+            .iter()
+            .any(|name| name == DEFAULT_DENY_NETWORK_POLICY)
+            || !self
+                .required_network_policies
+                .iter()
+                .chain(self.egress.iter().map(|egress| &egress.network_policy))
+                .all(|name| is_dns_label(name))
+        {
+            return invalid(format!(
+                "required_network_policies must include {DEFAULT_DENY_NETWORK_POLICY} and name \
+                 only valid policies"
+            ));
+        }
+        self.sandbox_egress()?;
+        let gate = &self.network_gate;
+        let canaries_valid = !gate.canaries.is_empty()
+            && gate
+                .canaries
+                .iter()
+                .all(|canary| canary.parse::<std::net::SocketAddr>().is_ok());
+        if !canaries_valid || !(5..=600).contains(&gate.timeout_seconds) {
+            return invalid(
+                "the network gate needs address:port canaries and a 5 to 600 second timeout".into(),
+            );
+        }
         Ok(())
     }
 }
@@ -250,8 +364,10 @@ pub struct CampusProviderConfigError(pub String);
 /// The real execution provider: admission-controlled Jobs in lab slots.
 pub struct KubernetesCampusProvider {
     config: KubernetesCampusProviderConfig,
+    egress: Option<CampusSandboxEgress>,
     profiles: BTreeMap<(String, String), CampusProfile>,
     authority: Arc<dyn CampusAuthoritySource>,
+    issuer: Arc<dyn CampusBrokerTokenIssuer>,
     api: Arc<dyn CampusKubeApi>,
     clock: Arc<dyn CampusBrokerClock>,
 }
@@ -260,8 +376,10 @@ pub struct KubernetesCampusProvider {
 struct Prepared {
     namespace: String,
     name: String,
+    tenant_id: String,
     anchor: Value,
     job: Value,
+    binding: CampusSandboxBrokerBinding,
 }
 
 type Refusal = String;
@@ -273,10 +391,12 @@ impl KubernetesCampusProvider {
         config: KubernetesCampusProviderConfig,
         profiles: impl IntoIterator<Item = CampusProfile>,
         authority: Arc<dyn CampusAuthoritySource>,
+        issuer: Arc<dyn CampusBrokerTokenIssuer>,
         api: Arc<dyn CampusKubeApi>,
         clock: Arc<dyn CampusBrokerClock>,
     ) -> Result<Self, CampusProviderConfigError> {
         config.validate()?;
+        let egress = config.sandbox_egress()?;
         let mut catalog = BTreeMap::new();
         for profile in profiles {
             profile
@@ -291,8 +411,10 @@ impl KubernetesCampusProvider {
         }
         Ok(Self {
             config,
+            egress,
             profiles: catalog,
             authority,
+            issuer,
             api,
             clock,
         })
@@ -366,6 +488,23 @@ impl KubernetesCampusProvider {
             .and_then(|value| canonical_json_sha256(&value))
             .map_err(|error| CampusProviderError::Internal(error.to_string()))?;
         let network = authority.sandbox_network();
+        let binding = match CampusSandboxBrokerBinding::new(&self.config.broker_url, &spec.workload)
+        {
+            Ok(binding) => binding,
+            Err(error) => return Ok(Err(error.to_string())),
+        };
+        let binding = match approved_egress_hosts(&network) {
+            Ok(hosts) if hosts.is_empty() => binding,
+            Ok(hosts) => match &self.egress {
+                Some(egress) => binding.with_egress(egress.clone()),
+                None => {
+                    return Ok(Err(
+                        CampusTemplateError::ApprovedEgress(hosts.len()).to_string()
+                    ))
+                }
+            },
+            Err(error) => return Ok(Err(error.to_string())),
+        };
         let input = CampusJobTemplateInput {
             config: &self.config,
             namespace: &namespace,
@@ -377,6 +516,7 @@ impl KubernetesCampusProvider {
             profile,
             constraints,
             network: &network,
+            binding: &binding,
             effective_policy_hash: authority.policy.effective_policy_hash(),
             expires_at,
             active_deadline_seconds: deadline,
@@ -396,10 +536,210 @@ impl KubernetesCampusProvider {
             .map(|(anchor, job)| Prepared {
                 name: session_resource_name(&spec.workload),
                 namespace,
+                tenant_id: spec.tenant_id.clone(),
                 anchor,
                 job,
+                binding,
             })
             .map_err(|error| error.to_string()))
+    }
+
+    /// Refuse a launch into a slot whose admin-owned network policies are
+    /// missing: without them the session would not be isolated.
+    async fn check_network_enforcement(
+        &self,
+        namespace: &str,
+        egress: bool,
+    ) -> Result<Result<(), Refusal>, CampusProviderError> {
+        let egress_policy = self
+            .config
+            .egress
+            .as_ref()
+            .filter(|_| egress)
+            .map(|egress| &egress.network_policy);
+        for name in self
+            .config
+            .required_network_policies
+            .iter()
+            .chain(egress_policy)
+        {
+            let policy = match self
+                .api
+                .get(CampusKubeKind::NetworkPolicy, namespace, name)
+                .await
+            {
+                Ok(policy) => policy,
+                Err(CampusKubeError::Rejected(message)) => {
+                    return Ok(Err(format!(
+                        "cannot read NetworkPolicy {name} in {namespace}: {message}"
+                    )))
+                }
+                Err(error) => return Err(provider_error(error)),
+            };
+            let Some(policy) = policy else {
+                return Ok(Err(format!(
+                    "slot network enforcement is missing: NetworkPolicy {name} does not exist \
+                     in {namespace}"
+                )));
+            };
+            if name == DEFAULT_DENY_NETWORK_POLICY && !is_default_deny(&policy) {
+                return Ok(Err(format!(
+                    "NetworkPolicy {name} in {namespace} no longer denies all ingress and egress"
+                )));
+            }
+        }
+        Ok(Ok(()))
+    }
+
+    /// Deliver the occupancy's broker token: create its Secret, or replace it
+    /// once the token is due for rotation. Returns whether a new token was
+    /// written.
+    async fn ensure_broker_token(
+        &self,
+        namespace: &str,
+        op_key: &str,
+        tenant_id: &str,
+        workload: &CampusWorkloadRef,
+        binding: &CampusSandboxBrokerBinding,
+        anchor_uid: &str,
+    ) -> Result<Result<bool, Refusal>, CampusProviderError> {
+        let name = binding.secret_name();
+        let existing = self
+            .api
+            .get(CampusKubeKind::Secret, namespace, name)
+            .await
+            .map_err(provider_error)?;
+        let now = self.clock.now();
+        if let Some(existing) = &existing {
+            let owned = existing
+                .pointer("/metadata/ownerReferences/0/uid")
+                .and_then(Value::as_str)
+                == Some(anchor_uid);
+            if !owned || workload_of(existing).as_ref() != Some(workload) {
+                return Ok(Err(
+                    "a Secret that is not this occupancy's holds the token name".into(),
+                ));
+            }
+            let due = annotation(existing, CAMPUS_BROKER_TOKEN_ROTATE_AT_ANNOTATION)
+                .and_then(|value| value.parse::<i64>().ok())
+                .map_or(true, |rotate_at| now >= rotate_at);
+            if !due {
+                return Ok(Ok(false));
+            }
+        }
+        let token = match self.issuer.issue(workload, CAMPUS_SANDBOX_AUDIENCE).await {
+            Ok(token) => token,
+            Err(CampusBrokerTokenError::NotIssuable(reason)) => {
+                return Ok(Err(format!("no broker token can be issued: {reason}")))
+            }
+            Err(CampusBrokerTokenError::Unavailable(reason)) => {
+                return Err(CampusProviderError::Unreachable(reason))
+            }
+        };
+        let labels = match broker_token_labels(&self.config.controller, tenant_id, workload) {
+            Ok(labels) => labels,
+            Err(error) => return Ok(Err(error.to_string())),
+        };
+        let mut manifest = binding
+            .secret_manifest(namespace, &labels, &token)
+            .map_err(|error| CampusProviderError::Internal(error.to_string()))?;
+        manifest["metadata"]["annotations"][ANNOTATION_OP_KEY] = op_key.into();
+        manifest["metadata"]["ownerReferences"] = json!([{
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "name": session_resource_name(workload),
+            "uid": anchor_uid,
+            "blockOwnerDeletion": false,
+        }]);
+        let mut current = existing;
+        for _ in 0..3 {
+            let result = match &current {
+                None => self.api.create(&manifest).await,
+                Some(stored) => {
+                    let mut replacement = manifest.clone();
+                    replacement["metadata"]["resourceVersion"] = stored
+                        .pointer("/metadata/resourceVersion")
+                        .cloned()
+                        .unwrap_or(Value::Null);
+                    self.api.replace(&replacement).await
+                }
+            };
+            match result {
+                Ok(_) => return Ok(Ok(true)),
+                // A concurrent provision wrote first. This token is the newest,
+                // so replace theirs rather than keep a token the issuer may
+                // already have revoked.
+                Err(CampusKubeError::AlreadyExists(_) | CampusKubeError::Failed(_)) => {
+                    current = self
+                        .api
+                        .get(CampusKubeKind::Secret, namespace, name)
+                        .await
+                        .map_err(provider_error)?;
+                }
+                Err(CampusKubeError::Rejected(message)) => {
+                    return Ok(Err(format!(
+                        "the slot refused the broker token Secret: {message}"
+                    )))
+                }
+                Err(error) => return Err(provider_error(error)),
+            }
+        }
+        Err(CampusProviderError::Internal(
+            "the broker token Secret kept changing".into(),
+        ))
+    }
+
+    /// Rotate a running occupancy's broker token when it is due. Returns
+    /// whether a new token was delivered. The kubelet refreshes the mounted
+    /// file in place; the Pod reads it on every request.
+    pub async fn rotate_broker_token(
+        &self,
+        workload: &CampusWorkloadRef,
+    ) -> Result<bool, CampusProviderError> {
+        let namespace = self
+            .namespace(workload)
+            .map_err(CampusProviderError::Internal)?;
+        let name = session_resource_name(workload);
+        let anchor = self
+            .api
+            .get(CampusKubeKind::ConfigMap, namespace, &name)
+            .await
+            .map_err(provider_error)?
+            .filter(|anchor| anchor_state(anchor) == Some("active"))
+            .ok_or_else(|| CampusProviderError::Internal("the occupancy is not active".into()))?;
+        let job = self
+            .api
+            .get(CampusKubeKind::Job, namespace, &name)
+            .await
+            .map_err(provider_error)?
+            .ok_or_else(|| CampusProviderError::Internal("the occupancy has no Job".into()))?;
+        let (Some(anchor_uid), Some(tenant_id), Some(op_key)) = (
+            anchor.pointer("/metadata/uid").and_then(Value::as_str),
+            label(&anchor, LABEL_TENANT),
+            annotation(&anchor, ANNOTATION_OP_KEY),
+        ) else {
+            return Err(CampusProviderError::Internal(
+                "the anchor has no uid or tenant".into(),
+            ));
+        };
+        let binding = CampusSandboxBrokerBinding::new(&self.config.broker_url, workload)
+            .map_err(|error| CampusProviderError::Internal(error.to_string()))?;
+        let has_egress = job
+            .pointer("/spec/template/metadata/labels")
+            .and_then(|labels| labels.get(crate::campus_egress::CAMPUS_EGRESS_LABEL))
+            .is_some();
+        let binding = match (&self.egress, has_egress) {
+            (Some(egress), true) => binding.with_egress(egress.clone()),
+            (None, true) => {
+                return Err(CampusProviderError::Internal(
+                    "the session has egress but no egress proxy is configured".into(),
+                ))
+            }
+            (_, false) => binding,
+        };
+        self.ensure_broker_token(namespace, op_key, tenant_id, workload, &binding, anchor_uid)
+            .await?
+            .map_err(CampusProviderError::Internal)
     }
 
     async fn check_runtime(&self) -> Result<Result<(), Refusal>, CampusProviderError> {
@@ -632,6 +972,21 @@ impl KubernetesCampusProvider {
             return Ok(CampusDeleteOutcome::InProgress);
         }
         let selector = record_selector(&self.config.controller, workload, RECORD_WORKLOAD);
+        // The token goes first: a stopped session's Pod must not keep it while
+        // it terminates.
+        let token_selector =
+            record_selector(&self.config.controller, workload, RECORD_BROKER_TOKEN);
+        for secret in self
+            .api
+            .list(CampusKubeKind::Secret, namespace, &token_selector)
+            .await?
+        {
+            if let Some(name) = object_name(&secret) {
+                self.api
+                    .delete(CampusKubeKind::Secret, namespace, name)
+                    .await?;
+            }
+        }
         for kind in [CampusKubeKind::Job, CampusKubeKind::Pod] {
             for object in self.api.list(kind, namespace, &selector).await? {
                 if object.pointer("/metadata/deletionTimestamp").is_none() {
@@ -649,7 +1004,11 @@ impl KubernetesCampusProvider {
             .api
             .list(CampusKubeKind::Pod, namespace, &selector)
             .await?;
-        if jobs.is_empty() && pods.is_empty() {
+        let secrets = self
+            .api
+            .list(CampusKubeKind::Secret, namespace, &token_selector)
+            .await?;
+        if jobs.is_empty() && pods.is_empty() && secrets.is_empty() {
             self.prune_tombstones(namespace, workload).await?;
             return Ok(CampusDeleteOutcome::Deleted);
         }
@@ -716,6 +1075,31 @@ impl KubernetesCampusProvider {
         }
         Ok(())
     }
+}
+
+/// Selects every Pod and denies all ingress and egress.
+fn is_default_deny(policy: &Value) -> bool {
+    let empty = |value: Option<&Value>| match value {
+        None | Some(Value::Null) => true,
+        Some(Value::Array(items)) => items.is_empty(),
+        Some(Value::Object(fields)) => fields.values().all(|field| match field {
+            Value::Object(map) => map.is_empty(),
+            Value::Array(items) => items.is_empty(),
+            _ => false,
+        }),
+        Some(_) => false,
+    };
+    let spec = policy.get("spec");
+    let types = spec
+        .and_then(|spec| spec.get("policyTypes"))
+        .and_then(Value::as_array)
+        .map(|types| types.iter().filter_map(Value::as_str).collect::<Vec<_>>())
+        .unwrap_or_default();
+    empty(spec.and_then(|spec| spec.get("podSelector")))
+        && types.contains(&"Ingress")
+        && types.contains(&"Egress")
+        && empty(spec.and_then(|spec| spec.get("ingress")))
+        && empty(spec.and_then(|spec| spec.get("egress")))
 }
 
 fn provider_error(error: CampusKubeError) -> CampusProviderError {
@@ -881,6 +1265,12 @@ impl CampusExecutionProvider for KubernetesCampusProvider {
         if let Err(reason) = self.check_runtime().await? {
             return rejected(reason);
         }
+        if let Err(reason) = self
+            .check_network_enforcement(&prepared.namespace, prepared.binding.egress().is_some())
+            .await?
+        {
+            return rejected(reason);
+        }
         if let Err(reason) = self.check_fences(&prepared.namespace, op_key, spec).await? {
             return rejected(reason);
         }
@@ -893,6 +1283,20 @@ impl CampusExecutionProvider for KubernetesCampusProvider {
                 "the anchor has no uid".into(),
             ));
         };
+        match self
+            .ensure_broker_token(
+                &prepared.namespace,
+                op_key,
+                &prepared.tenant_id,
+                &spec.workload,
+                &prepared.binding,
+                anchor_uid,
+            )
+            .await?
+        {
+            Ok(_) => {}
+            Err(reason) => return rejected(reason),
+        }
         let mut job = prepared.job.clone();
         job["metadata"]["ownerReferences"] = json!([{
             "apiVersion": "v1",
@@ -998,7 +1402,8 @@ impl CampusExecutionProvider for KubernetesCampusProvider {
     async fn list_owned(&self) -> Result<Vec<OwnedCampusResource>, CampusProviderError> {
         let controller = &self.config.controller;
         let selector = format!(
-            "{LABEL_CONTROLLER}={controller},{LABEL_RECORD} in ({RECORD_ANCHOR},{RECORD_WORKLOAD})"
+            "{LABEL_CONTROLLER}={controller},{LABEL_RECORD} in \
+             ({RECORD_ANCHOR},{RECORD_WORKLOAD},{RECORD_BROKER_TOKEN})"
         );
         let mut owned = Vec::new();
         for namespace in self.config.slots.values() {
@@ -1006,6 +1411,7 @@ impl CampusExecutionProvider for KubernetesCampusProvider {
                 (CampusKubeKind::Job, "job"),
                 (CampusKubeKind::Pod, "pod"),
                 (CampusKubeKind::ConfigMap, "anchor"),
+                (CampusKubeKind::Secret, "broker-token"),
             ] {
                 let objects = self
                     .api

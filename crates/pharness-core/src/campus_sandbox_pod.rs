@@ -14,10 +14,14 @@
 //!   separate process outside the Pod and is reached over the network at
 //!   [`CampusSandboxBrokerBinding::broker_url`], which must not be loopback;
 //! - only literal environment values, none of them credential-shaped
-//!   ([`check_sandbox_environment`]), and no `envFrom` or `valueFrom`;
+//!   ([`check_sandbox_environment`]), and no `envFrom` or `valueFrom`. The
+//!   platform variables (the broker URL and, for a session with approved
+//!   egress, the proxy and CA variables of [`CampusSandboxEgress`]) have
+//!   exactly the binding's values and appear nowhere else;
 //! - only `emptyDir`, `persistentVolumeClaim` and `configMap` volumes, plus
-//!   exactly one `secret` volume: the session's own broker token, mounted
-//!   read-only at [`CAMPUS_BROKER_TOKEN_DIR`];
+//!   exactly one `secret` volume: the session's own broker token (and the
+//!   public Campus egress CA certificate), mounted read-only at
+//!   [`CAMPUS_BROKER_TOKEN_DIR`];
 //! - no privileged containers, privilege escalation or added capabilities.
 //!
 //! [`check_campus_sandbox_pod_spec`] enforces this on the exact `PodSpec` a
@@ -42,6 +46,25 @@ pub const CAMPUS_BROKER_TOKEN_DIR: &str = "/var/run/campus-broker";
 pub const CAMPUS_BROKER_TOKEN_PATH: &str = "/var/run/campus-broker/token";
 pub const CAMPUS_BROKER_TOKEN_VOLUME: &str = "campus-broker-token";
 pub const CAMPUS_BROKER_TOKEN_SECRET_KEY: &str = "token";
+/// The public certificate of the Campus egress CA, next to the token. The
+/// egress proxy presents certificates from this CA for the approved hosts.
+pub const CAMPUS_EGRESS_CA_SECRET_KEY: &str = "egress-ca.pem";
+pub const CAMPUS_EGRESS_CA_PATH: &str = "/var/run/campus-broker/egress-ca.pem";
+/// Where HTTPS clients find the egress proxy.
+pub const CAMPUS_EGRESS_PROXY_ENV: &str = "HTTPS_PROXY";
+/// Keeps the broker off the proxy.
+pub const CAMPUS_NO_PROXY_ENV: &str = "NO_PROXY";
+/// Trust-store variables pointed at [`CAMPUS_EGRESS_CA_PATH`], for OpenSSL
+/// and curl (git), Python `ssl`, requests and pip, and Node (npm).
+pub const CAMPUS_EGRESS_CA_ENV: &[&str] = &[
+    "SSL_CERT_FILE",
+    "CURL_CA_BUNDLE",
+    "GIT_SSL_CAINFO",
+    "REQUESTS_CA_BUNDLE",
+    "PIP_CERT",
+    "NODE_EXTRA_CA_CERTS",
+];
+const MAX_CA_PEM_BYTES: usize = 16 * 1024;
 /// Annotations on the token Secret. They are not secret and let a provider
 /// decide when to rotate without keeping state.
 pub const CAMPUS_BROKER_TOKEN_ID_ANNOTATION: &str = "pharness.dev/campus-broker-token-id";
@@ -66,6 +89,7 @@ pub enum CampusPodSpecRule {
     EnvValueFrom,
     Environment,
     BrokerUrl,
+    EgressProxy,
     Privileged,
     PrivilegeEscalation,
     AddedCapabilities,
@@ -89,6 +113,7 @@ impl CampusPodSpecRule {
             Self::EnvValueFrom => "env_value_from",
             Self::Environment => "environment",
             Self::BrokerUrl => "broker_url",
+            Self::EgressProxy => "egress_proxy",
             Self::Privileged => "privileged",
             Self::PrivilegeEscalation => "privilege_escalation",
             Self::AddedCapabilities => "added_capabilities",
@@ -138,12 +163,68 @@ pub fn campus_broker_token_secret_name(workload: &CampusWorkloadRef) -> String {
     format!("campus-broker-{}", &digest[..24])
 }
 
+/// How a session with approved egress reaches the Campus egress proxy: its
+/// address and the public CA certificate the proxy's certificates chain to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CampusSandboxEgress {
+    proxy_url: String,
+    ca_certificate_pem: String,
+}
+
+impl CampusSandboxEgress {
+    /// Refuses a proxy that is not plain `http://host:port` to a network
+    /// endpoint outside the Pod, and anything but PEM certificates as the CA.
+    pub fn new(proxy_url: &Url, ca_certificate_pem: &str) -> Result<Self, CampusPodSpecViolation> {
+        let refuse = |detail: &str| Err(violation(CampusPodSpecRule::EgressProxy, detail));
+        check_network_endpoint(proxy_url, CampusPodSpecRule::EgressProxy)?;
+        if proxy_url.scheme() != "http" || !matches!(proxy_url.path(), "" | "/") {
+            return refuse("the egress proxy URL must be http://<host>:<port>");
+        }
+        let (Some(host), Some(port)) = (proxy_url.host_str(), proxy_url.port()) else {
+            return refuse("the egress proxy URL must name a host and an explicit port");
+        };
+        let pem = ca_certificate_pem.trim();
+        let blocks = pem.matches("-----BEGIN CERTIFICATE-----").count();
+        let only_certificates = blocks > 0
+            && blocks == pem.matches("-----END CERTIFICATE-----").count()
+            && pem.starts_with("-----BEGIN CERTIFICATE-----")
+            && pem.ends_with("-----END CERTIFICATE-----")
+            && pem.lines().all(|line| {
+                line == "-----BEGIN CERTIFICATE-----"
+                    || line == "-----END CERTIFICATE-----"
+                    || (!line.is_empty()
+                        && line.len() <= 76
+                        && line.bytes().all(|byte| {
+                            byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'=')
+                        }))
+            });
+        if !only_certificates || pem.len() > MAX_CA_PEM_BYTES {
+            return refuse("the egress CA must be PEM certificates only");
+        }
+        Ok(Self {
+            proxy_url: format!("http://{host}:{port}"),
+            ca_certificate_pem: format!("{pem}\n"),
+        })
+    }
+
+    /// The `HTTPS_PROXY` value: `http://<host>:<port>`.
+    pub fn proxy_url(&self) -> &str {
+        &self.proxy_url
+    }
+
+    pub fn ca_certificate_pem(&self) -> &str {
+        &self.ca_certificate_pem
+    }
+}
+
 /// What a provider gives one session Pod to reach the broker: the broker URL
-/// and the name of the Secret holding the session's inference token.
+/// and the name of the Secret holding the session's inference token, and for
+/// a session with approved egress, the egress proxy.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CampusSandboxBrokerBinding {
     broker_url: Url,
     secret_name: String,
+    egress: Option<CampusSandboxEgress>,
 }
 
 impl CampusSandboxBrokerBinding {
@@ -154,11 +235,23 @@ impl CampusSandboxBrokerBinding {
         broker_url: &Url,
         workload: &CampusWorkloadRef,
     ) -> Result<Self, CampusPodSpecViolation> {
-        check_broker_url(broker_url)?;
+        check_network_endpoint(broker_url, CampusPodSpecRule::BrokerUrl)?;
         Ok(Self {
             broker_url: broker_url.clone(),
             secret_name: campus_broker_token_secret_name(workload),
+            egress: None,
         })
+    }
+
+    /// Give the session the egress proxy. Only for a session whose effective
+    /// policy approves egress.
+    pub fn with_egress(mut self, egress: CampusSandboxEgress) -> Self {
+        self.egress = Some(egress);
+        self
+    }
+
+    pub fn egress(&self) -> Option<&CampusSandboxEgress> {
+        self.egress.as_ref()
     }
 
     pub fn broker_url(&self) -> &Url {
@@ -169,10 +262,37 @@ impl CampusSandboxBrokerBinding {
         &self.secret_name
     }
 
-    /// The container `env` entries the platform adds. They name the broker
-    /// and carry no credential.
+    /// The platform variables, by name. They name the broker, the egress
+    /// proxy and the CA file, and carry no credential.
+    pub fn platform_environment(&self) -> Vec<(&'static str, String)> {
+        let mut environment = vec![(CAMPUS_BROKER_URL_ENV, self.broker_url.to_string())];
+        if let Some(egress) = &self.egress {
+            environment.push((CAMPUS_EGRESS_PROXY_ENV, egress.proxy_url.clone()));
+            environment.push((
+                CAMPUS_NO_PROXY_ENV,
+                self.broker_url.host_str().unwrap_or_default().to_string(),
+            ));
+            for name in CAMPUS_EGRESS_CA_ENV {
+                environment.push((name, CAMPUS_EGRESS_CA_PATH.to_string()));
+            }
+        }
+        environment
+    }
+
+    /// The container `env` entries the platform adds.
     pub fn env(&self) -> Vec<Value> {
-        vec![json!({ "name": CAMPUS_BROKER_URL_ENV, "value": self.broker_url.as_str() })]
+        self.platform_environment()
+            .into_iter()
+            .map(|(name, value)| json!({ "name": name, "value": value }))
+            .collect()
+    }
+
+    fn secret_keys(&self) -> Vec<&'static str> {
+        let mut keys = vec![CAMPUS_BROKER_TOKEN_SECRET_KEY];
+        if self.egress.is_some() {
+            keys.push(CAMPUS_EGRESS_CA_SECRET_KEY);
+        }
+        keys
     }
 
     /// The Pod volume holding the token. Mode 0440 keeps it out of reach of
@@ -183,10 +303,11 @@ impl CampusSandboxBrokerBinding {
             "secret": {
                 "secretName": self.secret_name,
                 "defaultMode": 0o440,
-                "items": [{
-                    "key": CAMPUS_BROKER_TOKEN_SECRET_KEY,
-                    "path": CAMPUS_BROKER_TOKEN_SECRET_KEY,
-                }],
+                "items": self
+                    .secret_keys()
+                    .into_iter()
+                    .map(|key| json!({ "key": key, "path": key }))
+                    .collect::<Vec<_>>(),
             },
         })
     }
@@ -222,6 +343,17 @@ impl CampusSandboxBrokerBinding {
                 "the token was issued for another workload",
             ));
         }
+        let mut data = Map::new();
+        data.insert(
+            CAMPUS_BROKER_TOKEN_SECRET_KEY.into(),
+            token.secret.expose().into(),
+        );
+        if let Some(egress) = &self.egress {
+            data.insert(
+                CAMPUS_EGRESS_CA_SECRET_KEY.into(),
+                egress.ca_certificate_pem.clone().into(),
+            );
+        }
         Ok(json!({
             "apiVersion": "v1",
             "kind": "Secret",
@@ -235,25 +367,28 @@ impl CampusSandboxBrokerBinding {
                     CAMPUS_BROKER_TOKEN_ROTATE_AT_ANNOTATION: token.rotate_at().to_string(),
                 },
             },
-            "stringData": { CAMPUS_BROKER_TOKEN_SECRET_KEY: token.secret.expose() },
+            "stringData": data,
         }))
     }
 }
 
-fn check_broker_url(url: &Url) -> Result<(), CampusPodSpecViolation> {
-    let refuse = |detail: &str| Err(violation(CampusPodSpecRule::BrokerUrl, detail));
+fn check_network_endpoint(
+    url: &Url,
+    rule: CampusPodSpecRule,
+) -> Result<(), CampusPodSpecViolation> {
+    let refuse = |detail: &str| Err(violation(rule, detail));
     if !matches!(url.scheme(), "http" | "https") {
-        return refuse("the broker URL must be http or https");
+        return refuse("the URL must be http or https");
     }
     if !url.username().is_empty()
         || url.password().is_some()
         || url.query().is_some()
         || url.fragment().is_some()
     {
-        return refuse("the broker URL must not carry credentials, a query or a fragment");
+        return refuse("the URL must not carry credentials, a query or a fragment");
     }
     let local = match url.host() {
-        None => return refuse("the broker URL has no host"),
+        None => return refuse("the URL has no host"),
         Some(Host::Domain(domain)) => {
             let domain = domain.trim_end_matches('.').to_ascii_lowercase();
             domain == "localhost"
@@ -270,8 +405,8 @@ fn check_broker_url(url: &Url) -> Result<(), CampusPodSpecViolation> {
     };
     if local {
         return refuse(
-            "the broker must be a network endpoint outside the Pod, not loopback, \
-             link-local or a metadata service",
+            "the endpoint must be outside the Pod, not loopback, link-local or a \
+             metadata service",
         );
     }
     Ok(())
@@ -434,12 +569,24 @@ fn check_token_volume(
         return refuse("the token volume must not be optional".into());
     }
     let items = array(secret.get("items"), "the token volume items")?;
-    let only_token = items.iter().all(|item| {
-        item.get("key").and_then(Value::as_str) == Some(CAMPUS_BROKER_TOKEN_SECRET_KEY)
-            && item.get("path").and_then(Value::as_str) == Some(CAMPUS_BROKER_TOKEN_SECRET_KEY)
-    });
-    if !only_token {
-        return refuse("the token volume may project only the token key".into());
+    let mut projected = items
+        .iter()
+        .map(|item| {
+            let key = item.get("key").and_then(Value::as_str);
+            (key == item.get("path").and_then(Value::as_str))
+                .then_some(key)
+                .flatten()
+        })
+        .collect::<Option<Vec<_>>>()
+        .unwrap_or_default();
+    projected.sort_unstable();
+    let mut expected = binding.secret_keys();
+    expected.sort_unstable();
+    if projected != expected {
+        return refuse(format!(
+            "the token volume must project exactly {} at their own paths",
+            expected.join(" and ")
+        ));
     }
     Ok(())
 }
@@ -483,28 +630,43 @@ fn check_container(
     }
     check_sandbox_environment(environment.iter().copied())
         .map_err(|error| violation(R::Environment, format!("container {name}: {error}")))?;
-    let broker_urls = environment
-        .iter()
-        .filter(|(variable, _)| *variable == CAMPUS_BROKER_URL_ENV)
-        .map(|(_, value)| *value)
-        .collect::<Vec<_>>();
-    let expected_urls: &[&str] = if main {
-        &[binding.broker_url().as_str()]
-    } else {
-        &[]
-    };
-    if broker_urls != expected_urls {
-        return Err(violation(
-            R::BrokerUrl,
-            format!(
-                "container {name} must have {CAMPUS_BROKER_URL_ENV} exactly {}",
-                if main {
-                    "once, set to the binding's broker URL"
-                } else {
-                    "never"
-                }
-            ),
-        ));
+    let platform = binding.platform_environment();
+    let reserved = [
+        CAMPUS_BROKER_URL_ENV,
+        CAMPUS_EGRESS_PROXY_ENV,
+        CAMPUS_NO_PROXY_ENV,
+    ]
+    .into_iter()
+    .chain(CAMPUS_EGRESS_CA_ENV.iter().copied());
+    for reserved in reserved {
+        let found = environment
+            .iter()
+            .filter(|(variable, _)| *variable == reserved)
+            .map(|(_, value)| *value)
+            .collect::<Vec<_>>();
+        let expected = platform
+            .iter()
+            .filter(|(variable, _)| main && *variable == reserved)
+            .map(|(_, value)| value.as_str())
+            .collect::<Vec<_>>();
+        if found != expected {
+            let rule = if reserved == CAMPUS_BROKER_URL_ENV {
+                R::BrokerUrl
+            } else {
+                R::EgressProxy
+            };
+            return Err(violation(
+                rule,
+                format!(
+                    "container {name} must have {reserved} {}",
+                    if expected.is_empty() {
+                        "never".to_string()
+                    } else {
+                        "exactly once, with the binding's value".to_string()
+                    }
+                ),
+            ));
+        }
     }
 
     let security = match container.get("securityContext") {

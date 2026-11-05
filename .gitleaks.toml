@@ -13,3 +13,19 @@ condition = "AND"
 regexTarget = "secret"
 paths = ['''(^|/)planning/evidence/''']
 regexes = ['''^[0-9a-f]{40}$''', '''^[0-9a-f]{64}$''']
+
+[[allowlists]]
+description = "Campus sandbox Pod-spec tests feed truncated PEM private-key markers (body 'MIIB') to prove the egress CA validator rejects private keys; they are not keys."
+condition = "AND"
+regexTarget = "line"
+targetRules = ["private-key"]
+paths = ['''^crates/pharness-core/src/campus_sandbox_pod/tests\.rs$''']
+regexes = ['''MIIB\\n-----END PRIVATE KEY''']
+
+[[allowlists]]
+description = "The Campus egress probe sends a fixed WebSocket handshake nonce (Sec-WebSocket-Key) to prove the proxy refuses upgrades; it is not a credential."
+condition = "AND"
+regexTarget = "line"
+targetRules = ["generic-api-key"]
+paths = ['''^scripts/campus-egress-probe\.py$''']
+regexes = ['''Sec-WebSocket-Key''']

@@ -12,6 +12,10 @@ pub enum CampusKubeKind {
     Job,
     Pod,
     ConfigMap,
+    /// Only the session's broker token Secret.
+    Secret,
+    /// Read only: the provider checks the admin-owned slot policies exist.
+    NetworkPolicy,
     /// Cluster scoped; the namespace argument is ignored.
     RuntimeClass,
 }
@@ -22,6 +26,8 @@ impl CampusKubeKind {
             Self::Job => "jobs.batch",
             Self::Pod => "pods",
             Self::ConfigMap => "configmaps",
+            Self::Secret => "secrets",
+            Self::NetworkPolicy => "networkpolicies.networking.k8s.io",
             Self::RuntimeClass => "runtimeclasses.node.k8s.io",
         }
     }
@@ -31,6 +37,8 @@ impl CampusKubeKind {
             "Job" => Some(Self::Job),
             "Pod" => Some(Self::Pod),
             "ConfigMap" => Some(Self::ConfigMap),
+            "Secret" => Some(Self::Secret),
+            "NetworkPolicy" => Some(Self::NetworkPolicy),
             "RuntimeClass" => Some(Self::RuntimeClass),
             _ => None,
         }
@@ -74,6 +82,11 @@ pub trait CampusKubeApi: Send + Sync {
 
     /// Create the object and return it as stored, with its `uid`.
     async fn create(&self, manifest: &Value) -> Result<Value, CampusKubeError>;
+
+    /// Replace an existing object with the manifest, which must carry the
+    /// stored `resourceVersion` so a concurrent change is refused rather than
+    /// overwritten.
+    async fn replace(&self, manifest: &Value) -> Result<Value, CampusKubeError>;
 
     /// Delete one object; an absent object is not an error. Jobs are deleted
     /// with background propagation, so their Pods follow.
@@ -152,6 +165,28 @@ impl KubectlCampusKubeApi {
                 &output.stderr,
             )))
         }
+    }
+}
+
+impl KubectlCampusKubeApi {
+    /// The manifest goes on stdin, never on the command line, because a token
+    /// Secret carries the raw token.
+    async fn submit(&self, verb: &str, manifest: &Value) -> Result<Value, CampusKubeError> {
+        let body = serde_json::to_vec(manifest)
+            .map_err(|error| CampusKubeError::Failed(error.to_string()))?;
+        let stdout = self
+            .run(
+                vec![
+                    verb.into(),
+                    "-f".into(),
+                    "-".into(),
+                    "-o".into(),
+                    "json".into(),
+                ],
+                Some(body),
+            )
+            .await?;
+        parse_json(&stdout)
     }
 }
 
@@ -265,21 +300,11 @@ impl CampusKubeApi for KubectlCampusKubeApi {
     }
 
     async fn create(&self, manifest: &Value) -> Result<Value, CampusKubeError> {
-        let body = serde_json::to_vec(manifest)
-            .map_err(|error| CampusKubeError::Failed(error.to_string()))?;
-        let stdout = self
-            .run(
-                vec![
-                    "create".into(),
-                    "-f".into(),
-                    "-".into(),
-                    "-o".into(),
-                    "json".into(),
-                ],
-                Some(body),
-            )
-            .await?;
-        parse_json(&stdout)
+        self.submit("create", manifest).await
+    }
+
+    async fn replace(&self, manifest: &Value) -> Result<Value, CampusKubeError> {
+        self.submit("replace", manifest).await
     }
 
     async fn delete(
