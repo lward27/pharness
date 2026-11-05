@@ -14,17 +14,23 @@ anyhow.workspace = true
 base64.workspace = true
 async-trait.workspace = true
 hmac.workspace = true
+http-body-util.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
 pharness-config = { path = "../pharness-config" }
 pharness-core = { path = "../pharness-core" }
 pharness-fireworks = { path = "../pharness-fireworks" }
 pharness-openai-compatible = { path = "../pharness-openai-compatible" }
 pharness-runhost = { path = "../pharness-runhost" }
 reqwest.workspace = true
+rustls.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
 sha2.workspace = true
 tokio.workspace = true
+tokio-rustls.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+webpki-roots.workspace = true

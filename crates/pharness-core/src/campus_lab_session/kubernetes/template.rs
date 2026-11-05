@@ -8,10 +8,17 @@ use super::{
     KubernetesCampusProviderConfig, ANNOTATION_COURSE, ANNOTATION_EXPIRES_AT, ANNOTATION_OP_KEY,
     ANNOTATION_POLICY_HASH, ANNOTATION_PROFILE_HASH, ANNOTATION_SPEC_SHA256, LABEL_CONTROLLER,
     LABEL_GENERATION, LABEL_OP, LABEL_PROFILE, LABEL_RECORD, LABEL_SESSION, LABEL_SLOT,
-    LABEL_TENANT, RECORD_ANCHOR, RECORD_TOMBSTONE, RECORD_WORKLOAD,
+    LABEL_TENANT, RECORD_ANCHOR, RECORD_BROKER_TOKEN, RECORD_TOMBSTONE, RECORD_WORKLOAD,
 };
 use crate::campus_capability::{
     check_sandbox_environment, CampusSandboxError, CampusSandboxNetwork,
+};
+use crate::campus_egress::{
+    format_campus_egress_hosts, CAMPUS_EGRESS_HOSTS_ANNOTATION, CAMPUS_EGRESS_LABEL,
+    CAMPUS_EGRESS_LABEL_VALUE, CAMPUS_EGRESS_PORT, CAMPUS_EGRESS_ROUTES,
+};
+use crate::campus_sandbox_pod::{
+    check_campus_sandbox_pod_spec, CampusPodSpecViolation, CampusSandboxBrokerBinding,
 };
 use crate::policy::CampusEffectiveConstraints;
 use crate::{
@@ -20,12 +27,16 @@ use crate::{
 };
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
+use std::collections::BTreeSet;
 
 /// UID and GID of the unprivileged user in the approved runner images.
 pub const SESSION_UID: i64 = 65532;
 pub const WORKSPACE_MOUNT: &str = "/workspace";
 pub const TMP_MOUNT: &str = "/tmp";
 pub const SESSION_CONTAINER: &str = "workspace";
+/// Init container that holds the workspace back until the slot's network
+/// isolation is in force for the Pod.
+pub const NETWORK_GATE_CONTAINER: &str = "network-gate";
 const TERMINATION_GRACE_SECONDS: i64 = 5;
 const MIN_TMP_MIB: u32 = 16;
 const MAX_TMP_MIB: u32 = 256;
@@ -39,10 +50,14 @@ pub enum CampusTemplateError {
     #[error("profile {0} has an unqualified launch gate")]
     LaunchGate(String),
     #[error(
-        "the session network allows {0} egress destinations; lab slots are default-deny and \
-         have no admin-owned egress enforcer for approved destinations"
+        "the session network allows {0} egress destinations, but no Campus egress proxy is \
+         configured for the lab slots"
     )]
     ApprovedEgress(usize),
+    #[error("egress destination {0} is not an approved Campus egress route")]
+    UnapprovedEgress(String),
+    #[error("session pod spec refused: {0}")]
+    PodSpec(#[from] CampusPodSpecViolation),
     #[error("session environment refused: {0}")]
     Environment(#[from] CampusSandboxError),
     #[error("session envelope does not fit the lab slot: {0}")]
@@ -66,6 +81,8 @@ pub struct CampusJobTemplateInput<'a> {
     pub profile: &'a CampusProfile,
     pub constraints: &'a CampusEffectiveConstraints,
     pub network: &'a CampusSandboxNetwork,
+    /// The broker URL, token Secret and (with approved egress) the proxy.
+    pub binding: &'a CampusSandboxBrokerBinding,
     pub effective_policy_hash: &'a str,
     pub expires_at: i64,
     pub active_deadline_seconds: i64,
@@ -250,6 +267,20 @@ fn ownership_labels(
     Ok(labels)
 }
 
+/// Labels of the session's broker token Secret.
+pub fn broker_token_labels(
+    controller: &str,
+    tenant_id: &str,
+    workload: &CampusWorkloadRef,
+) -> Result<std::collections::BTreeMap<String, String>, CampusTemplateError> {
+    Ok(
+        ownership_labels(controller, tenant_id, workload, RECORD_BROKER_TOKEN)?
+            .into_iter()
+            .filter_map(|(key, value)| value.as_str().map(|value| (key, value.to_string())))
+            .collect(),
+    )
+}
+
 /// The anchor every workload resource is owned by. Deleting it lets the
 /// garbage collector remove any Job created against it, including one a
 /// stale worker creates after the delete.
@@ -344,10 +375,46 @@ fn base_environment(config: &KubernetesCampusProviderConfig) -> Vec<(String, Str
     environment
 }
 
+/// The approved egress hosts of a session network. Every destination must be
+/// an approved Campus egress route on port 443; anything else refuses the
+/// whole session rather than being dropped.
+pub fn approved_egress_hosts(
+    network: &CampusSandboxNetwork,
+) -> Result<BTreeSet<&'static str>, CampusTemplateError> {
+    if network.egress.is_empty() {
+        return Ok(BTreeSet::new());
+    }
+    if network.mode != CampusNetworkMode::ApprovedEgress {
+        return Err(CampusTemplateError::UnapprovedEgress(
+            "(network mode is denied)".into(),
+        ));
+    }
+    network
+        .egress
+        .iter()
+        .map(|destination| {
+            CAMPUS_EGRESS_ROUTES
+                .iter()
+                .find(|(host, _)| *host == destination.host)
+                .filter(|_| destination.port == CAMPUS_EGRESS_PORT)
+                .map(|(host, _)| *host)
+                .ok_or_else(|| {
+                    CampusTemplateError::UnapprovedEgress(format!(
+                        "{}:{}",
+                        destination.host, destination.port
+                    ))
+                })
+        })
+        .collect()
+}
+
 /// Refuse what the slots cannot provide, before anything is rendered.
+/// `egress_proxy` says whether the Campus egress proxy is configured; without
+/// it a session with approved egress cannot be enforced and is refused.
 pub fn check_launchable_in_slot(
     profile: &CampusProfile,
     network: &CampusSandboxNetwork,
+    egress_proxy: bool,
 ) -> Result<(), CampusTemplateError> {
     if profile.kind == CampusProfileKind::Security {
         return Err(CampusTemplateError::SecurityProfile(profile.id.clone()));
@@ -361,10 +428,67 @@ pub fn check_launchable_in_slot(
     if profile.launch_gate != CampusLaunchGate::Enabled {
         return Err(CampusTemplateError::LaunchGate(profile.id.clone()));
     }
-    if network.mode != CampusNetworkMode::Denied || !network.egress.is_empty() {
-        return Err(CampusTemplateError::ApprovedEgress(network.egress.len()));
+    let hosts = approved_egress_hosts(network)?;
+    if !hosts.is_empty() && !egress_proxy {
+        return Err(CampusTemplateError::ApprovedEgress(hosts.len()));
     }
     Ok(())
+}
+
+/// The init container's script: wait until none of the canaries (addresses
+/// the slot policy denies, such as the API server) accepts a TCP connection
+/// on two consecutive rounds, and fail the Pod if that does not happen in
+/// time. The network-policy controller programs a new Pod's rules shortly
+/// after the Pod gets its address, and a Pod is briefly unconfined until
+/// then. The probe uses whichever of python3 or node the image has; an
+/// image with neither fails closed.
+const NETWORK_GATE_SCRIPT: &str = r#"deadline=$(( $(date +%s) + $1 )); shift
+probe() {
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import socket, sys
+s = socket.socket()
+s.settimeout(1)
+try:
+    s.connect((sys.argv[1], int(sys.argv[2])))
+except Exception:
+    sys.exit(1)
+sys.exit(0)' "$1" "$2"
+  elif command -v node >/dev/null 2>&1; then
+    node -e 'const s = require("net").connect({ host: process.argv[1], port: Number(process.argv[2]), timeout: 1000 });
+s.on("connect", () => process.exit(0)); s.on("error", () => process.exit(1)); s.on("timeout", () => process.exit(1));' "$1" "$2"
+  else
+    echo "campus network gate: the image has no python3 or node to probe with" >&2
+    exit 3
+  fi
+}
+quiet=0
+while [ "$(date +%s)" -lt "$deadline" ]; do
+  open=0
+  for canary in "$@"; do
+    if probe "${canary%:*}" "${canary##*:}"; then open=1; fi
+  done
+  if [ "$open" = 0 ]; then
+    quiet=$((quiet + 1))
+    if [ "$quiet" -ge 2 ]; then exit 0; fi
+  else
+    quiet=0
+  fi
+  sleep 1
+done
+echo "campus network gate: network isolation is not in force" >&2
+exit 1"#;
+
+/// The argv of the network gate init container.
+pub fn network_gate_command(timeout_seconds: u32, canaries: &[String]) -> Vec<String> {
+    let mut argv = vec![
+        "/bin/sh".to_string(),
+        "-c".to_string(),
+        NETWORK_GATE_SCRIPT.to_string(),
+        "campus-network-gate".to_string(),
+        timeout_seconds.to_string(),
+    ];
+    argv.extend(canaries.iter().cloned());
+    argv
 }
 
 /// Render the session Job. The environment check runs on the exact
@@ -373,7 +497,12 @@ pub fn render_session_job(
     input: &CampusJobTemplateInput<'_>,
 ) -> Result<Value, CampusTemplateError> {
     let config = input.config;
-    check_launchable_in_slot(input.profile, input.network)?;
+    let binding = input.binding;
+    check_launchable_in_slot(input.profile, input.network, binding.egress().is_some())?;
+    let egress_hosts = approved_egress_hosts(input.network)?;
+    if egress_hosts.is_empty() == binding.egress().is_some() {
+        return Err(CampusTemplateError::ApprovedEgress(egress_hosts.len()));
+    }
     let max = i64::from(crate::campus_profile::MAX_TTL_SECONDS);
     if !(1..=max).contains(&input.active_deadline_seconds) {
         return Err(CampusTemplateError::Deadline {
@@ -394,7 +523,7 @@ pub fn render_session_job(
         LABEL_PROFILE.into(),
         label_value("profile_id", &input.profile.id)?.into(),
     );
-    let annotations = json!({
+    let mut annotations = json!({
         ANNOTATION_OP_KEY: input.op_key,
         ANNOTATION_SPEC_SHA256: input.spec_sha256,
         ANNOTATION_PROFILE_HASH: input.profile.profile_hash(),
@@ -402,33 +531,56 @@ pub fn render_session_job(
         ANNOTATION_COURSE: input.course_id,
         ANNOTATION_EXPIRES_AT: input.expires_at.to_string(),
     });
+    // The label admits the Pod to the egress proxy in the slot NetworkPolicy;
+    // the proxy then allows only the annotated hosts.
+    if !egress_hosts.is_empty() {
+        labels.insert(CAMPUS_EGRESS_LABEL.into(), CAMPUS_EGRESS_LABEL_VALUE.into());
+        annotations[CAMPUS_EGRESS_HOSTS_ANNOTATION] =
+            format_campus_egress_hosts(egress_hosts.iter().copied()).into();
+    }
     let resources = json!({
         "cpu": format!("{}m", sizing.cpu_millicores),
         "memory": format!("{}Mi", sizing.memory_limit_mib),
         "ephemeral-storage": format!("{}Mi", sizing.ephemeral_storage_mib),
     });
     let environment = base_environment(config);
+    let security_context = json!({
+        "allowPrivilegeEscalation": false,
+        "privileged": false,
+        "readOnlyRootFilesystem": true,
+        "runAsNonRoot": true,
+        "capabilities": { "drop": ["ALL"] },
+    });
+    let gate = json!({
+        "name": NETWORK_GATE_CONTAINER,
+        "image": input.profile.image,
+        "imagePullPolicy": "IfNotPresent",
+        "command": network_gate_command(
+            config.network_gate.timeout_seconds,
+            &config.network_gate.canaries,
+        ),
+        "env": [{ "name": "LANG", "value": "C.UTF-8" }],
+        "securityContext": security_context,
+        "resources": { "requests": resources, "limits": resources },
+    });
+    let mut env = environment
+        .iter()
+        .map(|(name, value)| json!({ "name": name, "value": value }))
+        .collect::<Vec<_>>();
+    env.extend(binding.env());
     let container = json!({
         "name": SESSION_CONTAINER,
         "image": input.profile.image,
         "imagePullPolicy": "IfNotPresent",
         "command": session_command(sizing.pids, &config.workspace_command),
         "workingDir": WORKSPACE_MOUNT,
-        "env": environment
-            .iter()
-            .map(|(name, value)| json!({ "name": name, "value": value }))
-            .collect::<Vec<_>>(),
-        "securityContext": {
-            "allowPrivilegeEscalation": false,
-            "privileged": false,
-            "readOnlyRootFilesystem": true,
-            "runAsNonRoot": true,
-            "capabilities": { "drop": ["ALL"] },
-        },
+        "env": env,
+        "securityContext": security_context,
         "resources": { "requests": resources, "limits": resources },
         "volumeMounts": [
             { "name": "workspace", "mountPath": WORKSPACE_MOUNT },
             { "name": "tmp", "mountPath": TMP_MOUNT },
+            binding.volume_mount(),
         ],
     });
     let volumes = json!([
@@ -438,6 +590,7 @@ pub fn render_session_job(
         { "name": "tmp", "emptyDir": {
             "medium": "Memory", "sizeLimit": format!("{}Mi", sizing.tmp_mib),
         } },
+        binding.volume(),
     ]);
     let pod_spec = json!({
         "runtimeClassName": config.runtime.class_name,
@@ -458,6 +611,7 @@ pub fn render_session_job(
             "fsGroup": SESSION_UID,
             "seccompProfile": { "type": "RuntimeDefault" },
         },
+        "initContainers": [gate],
         "containers": [container],
         "volumes": volumes,
     });
@@ -483,6 +637,7 @@ pub fn render_session_job(
         },
     });
     check_rendered_environment(&job)?;
+    check_campus_sandbox_pod_spec(&job["spec"]["template"]["spec"], binding)?;
     Ok(job)
 }
 

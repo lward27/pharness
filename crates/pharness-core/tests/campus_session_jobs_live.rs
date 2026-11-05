@@ -8,14 +8,19 @@
 //! - `PHARNESS_CAMPUS_LIVE_RUN`: run id, part of every session id.
 //! - `PHARNESS_CAMPUS_LIVE_SLOTS`: comma-separated probe slot namespaces; the
 //!   slot id equals the namespace.
-//! - `PHARNESS_CAMPUS_LIVE_REAL_SLOT`: an Argo-managed slot, expected to
-//!   refuse the session image while the approved-image allowlist is empty.
+//! - `PHARNESS_CAMPUS_LIVE_REAL_SLOT`: an Argo-managed slot, which admits the
+//!   approved research image (LUC-121) behind its own network policies.
 //! - `PHARNESS_CAMPUS_LIVE_CONTROLLER_ARGS`: kubectl global arguments for the
 //!   controller identity (`--context ... --as ...`).
 //! - `PHARNESS_CAMPUS_LIVE_ADMIN_ARGS`: kubectl global arguments for an
 //!   operator, used only to show a missing RuntimeClass is refused.
 //! - `PHARNESS_CAMPUS_LIVE_OUT`: directory for the observed Jobs and Pods.
 
+use async_trait::async_trait;
+use pharness_core::campus_broker_token::{
+    CampusBrokerAudience, CampusBrokerSecret, CampusBrokerTokenError, CampusBrokerTokenIssuer,
+    CampusIssuedBrokerToken,
+};
 use pharness_core::campus_capability::{
     CampusActorRef, CampusBrokerClock, CampusSessionAuthority, InMemoryCampusAuthoritySource,
     SystemCampusBrokerClock,
@@ -82,6 +87,37 @@ fn policy(document: &str) -> EffectiveCampusPolicy {
     .expect("policy composes")
 }
 
+/// Issues well-formed tokens bound to the workload. The live provider
+/// test has no journal; the broker-backed qualification is the pharness-api
+/// `campus_broker_live` test.
+struct LiveIssuer;
+
+#[async_trait]
+impl CampusBrokerTokenIssuer for LiveIssuer {
+    async fn issue(
+        &self,
+        workload: &CampusWorkloadRef,
+        audience: CampusBrokerAudience,
+    ) -> Result<CampusIssuedBrokerToken, CampusBrokerTokenError> {
+        let mut bytes = [0_u8; 32];
+        std::io::Read::read_exact(
+            &mut std::fs::File::open("/dev/urandom").expect("urandom"),
+            &mut bytes,
+        )
+        .expect("random bytes");
+        let now = SystemCampusBrokerClock.now();
+        Ok(CampusIssuedBrokerToken {
+            token_id: format!("cbt-live-{now}"),
+            audience,
+            workload: workload.clone(),
+            lab_generation: 1,
+            issued_at: now,
+            expires_at: now + 900,
+            secret: CampusBrokerSecret::from_random_bytes(&bytes),
+        })
+    }
+}
+
 struct Live {
     run: String,
     slots: Vec<String>,
@@ -129,6 +165,7 @@ impl Live {
             config,
             [profile(RESEARCH), profile(SECURITY)],
             self.authority.clone(),
+            Arc::new(LiveIssuer),
             api,
             self.clock.clone(),
         )
@@ -264,26 +301,34 @@ async fn provision_phase(live: &Live) {
         .await
         .is_empty());
 
-    // An Argo-managed slot fails closed while the image allowlist is empty.
+    // An Argo-managed slot admits the approved research image.
     let spec = live.admit(&live.real_slot, "real", RESEARCH, 1);
     let outcome = provider
         .provision(&Live::op(&spec, "provision"), &spec)
         .await
         .expect("provision call");
-    let reason = rejected(&outcome).to_string();
     assert!(
-        reason.contains("pharness-campus-lab-image-allowlist"),
-        "{reason}"
+        !matches!(outcome, CampusProvisionOutcome::Rejected { .. }),
+        "{outcome:?}"
     );
     report(
-        "real_slot_refused",
-        json!({ "slot": live.real_slot, "reason": reason }),
+        "real_slot_admitted",
+        json!({ "slot": live.real_slot, "outcome": format!("{outcome:?}") }),
     );
-    let deleted = provider
-        .delete(&Live::op(&spec, "delete"), &spec.workload)
-        .await
-        .expect("delete call");
-    assert_eq!(deleted, CampusDeleteOutcome::Deleted);
+    let started = Instant::now();
+    loop {
+        match provider
+            .delete(&Live::op(&spec, "delete"), &spec.workload)
+            .await
+            .expect("delete call")
+        {
+            CampusDeleteOutcome::Deleted => break,
+            CampusDeleteOutcome::InProgress => {}
+            other => panic!("real slot delete: {other:?}"),
+        }
+        assert!(started.elapsed() < Duration::from_secs(120));
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
 
     // Approved sessions in every probe slot at once.
     let started = Instant::now();
@@ -368,7 +413,8 @@ async fn provision_phase(live: &Live) {
     report("idempotent_repeat", json!({ "slots": specs.len() }));
     let owned = provider.list_owned().await.expect("list owned");
     report("owned_resources", json!({ "count": owned.len() }));
-    assert_eq!(owned.len(), specs.len() * 3);
+    // Anchor, Job, Pod and broker token Secret.
+    assert_eq!(owned.len(), specs.len() * 4);
 
     // A second occupant of a busy slot is held off by the slot quota, and the
     // first occupant is then fenced as stale.

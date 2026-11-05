@@ -42,6 +42,7 @@ const CONTEXT_FETCH_RETRY_DELAY: Duration = Duration::from_secs(2);
 const DEFAULT_TEKTON_EXECUTOR_POLL_SECONDS: u64 = 5;
 const DEFAULT_ARGO_EXECUTOR_POLL_SECONDS: u64 = 5;
 
+mod campus_egress_proxy;
 mod hosted_build;
 mod production_gitops;
 mod source_merge;
@@ -54,6 +55,7 @@ async fn main() -> anyhow::Result<()> {
     match std::env::var("PHARNESS_EXECUTION_KIND").as_deref() {
         Ok("hosted_staging_gitops") => return staging_gitops::execute().await,
         Ok("hosted_production_gitops") => return production_gitops::execute().await,
+        Ok("campus_egress_proxy") => return campus_egress_proxy::execute().await,
         _ => {}
     }
 

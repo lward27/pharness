@@ -6,8 +6,9 @@
 # guardrails as the Argo-managed slots, rendered from charts/campus-lab in the
 # GitOps repository, plus a test-only image allowlist that admits only the
 # research profile digest. The Argo-managed slots carry the real LUC-121
-# allowlist, which is empty, so they refuse every session image; the probe
-# checks that too. Everything the probe creates is removed on exit.
+# allowlist, which admits the approved runner images. Network egress is
+# qualified separately by scripts/campus-egress-cluster-test.sh (LUC-130).
+# Everything the probe creates is removed on exit.
 #
 # Phases:
 #   1. preconditions and versions (Argo, RuntimeClass, guard, node, CNI)
@@ -225,7 +226,11 @@ can no create pods/ephemeralcontainers -n "$REAL_SLOT"
 can no update pods -n "$REAL_SLOT"
 can no patch jobs.batch -n "$REAL_SLOT"
 can no update configmaps -n "$REAL_SLOT"
-can no get secrets -n "$REAL_SLOT"
+# Only the session token Secrets; admission refuses any other Secret.
+can yes create secrets -n "$REAL_SLOT"
+can no watch secrets -n "$REAL_SLOT"
+can yes get networkpolicies -n "$REAL_SLOT"
+can no patch networkpolicies -n "$REAL_SLOT"
 can no create serviceaccounts/token -n "$REAL_SLOT"
 can no create jobs.batch -n default
 can no create jobs.batch -n pharness

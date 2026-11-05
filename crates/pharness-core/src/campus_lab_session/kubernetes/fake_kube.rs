@@ -16,6 +16,7 @@ pub struct FakeKubeState {
     next_uid: u64,
     /// Every create attempt, in order, as `Kind/namespace/name`.
     pub creates: Vec<String>,
+    pub replaces: Vec<String>,
     pub unreachable: bool,
     /// Refuse creates of this kind as admission would.
     pub reject_kind: Option<(CampusKubeKind, String)>,
@@ -60,8 +61,27 @@ impl FakeKubeState {
         if object.pointer("/metadata/uid").is_none() {
             object["metadata"]["uid"] = self.uid().into();
         }
+        self.next_uid += 1;
+        object["metadata"]["resourceVersion"] = self.next_uid.to_string().into();
         self.objects.insert((kind, namespace, name), object.clone());
         object
+    }
+
+    pub fn put_slot_network_policies(&mut self, namespace: &str) {
+        self.put(json!({
+            "apiVersion": "networking.k8s.io/v1",
+            "kind": "NetworkPolicy",
+            "metadata": { "name": "campus-lab-default-deny", "namespace": namespace },
+            "spec": { "podSelector": {}, "policyTypes": ["Ingress", "Egress"] },
+        }));
+        for name in ["campus-lab-session-broker", "campus-lab-session-egress"] {
+            self.put(json!({
+                "apiVersion": "networking.k8s.io/v1",
+                "kind": "NetworkPolicy",
+                "metadata": { "name": name, "namespace": namespace },
+                "spec": { "podSelector": { "matchLabels": { "a": "b" } }, "policyTypes": ["Egress"] },
+            }));
+        }
     }
 
     pub fn tombstone_now(&mut self, namespace: &str, name: &str) {
@@ -257,7 +277,18 @@ pub struct FakeKube {
 }
 
 impl FakeKube {
+    /// A cluster with the qualified RuntimeClass and every slot's admin-owned
+    /// NetworkPolicies.
     pub fn with_runtime_class(handler: &str, pool: (&str, &str)) -> Self {
+        let fake = Self::without_network_policies(handler, pool);
+        for slot in 1..=5 {
+            fake.state()
+                .put_slot_network_policies(&format!("campus-lab-slot-{slot}"));
+        }
+        fake
+    }
+
+    pub fn without_network_policies(handler: &str, pool: (&str, &str)) -> Self {
         let fake = Self::default();
         fake.state().put(json!({
             "apiVersion": "node.k8s.io/v1",
@@ -383,6 +414,35 @@ impl CampusKubeApi for FakeKube {
             }
         }
         Ok(stored)
+    }
+
+    async fn replace(&self, manifest: &Value) -> Result<Value, CampusKubeError> {
+        let mut state = self.check()?;
+        let kind = CampusKubeKind::from_kind(manifest["kind"].as_str().unwrap_or_default())
+            .ok_or_else(|| CampusKubeError::Rejected("unknown kind".into()))?;
+        let namespace = manifest["metadata"]["namespace"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+        let name = manifest["metadata"]["name"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+        state.replaces.push(format!("{kind:?}/{namespace}/{name}"));
+        let key = (kind, namespace, name.clone());
+        let Some(stored) = state.objects.get(&key) else {
+            return Err(CampusKubeError::Failed(format!("{name} not found")));
+        };
+        if stored.pointer("/metadata/resourceVersion")
+            != manifest.pointer("/metadata/resourceVersion")
+        {
+            return Err(CampusKubeError::Failed(format!(
+                "Operation cannot be fulfilled on {name}: the object has been modified (Conflict)"
+            )));
+        }
+        let mut replacement = manifest.clone();
+        replacement["metadata"]["uid"] = stored["metadata"]["uid"].clone();
+        Ok(state.put(replacement))
     }
 
     async fn delete(

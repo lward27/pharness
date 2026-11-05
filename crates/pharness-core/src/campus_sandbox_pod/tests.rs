@@ -432,3 +432,123 @@ fn the_secret_manifest_carries_only_an_inference_token_for_its_workload() {
         .secret_manifest("campus-slot-01", &labels, &stale)
         .is_err());
 }
+
+const CA: &str =
+    "-----BEGIN CERTIFICATE-----\nMIIBszCCAVmgAwIBAgIUY2FtcHVz\n-----END CERTIFICATE-----";
+
+fn egress_binding() -> CampusSandboxBrokerBinding {
+    let egress =
+        CampusSandboxEgress::new(&Url::parse("http://10.43.130.30:3128").unwrap(), CA).unwrap();
+    binding().with_egress(egress)
+}
+
+fn with_binding(binding: &CampusSandboxBrokerBinding) -> Value {
+    let mut spec = compliant();
+    let mut env = binding.env();
+    env.push(json!({ "name": "HOME", "value": "/workspace" }));
+    spec["containers"][0]["env"] = Value::Array(env);
+    let volumes = spec["volumes"].as_array_mut().unwrap();
+    *volumes.last_mut().unwrap() = binding.volume();
+    spec
+}
+
+#[test]
+fn an_egress_session_gets_exactly_the_proxy_and_ca_variables() {
+    let binding = egress_binding();
+    let spec = with_binding(&binding);
+    check_campus_sandbox_pod_spec(&spec, &binding).unwrap();
+    let environment = binding.platform_environment();
+    assert!(environment.contains(&(CAMPUS_EGRESS_PROXY_ENV, "http://10.43.130.30:3128".into())));
+    assert!(environment.contains(&(
+        CAMPUS_NO_PROXY_ENV,
+        "pharness-campus-broker.pharness.svc".into()
+    )));
+    assert_eq!(
+        binding.volume()["secret"]["items"],
+        json!([
+            { "key": "token", "path": "token" },
+            { "key": "egress-ca.pem", "path": "egress-ca.pem" },
+        ])
+    );
+    // The egress spec does not fit a session without egress, and the
+    // other way round: the proxy variables and the CA key belong to the
+    // binding, not to the spec.
+    assert!(check_campus_sandbox_pod_spec(&spec, &super::tests::binding()).is_err());
+    assert!(check_campus_sandbox_pod_spec(&compliant(), &binding).is_err());
+
+    for (name, value) in [
+        (CAMPUS_EGRESS_PROXY_ENV, "http://attacker.example:3128"),
+        ("SSL_CERT_FILE", "/workspace/my-ca.pem"),
+        (CAMPUS_NO_PROXY_ENV, "*"),
+    ] {
+        let mut spec = with_binding(&binding);
+        for entry in spec["containers"][0]["env"].as_array_mut().unwrap() {
+            if entry["name"] == name {
+                entry["value"] = value.into();
+            }
+        }
+        let error = check_campus_sandbox_pod_spec(&spec, &binding).unwrap_err();
+        assert_eq!(error.rule, CampusPodSpecRule::EgressProxy, "{name}");
+    }
+    // Neither may an init container see the proxy.
+    let mut spec = with_binding(&binding);
+    spec["initContainers"][0]["env"] =
+        json!([{ "name": "HTTPS_PROXY", "value": "http://10.43.130.30:3128" }]);
+    assert_eq!(
+        check_campus_sandbox_pod_spec(&spec, &binding)
+            .unwrap_err()
+            .rule,
+        CampusPodSpecRule::EgressProxy
+    );
+}
+
+#[test]
+fn the_egress_ca_is_public_certificates_and_the_proxy_a_network_endpoint() {
+    let proxy = Url::parse("http://10.43.130.30:3128").unwrap();
+    assert!(CampusSandboxEgress::new(&proxy, CA).is_ok());
+    for bad in [
+        "",
+        "-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----",
+        "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----",
+        "-----BEGIN CERTIFICATE-----\nMI IB\n-----END CERTIFICATE-----",
+    ] {
+        assert!(CampusSandboxEgress::new(&proxy, bad).is_err(), "{bad:?}");
+    }
+    for url in [
+        "http://127.0.0.1:3128",
+        "http://[::1]:3128",
+        "http://169.254.169.254:80",
+        "http://10.43.130.30",
+        "https://10.43.130.30:3128",
+        "http://10.43.130.30:3128/path",
+        "http://u:p@10.43.130.30:3128",
+    ] {
+        assert!(
+            CampusSandboxEgress::new(&Url::parse(url).unwrap(), CA).is_err(),
+            "{url}"
+        );
+    }
+}
+
+#[test]
+fn the_egress_secret_carries_the_ca_next_to_the_token() {
+    let binding = egress_binding();
+    let token = CampusIssuedBrokerToken {
+        token_id: "cbt-1".into(),
+        audience: CampusBrokerAudience::Inference,
+        workload: workload(),
+        lab_generation: 1,
+        issued_at: 100,
+        expires_at: 1_000,
+        secret: CampusBrokerSecret::from_random_bytes(&[7; 32]),
+    };
+    let manifest = binding
+        .secret_manifest("slot", &BTreeMap::new(), &token)
+        .unwrap();
+    assert_eq!(manifest["stringData"]["egress-ca.pem"], format!("{CA}\n"));
+    assert_eq!(
+        manifest["stringData"].as_object().unwrap().len(),
+        2,
+        "token and CA only"
+    );
+}
