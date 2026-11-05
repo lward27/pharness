@@ -26,7 +26,7 @@ things are public:
 
 - `campus.lucas.engineering`: `/api/campus/` to Service
   `campus-poc/pharness-campus-api:4777`, `/` to the static Campus page
-  (`campus-poc/pharness-campus-ui:8080`, which serves `/campus.html` and
+  (`campus-poc/pharness-campus-ui:80`, which serves `/campus.html` and
   `/assets/` and redirects `/` to `/campus.html`). The operator API of
   this instance, `/health` and the broker are not routed.
 - `campus-idp.lucas.engineering`: the `campus` realm and Keycloak static
@@ -139,7 +139,8 @@ Keycloak and `deploy/pharness-campus-api`.
 
 - Tenant `campus-poc`, organization `org_campus_poc`, database generation
   `dbgen_campus_poc_20261105`; SQLite on PVC `pharness-campus-data`
-  (local-path, 1 Gi, `helm.sh/resource-policy: keep`). One replica,
+  (local-path, 1 Gi; kept by Helm and Argo on uninstall, sync prune and
+  Application deletion). One replica,
   `Recreate`.
 - OIDC: issuer above, client `pharness-campus` (confidential, PKCE S256),
   redirect `https://campus.lucas.engineering/api/campus/auth/callback`,

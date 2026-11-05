@@ -10,6 +10,7 @@ metadata:
   annotations:
     # The lab journal: deleting it orphans live sessions' records.
     helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 spec:
   accessModes: ["ReadWriteOnce"]
   storageClassName: {{ .Values.api.persistence.storageClass }}
