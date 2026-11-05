@@ -189,6 +189,18 @@ async fn schema(pool: &SqlitePool) -> BTreeMap<(String, String), Option<String>>
         .collect()
 }
 
+/// Upgrade to exactly schema 58, as the release that introduced 0058 did.
+/// Later migrations have their own upgrade tests.
+async fn at_schema_58(path: &Path) -> SqliteStore {
+    let pool = pool_at(path, false).await;
+    migrator_through(58).run(&pool).await.unwrap();
+    sqlx::query("PRAGMA foreign_keys = ON")
+        .execute(&pool)
+        .await
+        .unwrap();
+    SqliteStore { pool }
+}
+
 async fn latest(pool: &SqlitePool) -> i64 {
     sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations")
         .fetch_one(pool)
@@ -215,7 +227,7 @@ async fn schema_57_data_survives_0058_and_an_archive_restores_the_previous_relea
         .unwrap();
     old.pool.close().await;
 
-    let upgraded = SqliteStore::connect(&database).await.unwrap();
+    let upgraded = at_schema_58(&database).await;
     assert_eq!(latest(&upgraded.pool).await, 58);
     assert_eq!(rows(&upgraded.pool, &old_tables).await, before_rows);
     let after_schema = schema(&upgraded.pool).await;
@@ -305,7 +317,7 @@ async fn schema_57_data_survives_0058_and_an_archive_restores_the_previous_relea
     restored.close().await;
 
     // Rolling forward again from the restored archive is the same upgrade.
-    let reupgraded = SqliteStore::connect(&archive).await.unwrap();
+    let reupgraded = at_schema_58(&archive).await;
     assert_eq!(latest(&reupgraded.pool).await, 58);
     assert_eq!(rows(&reupgraded.pool, &old_tables).await, before_rows);
     reupgraded.pool.close().await;
@@ -334,7 +346,7 @@ async fn an_interrupted_0058_rolls_back_and_can_be_retried() {
     assert_eq!(latest(&old.pool).await, 57);
     old.pool.close().await;
 
-    let retried = SqliteStore::connect(&database).await.unwrap();
+    let retried = at_schema_58(&database).await;
     assert_eq!(latest(&retried.pool).await, 58);
     assert_eq!(rows(&retried.pool, &old_tables).await, before_rows);
     retried.pool.close().await;

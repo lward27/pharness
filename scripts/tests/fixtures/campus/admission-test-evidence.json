@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "description": "Test-only allowlist for the in-cluster admission and cache-isolation fixture. These entries are not approvals; the real allowlist is deploy/campus/approved-images.json.",
+  "images": [
+    {
+      "image": "registry.lucas.engineering/pharness-node-runner@sha256:c478a31d341af1d1c7a13a99236120c870d0b88d1a9b80ac59159dd1a145a7bd",
+      "status": "approved"
+    },
+    {
+      "image": "registry.lucas.engineering/pharness-python-runner@sha256:0dcdb9e74355d55c634e6adaf9643b4466557aa728130e752408d62baf2f9756",
+      "status": "approved"
+    }
+  ]
+}

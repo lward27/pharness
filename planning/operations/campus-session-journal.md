@@ -1,9 +1,10 @@
 # Campus lab session journal
 
-Status: library and tests only. Nothing in the API, worker or Helm chart
-calls it yet, and no background loop runs. Migration `0058` adds the tables,
-so a release that contains it also changes the database schema (see
-[Restore procedure](#restore-procedure)).
+Status: driven by the Campus lab API and its in-process reconciler
+([`campus-lab-admission.md`](campus-lab-admission.md), LUC-126). No real
+execution provider is wired yet, so in production nothing is launched.
+Migration `0058` adds the tables, so a release that contains it also changes
+the database schema (see [Restore procedure](#restore-procedure)).
 
 The journal is the durable local state machine for Campus lab sessions: one
 student workspace, launched under a Campus profile, in one lab slot. It is
@@ -178,9 +179,9 @@ know about. While nothing calls the journal this list is empty.
 
 ## Residual risks
 
-- No production caller: the API, quotas, real provider and background
-  reconciler are LUC-125, LUC-126 and LUC-133. Until they exist the journal
-  is exercised only by tests.
+- The API, quotas and reconciler (LUC-126) call the journal, but the real
+  provider (LUC-125) does not exist yet, so production launches are refused
+  and the journal is exercised end to end only by tests.
 - A provider call can outlive its lease. Journal writes are fenced, but the
   call itself is not; the real provider must enforce the
   no-create-after-delete rule and exact slot-generation labels
@@ -196,5 +197,7 @@ know about. While nothing calls the journal this list is empty.
   `mark_campus_lab_events_published`.
 - Journal and event rows are never deleted, and a trigger blocks event
   deletion. A future retention policy needs its own migration.
-- Absolute expiry is enforced only when a session is stepped; LUC-133 owns
-  scheduling and revocation of expired sessions.
+- Absolute expiry is enforced when a session is stepped. The LUC-126
+  reconciler steps every live session every few seconds, and the
+  journal-backed capability authority treats an expired session as revoked
+  regardless; LUC-133 owns the remaining revocation work.

@@ -1,0 +1,1 @@
+{"created":"2026-11-04T21:55:51Z","purpose":"campus-signing-key-qualification","secret":"tekton-pipelines/campus-cosign-signing","statement":"This payload carries no approval. It proves that the cluster signing Secret matches the committed public key."}

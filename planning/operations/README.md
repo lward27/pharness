@@ -12,6 +12,10 @@ and effect boundary before it runs.
 
 - [Campus lab session journal](campus-session-journal.md) describes the lab-session states, fencing, crash recovery, provider contract and the restore procedure for migration `0058`.
 
+- [Campus lab admission and session API](campus-lab-admission.md) configures the static lab catalog and slot count, lists the launch, status, stop and reset routes with their error codes, explains transactional quota admission and resets, and the restore procedure for migration `0059`.
+
+- [Campus image, dependency and installer gates](campus-image-approval.md) approves lab template image digests through SBOM, vulnerability and signing evidence, enforces the digest allowlist at admission, and pins package indexes and per-session caches.
+
 - [Campus session Jobs in lab slots](campus-session-jobs.md) describes the Kubernetes provider, the slot guardrails, session limits, the cluster qualification script and residual risks.
 
 - [Exact-policy gateway preflight](ASTRA-M04-GATEWAY-PREFLIGHT.md) binds protocol evidence to the selected stage policy before diagnostics or qualification.

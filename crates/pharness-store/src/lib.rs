@@ -2,6 +2,8 @@
 
 mod agent_execution;
 mod campus;
+mod campus_admission;
+mod campus_authority;
 mod campus_driver;
 mod campus_journal;
 mod data_lifecycle;
@@ -27,6 +29,11 @@ pub use campus::{
     CreateCampusSession, PutCampusMembership, StoredCampusIdentity, StoredCampusMembership,
     UpsertCampusIdentity,
 };
+pub use campus_admission::{
+    AdmitCampusLabLaunch, CampusLabAdmission, CampusLabLimits, CampusLabRejection,
+    CampusLabSessionRecord, StoredCampusLab,
+};
+pub use campus_authority::{CampusAssignmentPolicies, JournalCampusAuthoritySource};
 pub use campus_driver::{
     advance_campus_lab_session, retry_campus_lab_cleanup, CampusDriverContext, CampusStepOutcome,
     CENTRAL_AUTHORITY_UNAVAILABLE,
