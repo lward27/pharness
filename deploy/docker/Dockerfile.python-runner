@@ -33,7 +33,7 @@ COPY deploy/docker/install-codex.sh /usr/local/bin/install-codex
 RUN chmod 0755 /usr/local/bin/install-codex \
     && TARGETARCH="${TARGETARCH}" /usr/local/bin/install-codex /out/codex
 
-FROM python:3.11-slim@sha256:a630a63cdb314e2d138a2fca3e375e319e8568346ffafac5b980f888630ac4f1
+FROM python:3.11-slim@sha256:db20d8506e2f15b6db39b40b6015ca46bae855dec6dd326d462cfe79ae972893
 ARG PHARNESS_BUILD_REVISION=unknown
 LABEL org.opencontainers.image.source="https://github.com/lward27/pharness" \
       org.opencontainers.image.revision="${PHARNESS_BUILD_REVISION}"
@@ -44,6 +44,15 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends bubblewrap ca-certificates git \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 65532 --user-group --home-dir /workspace --no-create-home pharness
+# The base image's setuptools vendors jaraco.context 5.3.0 and wheel 0.45.1,
+# both with fixed High advisories. 80.10.2 vendors the fixed releases and stays
+# on a line that still ships pkg_resources (removed in setuptools 82).
+RUN printf '%s\n' 'setuptools==80.10.2 --hash=sha256:95b30ddfb717250edb492926c92b5221f7ef3fbcc2b07579bcd4a27da21d0173' \
+      > /tmp/setuptools-requirements.txt \
+    && pip install --no-cache-dir --no-deps --only-binary=:all: --require-hashes --root-user-action=ignore \
+      -r /tmp/setuptools-requirements.txt \
+    && rm /tmp/setuptools-requirements.txt \
+    && python -c "import importlib.metadata as m; assert m.version('setuptools') == '80.10.2'"
 COPY --from=builder /build/out/pharness-worker /usr/local/bin/pharness-worker
 COPY --from=builder /build/out/pharness-codex-host /usr/local/bin/pharness-codex-host
 COPY --from=codex /out/codex /usr/local/bin/codex
