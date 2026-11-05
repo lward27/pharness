@@ -5,12 +5,20 @@ lab template image, how that approval is enforced at admission, how
 vulnerability exceptions work, and how package installs inside a lab session
 are kept to reviewed indexes and per-session caches.
 
-Current state: **no image is approved.** Both lab runner images from release
-`8f7338c792fc88d4b2b700b45b2161108b39e0bf` were assessed and blocked by the
-vulnerability gate (details below). The admission allowlist is therefore empty,
-and any namespace labelled `pharness.dev/campus-lab=true` will reject every
-Pod. No exception has been recorded; deciding whether to accept any of these
-findings belongs to the owner, not to the tooling.
+Current state: two lab runner images are approved, both from release
+`9761707332da8f6558d5c35e50af73bbe731734b` with 0 blocking findings and no
+exceptions:
+
+- `registry.lucas.engineering/pharness-python-runner@sha256:bb5cc07a648ba4803a87aff4129cd21434b4364d098a2723b96d4952c0bb7400`
+  (Research profile)
+- `registry.lucas.engineering/pharness-node-runner@sha256:3cc3cd8dc39fc89e2cd443156a96b401d4da38caf5e0762d17f2fa2ec7345acd`
+  (Coding profile)
+
+The runner images from release `8f7338c792fc88d4b2b700b45b2161108b39e0bf`
+were blocked by the vulnerability gate and remain recorded as blocked (details
+below). Any other digest is rejected in namespaces labelled
+`pharness.dev/campus-lab=true`. No exception has been recorded; deciding
+whether to accept findings belongs to the owner, not to the tooling.
 
 ## Contract
 

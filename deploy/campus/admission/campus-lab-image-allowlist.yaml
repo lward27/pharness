@@ -10,7 +10,7 @@ metadata:
     app.kubernetes.io/component: "campus-image-admission"
   annotations:
     pharness.dev/generated-from: "deploy/campus/approved-images.json"
-    pharness.dev/allowlist-sha256: "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    pharness.dev/allowlist-sha256: "sha256:7fa8a6c220ab0f32f861d3365019a68ac2249663595d9a8c25c997fc78209bce"
 spec:
   failurePolicy: "Fail"
   matchConstraints:
@@ -52,7 +52,7 @@ spec:
           - "daemonsets"
   variables:
     - name: "allowedImages"
-      expression: "[]"
+      expression: "['registry.lucas.engineering/pharness-node-runner@sha256:3cc3cd8dc39fc89e2cd443156a96b401d4da38caf5e0762d17f2fa2ec7345acd', 'registry.lucas.engineering/pharness-python-runner@sha256:bb5cc07a648ba4803a87aff4129cd21434b4364d098a2723b96d4952c0bb7400']"
     - name: "podSpec"
       expression: "object.kind == 'Pod' ? object.spec : (object.kind == 'CronJob' ? object.spec.jobTemplate.spec.template.spec : object.spec.template.spec)"
     - name: "images"
