@@ -23,6 +23,10 @@ async fn main() -> anyhow::Result<()> {
     validate_operator_auth_configuration(bind, &operator_tokens)?;
     let campus_config = app::campus::load_campus_config_from_env()?;
     app::campus::validate_campus_startup(campus_config.as_ref(), operator_tokens.len())?;
+    let campus_labs = match &campus_config {
+        Some(campus_config) => app::campus::load_campus_labs_from_env(campus_config)?,
+        None => None,
+    };
     let db_path = config.storage.path.clone();
     let cluster_tools = config.cluster_tools();
     let policy = config.policy.clone();
@@ -112,10 +116,32 @@ async fn main() -> anyhow::Result<()> {
                 issuer = %campus_config.issuer,
                 "campus OIDC enabled"
             );
-            app::campus::CampusMount::Enabled(Box::new(
-                app::campus::CampusRuntime::production(campus_config)
-                    .context("failed to configure campus OIDC client")?,
-            ))
+            let mut runtime = app::campus::CampusRuntime::production(campus_config)
+                .context("failed to configure campus OIDC client")?;
+            if let Some(labs_config) = campus_labs {
+                let provider: Option<Arc<dyn pharness_core::CampusExecutionProvider>> =
+                    match labs_config.provider {
+                        app::campus::CampusLabProviderKind::None => None,
+                        app::campus::CampusLabProviderKind::Fake => {
+                            tracing::warn!(
+                                "campus labs use the in-memory fake provider; nothing real is launched"
+                            );
+                            Some(Arc::new(pharness_core::FakeCampusProvider::new()))
+                        }
+                    };
+                let labs = Arc::new(app::campus::CampusLabs::new(labs_config.catalog, provider));
+                labs.register_slots(&store, now)
+                    .await
+                    .context("failed to register campus lab slots")?;
+                tracing::info!(
+                    lab_slots = labs.slot_ids().len(),
+                    can_launch = labs.can_launch(),
+                    "campus lab catalog loaded"
+                );
+                runtime = runtime.with_labs(labs);
+                runtime.spawn_lab_reconciler(store.clone());
+            }
+            app::campus::CampusMount::Enabled(Box::new(runtime))
         }
     };
     let dispatcher = match config.worker.mode {

@@ -9,6 +9,9 @@ mod authz;
 mod config;
 mod error;
 mod handlers;
+mod lab_catalog;
+mod lab_handlers;
+mod labs;
 mod login_cookie;
 mod oidc;
 mod session;
@@ -19,6 +22,8 @@ mod tokens;
 mod tests;
 
 pub(crate) use config::{load_campus_config_from_env, validate_campus_startup};
+pub(crate) use lab_catalog::{load_campus_labs_from_env, CampusLabProviderKind};
+pub(crate) use labs::CampusLabs;
 pub(crate) use state::{CampusMount, CampusRuntime};
 
 use axum::body::Body;
@@ -83,6 +88,34 @@ fn enabled_router(state: CampusState) -> Router {
             get(handlers::list_members)
                 .put(handlers::put_member)
                 .delete(handlers::delete_member),
+        )
+        .route(
+            "/api/campus/courses/:course_id/assignments",
+            get(lab_handlers::list_assignments),
+        )
+        .route(
+            "/api/campus/courses/:course_id/assignments/:assignment_id/launch",
+            post(lab_handlers::launch),
+        )
+        .route(
+            "/api/campus/courses/:course_id/lab-sessions",
+            get(lab_handlers::list_course_sessions),
+        )
+        .route(
+            "/api/campus/lab-sessions",
+            get(lab_handlers::list_my_sessions),
+        )
+        .route(
+            "/api/campus/lab-sessions/:session_id",
+            get(lab_handlers::get_session),
+        )
+        .route(
+            "/api/campus/lab-sessions/:session_id/stop",
+            post(lab_handlers::stop_session),
+        )
+        .route(
+            "/api/campus/lab-sessions/:session_id/reset",
+            post(lab_handlers::reset_session),
         )
         .route_layer(from_fn_with_state(
             state.clone(),

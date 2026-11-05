@@ -1,4 +1,5 @@
 use super::config::CampusConfig;
+use super::labs::CampusLabs;
 use super::login_cookie::LoginCookieKey;
 use super::oidc::{IdTokenValidator, OidcHttp, ReqwestOidcHttp};
 use pharness_store::SqliteStore;
@@ -31,6 +32,8 @@ pub(crate) struct CampusRuntime {
     pub(crate) clock: Arc<dyn CampusClock>,
     pub(crate) rng: SystemRandom,
     pub(crate) login_cookie_key: LoginCookieKey,
+    /// Absent when no lab catalog is configured.
+    pub(crate) labs: Option<Arc<CampusLabs>>,
 }
 
 impl CampusRuntime {
@@ -53,6 +56,21 @@ impl CampusRuntime {
             clock,
             rng: SystemRandom::new(),
             login_cookie_key,
+            labs: None,
+        }
+    }
+
+    pub(crate) fn with_labs(mut self, labs: Arc<CampusLabs>) -> Self {
+        self.labs = Some(labs);
+        self
+    }
+
+    /// Start the lab reconciler on this runtime's clock. Does nothing
+    /// without a lab catalog.
+    pub(crate) fn spawn_lab_reconciler(&self, store: Arc<SqliteStore>) {
+        if let Some(labs) = &self.labs {
+            let clock = self.clock.clone();
+            labs.clone().spawn_reconciler(store, move || clock.now());
         }
     }
 }

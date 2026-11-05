@@ -340,7 +340,7 @@ fn validate_course_id(course_id: &str) -> Result<(), CampusError> {
 
 /// Resolve the caller's current standing for a course and require `action`.
 /// Roles are read from storage on every request, never from the session.
-async fn require_course_action(
+pub(crate) async fn require_course_action(
     state: &CampusState,
     principal: &CampusPrincipal,
     course_id: &str,

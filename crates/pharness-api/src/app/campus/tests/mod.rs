@@ -7,10 +7,13 @@
 mod config;
 mod flow;
 mod id_token;
+mod labs;
 mod login_cookie;
 mod routes;
 
 use super::config::CampusConfig;
+use super::lab_catalog::CampusLabCatalog;
+use super::labs::{CampusLabSweep, CampusLabs};
 use super::login_cookie::LOGIN_COOKIE_KEY_BYTES;
 use super::oidc::{IdTokenResponse, OidcHttp, OidcHttpError, TokenExchange};
 use super::state::{CampusClock, CampusMount, CampusRuntime};
@@ -23,6 +26,7 @@ use axum::Router;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use jsonwebtoken::Algorithm;
+use pharness_core::FakeCampusProvider;
 use pharness_store::SqliteStore;
 use ring::rand::{SecureRandom, SystemRandom};
 use ring::signature::{EcdsaKeyPair, KeyPair, ECDSA_P256_SHA256_FIXED_SIGNING};
@@ -265,6 +269,14 @@ impl Drop for DiskDatabase {
     }
 }
 
+fn disk_path() -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "pharness-campus-api-{}-{}.db",
+        std::process::id(),
+        uuid::Uuid::now_v7().simple()
+    ))
+}
+
 pub(super) struct Harness {
     pub(super) app: Router,
     pub(super) store: Arc<SqliteStore>,
@@ -272,6 +284,8 @@ pub(super) struct Harness {
     pub(super) clock: Arc<TestClock>,
     pub(super) key: EcKey,
     pub(super) config: CampusConfig,
+    pub(super) labs: Option<Arc<CampusLabs>>,
+    pub(super) provider: Arc<FakeCampusProvider>,
     disk: Option<DiskDatabase>,
     next_code: AtomicUsize,
 }
@@ -341,27 +355,69 @@ impl Harness {
 
     pub(super) async fn with_config(config: CampusConfig) -> Self {
         let store = SqliteStore::connect_in_memory().await.unwrap();
-        Self::build(config, store, None)
+        Self::build(config, store, None, None)
+    }
+
+    /// A harness whose labs run on a [`FakeCampusProvider`]; the reconciler
+    /// runs only when a test calls [`Self::reconcile`]. Without
+    /// `with_provider` the catalog is loaded but nothing can launch.
+    pub(super) async fn with_labs(
+        catalog: CampusLabCatalog,
+        with_provider: bool,
+        on_disk: bool,
+    ) -> Self {
+        let (store, disk) = if on_disk {
+            let path = disk_path();
+            (
+                SqliteStore::connect(&path).await.unwrap(),
+                Some(DiskDatabase(path)),
+            )
+        } else {
+            (SqliteStore::connect_in_memory().await.unwrap(), None)
+        };
+        let provider = Arc::new(FakeCampusProvider::new());
+        let labs = Arc::new(CampusLabs::new(
+            catalog,
+            with_provider
+                .then(|| provider.clone() as Arc<dyn pharness_core::CampusExecutionProvider>),
+        ));
+        labs.register_slots(&store, START).await.unwrap();
+        let mut harness = Self::build(test_config(), store, disk, Some(labs));
+        harness.provider = provider;
+        harness
+    }
+
+    /// One reconciler pass at the current test time.
+    pub(super) async fn reconcile(&self) -> CampusLabSweep {
+        self.labs
+            .as_ref()
+            .expect("reconcile needs Harness::with_labs")
+            .reconcile(&self.store, self.now())
+            .await
     }
 
     /// A harness backed by a file database so that [`Self::row_counts`]
     /// can observe every table.
     pub(super) async fn on_disk() -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "pharness-campus-api-{}-{}.db",
-            std::process::id(),
-            uuid::Uuid::now_v7().simple()
-        ));
+        let path = disk_path();
         let store = SqliteStore::connect(&path).await.unwrap();
-        Self::build(test_config(), store, Some(DiskDatabase(path)))
+        Self::build(test_config(), store, Some(DiskDatabase(path)), None)
     }
 
-    fn build(config: CampusConfig, store: SqliteStore, disk: Option<DiskDatabase>) -> Self {
+    fn build(
+        config: CampusConfig,
+        store: SqliteStore,
+        disk: Option<DiskDatabase>,
+        labs: Option<Arc<CampusLabs>>,
+    ) -> Self {
         let store = Arc::new(store);
         let key = EcKey::generate("campus-key-1");
         let idp = MockIdp::with_keys(&[key.jwk()]);
         let clock = Arc::new(TestClock(AtomicI64::new(START)));
-        let runtime = CampusRuntime::new(config.clone(), idp.clone(), clock.clone());
+        let mut runtime = CampusRuntime::new(config.clone(), idp.clone(), clock.clone());
+        if let Some(labs) = &labs {
+            runtime = runtime.with_labs(labs.clone());
+        }
         let app = full_app(store.clone(), CampusMount::Enabled(Box::new(runtime)));
         Self {
             app,
@@ -370,6 +426,8 @@ impl Harness {
             clock,
             key,
             config,
+            labs,
+            provider: Arc::new(FakeCampusProvider::new()),
             disk,
             next_code: AtomicUsize::new(1),
         }
