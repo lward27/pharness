@@ -294,6 +294,10 @@ impl CampusKubeApi for FakePods {
         Err(CampusKubeError::Rejected("create is not used".into()))
     }
 
+    async fn replace(&self, _manifest: &Value) -> Result<Value, CampusKubeError> {
+        Err(CampusKubeError::Rejected("replace is not used".into()))
+    }
+
     async fn delete(
         &self,
         _kind: CampusKubeKind,
