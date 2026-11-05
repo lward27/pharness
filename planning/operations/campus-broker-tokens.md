@@ -1,10 +1,11 @@
 # Campus broker tokens and the sandbox credential boundary
 
 Status: the token model, the journal-backed issuer, the broker listener with
-a fake inference endpoint, and the sandbox Pod-spec contract are in place
-and tested against `FakeCampusProvider` and the local journal. No real
-execution provider delivers tokens yet: the Kubernetes provider (LUC-125)
-must follow the [provider integration contract](#provider-integration-contract).
+a fake inference endpoint, and the sandbox Pod-spec contract are in place.
+The Kubernetes provider (LUC-125) follows the
+[provider integration contract](#provider-integration-contract) (LUC-130).
+It was verified live in a lab slot under gVisor
+([Verification status](#verification-status)).
 Migration `0060` adds the token table (see
 [Restore procedure](#restore-procedure)).
 
@@ -187,14 +188,35 @@ Proven by tests now (`cargo test --workspace`):
   credential-shaped values, reserved mount paths, writable or `subPath`
   token mounts, and the SDLC worker Job specs.
 
-Pending live verification after LUC-125 deploys a real provider:
+Verified live on 2026-11-05 (`scripts/campus-egress-cluster-test.sh`, phase
+11, and the ignored test `campus_broker_live`). The real Kubernetes provider
+used the journal's issuer and launched a session through the controller
+identity under gVisor:
 
-- scraping from inside a running lab Pod (`env`, `/proc/*/environ`,
-  `/var/run/secrets`, mounted files, `ps`, the browser terminal) finds only
-  the broker token;
-- the sandbox NetworkPolicy admits the broker port and nothing else of the
-  control plane, including the Kubernetes API and cloud metadata;
-- token rotation through the Secret within the kubelet sync period.
+- the mounted token authenticates its own session at the broker;
+- a scrape from inside the Pod found no broker token and no
+  credential-shaped variable in the environment, `/proc/*/environ`, process
+  arguments or file names (21 variables, 18 processes);
+- there is no service-account mount, and `/var/run/secrets` and
+  `/run/secrets` do not exist;
+- the token mount is read-only, and `token` is its only file (the egress CA
+  is added only for egress sessions);
+- rotation: a provider past `rotate_at` replaced the Secret, and the kubelet
+  changed the mounted file in place after 65 s. Both tokens stayed valid
+  during the overlap;
+- stop: the broker refused both the current and the previous token with
+  `token_revoked` on the first request after the stop (0 ms), and a later
+  rotation was refused;
+- delete removed the Job, the Pod and the token Secret in 3 s;
+- the slot NetworkPolicies admit the broker port and nothing else of the
+  control plane. The Kubernetes API, the kubelet, cloud metadata, the API's
+  operator port and DNS are unreachable
+  ([campus-egress.md](campus-egress.md#results-2026-11-05-run-035824)).
+
+Not yet verified: broker HTTP from inside the Pod to the production API
+(`10.43.130.31:4790`). The PHarness chart does not yet create the broker
+Service or enable `PHARNESS_CAMPUS_BROKER_BIND`, and the browser terminal
+does not exist yet.
 
 ## Residual risks
 

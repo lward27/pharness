@@ -1,11 +1,19 @@
 use super::fake_kube::{matches_selector, FakeKube};
 use super::*;
+use crate::campus_broker_token::{
+    CampusBrokerAudience, CampusBrokerSecret, CampusIssuedBrokerToken,
+};
 use crate::campus_capability::{
     CampusActorRef, CampusSandboxNetwork, CampusSessionAuthority, InMemoryCampusAuthoritySource,
+};
+use crate::campus_sandbox_pod::{
+    campus_broker_token_secret_name, CAMPUS_BROKER_TOKEN_DIR, CAMPUS_BROKER_TOKEN_VOLUME,
+    CAMPUS_EGRESS_CA_SECRET_KEY,
 };
 use crate::policy::{CampusPolicyLayer, CAMPUS_POLICY_LAYER_SCHEMA};
 use crate::{EffectiveCampusPolicy, SECURITY_PROFILE_QUALIFICATION};
 use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::Mutex;
 
 const RESEARCH: &str = include_str!("../../campus_profile/fixtures/research.json");
 const CODING: &str = include_str!("../../campus_profile/fixtures/coding.json");
@@ -66,10 +74,65 @@ fn lab_coding() -> Value {
     })
 }
 
+/// Issues tokens like the journal does, bound to the workload, and records
+/// them so tests can find the raw value.
+struct FakeIssuer {
+    clock: Arc<TestClock>,
+    issued: Mutex<Vec<CampusIssuedBrokerToken>>,
+    refuse: Mutex<Option<CampusBrokerTokenError>>,
+}
+
+impl FakeIssuer {
+    fn tokens(&self) -> Vec<CampusIssuedBrokerToken> {
+        self.issued.lock().expect("issuer lock").clone()
+    }
+}
+
+#[async_trait]
+impl CampusBrokerTokenIssuer for FakeIssuer {
+    async fn issue(
+        &self,
+        workload: &CampusWorkloadRef,
+        audience: CampusBrokerAudience,
+    ) -> Result<CampusIssuedBrokerToken, CampusBrokerTokenError> {
+        if let Some(error) = self.refuse.lock().expect("issuer lock").clone() {
+            return Err(error);
+        }
+        let mut issued = self.issued.lock().expect("issuer lock");
+        let index = u8::try_from(issued.len() + 1).expect("few tokens");
+        let now = self.clock.now();
+        let token = CampusIssuedBrokerToken {
+            token_id: format!("cbt-{index}"),
+            audience,
+            workload: workload.clone(),
+            lab_generation: 1,
+            issued_at: now,
+            expires_at: now + 900,
+            secret: CampusBrokerSecret::from_random_bytes(&[index; 32]),
+        };
+        issued.push(token.clone());
+        Ok(token)
+    }
+}
+
+const TEST_CA: &str =
+    "-----BEGIN CERTIFICATE-----\nMIIBszCCAVmgAwIBAgIUY2FtcHVz\n-----END CERTIFICATE-----\n";
+
+fn egress_config() -> KubernetesCampusProviderConfig {
+    let mut config = KubernetesCampusProviderConfig::m1_lab();
+    config.egress = Some(CampusEgressProxyConfig {
+        proxy_url: Url::parse("http://10.43.130.30:3128").expect("url"),
+        ca_certificate_pem: TEST_CA.into(),
+        network_policy: "campus-lab-session-egress".into(),
+    });
+    config
+}
+
 struct Harness {
     kube: Arc<FakeKube>,
     authority: Arc<InMemoryCampusAuthoritySource>,
     clock: Arc<TestClock>,
+    issuer: Arc<FakeIssuer>,
     provider: KubernetesCampusProvider,
 }
 
@@ -79,13 +142,23 @@ impl Harness {
     }
 
     fn with_kube(kube: FakeKube) -> Self {
+        Self::with(kube, KubernetesCampusProviderConfig::m1_lab())
+    }
+
+    fn with(kube: FakeKube, config: KubernetesCampusProviderConfig) -> Self {
         let kube = Arc::new(kube);
         let authority = Arc::new(InMemoryCampusAuthoritySource::default());
         let clock = Arc::new(TestClock(AtomicI64::new(START)));
+        let issuer = Arc::new(FakeIssuer {
+            clock: clock.clone(),
+            issued: Mutex::default(),
+            refuse: Mutex::default(),
+        });
         let provider = KubernetesCampusProvider::new(
-            KubernetesCampusProviderConfig::m1_lab(),
+            config,
             [profile(RESEARCH), profile(CODING), profile(SECURITY)],
             authority.clone(),
+            issuer.clone(),
             kube.clone(),
             clock.clone(),
         )
@@ -94,8 +167,15 @@ impl Harness {
             kube,
             authority,
             clock,
+            issuer,
             provider,
         }
+    }
+
+    fn secret(&self) -> Value {
+        let secrets = self.kube.state().of_kind(CampusKubeKind::Secret);
+        assert_eq!(secrets.len(), 1, "exactly one token Secret");
+        secrets[0].clone()
     }
 
     fn admit(&self, session_id: &str, policy: EffectiveCampusPolicy) {
@@ -233,7 +313,9 @@ async fn approved_research_template_runs_on_the_qualified_runtime_and_pool() {
     let volumes = pod["volumes"].as_array().expect("volumes");
     assert!(volumes
         .iter()
+        .filter(|volume| volume["name"] != CAMPUS_BROKER_TOKEN_VOLUME)
         .all(|volume| volume["emptyDir"]["medium"] == "Memory"));
+    assert_eq!(volumes.len(), 3);
     assert_eq!(volumes[0]["emptyDir"]["sizeLimit"], "768Mi");
     assert_eq!(volumes[1]["emptyDir"]["sizeLimit"], "256Mi");
     let env = container["env"].as_array().expect("env");
@@ -340,7 +422,10 @@ async fn security_profile_and_unenforceable_egress_are_refused() {
     harness.admit("session-egress", compose(CODING, json!({})));
     let spec = harness.spec("session-egress", "campus-lab-slot-2", 1);
     let reason = rejected(harness.provider.provision(OP, &spec).await.expect("call"));
-    assert!(reason.contains("egress"), "{reason}");
+    assert!(
+        reason.contains("no Campus egress proxy is configured"),
+        "{reason}"
+    );
     assert!(harness.kube.state().creates.is_empty());
 }
 
@@ -427,12 +512,18 @@ async fn authority_mismatches_are_refused_before_any_effect() {
 async fn an_unlisted_profile_version_is_not_launchable() {
     let kube = Arc::new(FakeKube::with_runtime_class("runsc", POOL));
     let authority = Arc::new(InMemoryCampusAuthoritySource::default());
+    let clock = Arc::new(TestClock(AtomicI64::new(START)));
     let provider = KubernetesCampusProvider::new(
         KubernetesCampusProviderConfig::m1_lab(),
         [profile(CODING)],
         authority.clone(),
+        Arc::new(FakeIssuer {
+            clock: clock.clone(),
+            issued: Mutex::default(),
+            refuse: Mutex::default(),
+        }),
         kube.clone(),
-        Arc::new(TestClock(AtomicI64::new(START))),
+        clock,
     )
     .expect("provider");
     let policy = compose(RESEARCH, json!({}));
@@ -787,7 +878,7 @@ async fn list_owned_reports_every_live_resource_with_its_operation() {
         .iter()
         .map(|resource| resource.kind.as_str())
         .collect::<Vec<_>>();
-    assert_eq!(kinds, ["anchor", "job", "pod"]);
+    assert_eq!(kinds, ["anchor", "broker-token", "job", "pod"]);
     assert!(owned
         .iter()
         .all(|resource| resource.workload == spec.workload && resource.op_key == OP));
@@ -800,15 +891,15 @@ fn template_refuses_what_the_slots_cannot_provide() {
         mode: crate::CampusNetworkMode::Denied,
         egress: BTreeSet::new(),
     };
-    assert_eq!(check_launchable_in_slot(&research, &denied), Ok(()));
+    assert_eq!(check_launchable_in_slot(&research, &denied, false), Ok(()));
     assert!(matches!(
-        check_launchable_in_slot(&profile(SECURITY), &denied),
+        check_launchable_in_slot(&profile(SECURITY), &denied, true),
         Err(CampusTemplateError::SecurityProfile(_))
     ));
     let mut runc = research.clone();
     runc.isolation = crate::CampusIsolation::HardwareIsolated;
     assert!(matches!(
-        check_launchable_in_slot(&runc, &denied),
+        check_launchable_in_slot(&runc, &denied, true),
         Err(CampusTemplateError::Isolation(..))
     ));
     let egress = CampusSandboxNetwork {
@@ -816,9 +907,47 @@ fn template_refuses_what_the_slots_cannot_provide() {
         egress: profile(CODING).network.egress.iter().cloned().collect(),
     };
     assert!(matches!(
-        check_launchable_in_slot(&research, &egress),
+        check_launchable_in_slot(&research, &egress, false),
         Err(CampusTemplateError::ApprovedEgress(5))
     ));
+    assert_eq!(check_launchable_in_slot(&research, &egress, true), Ok(()));
+    assert_eq!(
+        approved_egress_hosts(&egress).expect("approved"),
+        BTreeSet::from([
+            "codeload.github.com",
+            "files.pythonhosted.org",
+            "github.com",
+            "pypi.org",
+            "registry.npmjs.org",
+        ])
+    );
+    // Anything outside the approved routes refuses the whole session, even
+    // with the proxy configured.
+    for (host, port) in [
+        ("example.com", 443),
+        ("pypi.org", 80),
+        ("PYPI.ORG", 443),
+        ("pypi.org.", 443),
+        ("140.82.112.3", 443),
+        ("169.254.169.254", 443),
+        ("kubernetes.default.svc", 443),
+    ] {
+        let mut network = egress.clone();
+        network.egress.insert(crate::CampusEgressDestination {
+            host: host.into(),
+            port,
+        });
+        assert!(
+            matches!(
+                check_launchable_in_slot(&research, &network, true),
+                Err(CampusTemplateError::UnapprovedEgress(_))
+            ),
+            "{host}:{port}"
+        );
+    }
+    let mut inconsistent = egress.clone();
+    inconsistent.mode = crate::CampusNetworkMode::Denied;
+    assert!(check_launchable_in_slot(&research, &inconsistent, true).is_err());
 }
 
 #[test]
@@ -883,7 +1012,9 @@ fn rendered_environment_is_checked_for_credentials() {
         mode: crate::CampusNetworkMode::Denied,
         egress: BTreeSet::new(),
     };
+    let binding = CampusSandboxBrokerBinding::new(&config.broker_url, &workload).expect("binding");
     let input = CampusJobTemplateInput {
+        binding: &binding,
         config: &leaky,
         namespace: "campus-lab-slot-1",
         workload: &workload,
@@ -1014,4 +1145,347 @@ fn api_server_timestamps_parse() {
     assert_eq!(parse_rfc3339_utc("1970-01-01T00:00:00Z"), Some(0));
     assert_eq!(parse_rfc3339_utc("2030-03-17T17:46:40.5Z"), None);
     assert_eq!(parse_rfc3339_utc("2030-13-17T17:46:40Z"), None);
+}
+
+fn env_of(container: &Value) -> BTreeMap<String, String> {
+    container["env"]
+        .as_array()
+        .expect("env")
+        .iter()
+        .map(|entry| {
+            (
+                entry["name"].as_str().expect("name").to_string(),
+                entry["value"].as_str().expect("literal value").to_string(),
+            )
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn every_session_gets_its_scoped_token_and_the_network_gate() {
+    let harness = Harness::new();
+    harness.admit("session-a", compose(RESEARCH, json!({})));
+    let spec = harness.spec("session-a", "campus-lab-slot-1", 1);
+    harness
+        .provider
+        .provision(OP, &spec)
+        .await
+        .expect("provision");
+
+    let job = harness.job();
+    let pod = &job["spec"]["template"]["spec"];
+    let secret_name = campus_broker_token_secret_name(&spec.workload);
+    let volumes = pod["volumes"].as_array().expect("volumes");
+    let token_volume = volumes
+        .iter()
+        .find(|volume| volume["name"] == CAMPUS_BROKER_TOKEN_VOLUME)
+        .expect("token volume");
+    assert_eq!(token_volume["secret"]["secretName"], secret_name);
+    assert_eq!(
+        token_volume["secret"]["items"],
+        json!([{ "key": "token", "path": "token" }])
+    );
+    let container = &pod["containers"][0];
+    let mount = container["volumeMounts"]
+        .as_array()
+        .expect("mounts")
+        .iter()
+        .find(|mount| mount["name"] == CAMPUS_BROKER_TOKEN_VOLUME)
+        .expect("token mount")
+        .clone();
+    assert_eq!(mount["mountPath"], CAMPUS_BROKER_TOKEN_DIR);
+    assert_eq!(mount["readOnly"], true);
+    let env = env_of(container);
+    assert_eq!(env["CAMPUS_BROKER_URL"], "http://10.43.130.31:4790/");
+    // No egress: no proxy, no CA variables, no egress label or annotation.
+    assert!(!env.contains_key("HTTPS_PROXY") && !env.contains_key("SSL_CERT_FILE"));
+    assert!(job["spec"]["template"]["metadata"]["labels"]
+        .get(crate::campus_egress::CAMPUS_EGRESS_LABEL)
+        .is_none());
+    assert!(job["spec"]["template"]["metadata"]["annotations"]
+        .get(crate::campus_egress::CAMPUS_EGRESS_HOSTS_ANNOTATION)
+        .is_none());
+
+    // The gate runs first, with the same image and confinement but neither
+    // the token nor any platform variable.
+    let gates = pod["initContainers"].as_array().expect("init containers");
+    assert_eq!(gates.len(), 1);
+    let gate = &gates[0];
+    assert_eq!(gate["name"], NETWORK_GATE_CONTAINER);
+    assert_eq!(gate["image"], container["image"]);
+    assert_eq!(gate["securityContext"], container["securityContext"]);
+    assert_eq!(gate["resources"], container["resources"]);
+    assert!(gate.get("volumeMounts").is_none());
+    assert_eq!(env_of(gate).len(), 1);
+    assert_eq!(gate["command"][4], "60");
+    assert_eq!(gate["command"][5], "10.43.0.1:443");
+
+    // The Secret holds the raw token of an inference token for this exact
+    // occupancy and is owned by the anchor, so it goes with the occupancy.
+    let tokens = harness.issuer.tokens();
+    assert_eq!(tokens.len(), 1);
+    assert_eq!(tokens[0].audience, CampusBrokerAudience::Inference);
+    assert_eq!(tokens[0].workload, spec.workload);
+    let secret = harness.secret();
+    assert_eq!(secret["metadata"]["name"], secret_name);
+    assert_eq!(secret["stringData"]["token"], tokens[0].secret.expose());
+    assert!(secret["stringData"]
+        .get(CAMPUS_EGRESS_CA_SECRET_KEY)
+        .is_none());
+    let anchor = &harness.kube.state().of_kind(CampusKubeKind::ConfigMap)[0];
+    assert_eq!(
+        secret["metadata"]["ownerReferences"][0]["uid"],
+        anchor["metadata"]["uid"]
+    );
+    assert_ownership(&secret, RECORD_BROKER_TOKEN, 1);
+    // The raw token appears in the Secret only, never in the Job.
+    assert!(!job.to_string().contains(tokens[0].secret.expose()));
+
+    // A repeated provision keeps the token until it is due for rotation.
+    harness.provider.provision(OP, &spec).await.expect("again");
+    assert_eq!(harness.issuer.tokens().len(), 1);
+    assert!(harness.kube.state().replaces.is_empty());
+}
+
+#[tokio::test]
+async fn approved_egress_goes_only_through_the_configured_proxy() {
+    let harness = Harness::with(FakeKube::with_runtime_class("runsc", POOL), egress_config());
+    let narrowed = json!({
+        "cpu_millicores": 1500,
+        "memory_mib": 1024,
+        "ephemeral_storage_mib": 1024,
+    });
+    harness.admit("session-code", compose(CODING, narrowed));
+    let spec = harness.spec("session-code", "campus-lab-slot-1", 1);
+    assert!(matches!(
+        harness.provider.provision(OP, &spec).await.expect("call"),
+        CampusProvisionOutcome::InProgress { .. }
+    ));
+    let job = harness.job();
+    let template = &job["spec"]["template"];
+    assert_eq!(
+        template["metadata"]["labels"][crate::campus_egress::CAMPUS_EGRESS_LABEL],
+        "proxy"
+    );
+    assert_eq!(
+        template["metadata"]["annotations"][crate::campus_egress::CAMPUS_EGRESS_HOSTS_ANNOTATION],
+        "codeload.github.com,files.pythonhosted.org,github.com,pypi.org,registry.npmjs.org"
+    );
+    let env = env_of(&template["spec"]["containers"][0]);
+    assert_eq!(env["HTTPS_PROXY"], "http://10.43.130.30:3128");
+    assert_eq!(env["NO_PROXY"], "10.43.130.31");
+    for name in crate::campus_sandbox_pod::CAMPUS_EGRESS_CA_ENV {
+        assert_eq!(env[*name], "/var/run/campus-broker/egress-ca.pem", "{name}");
+    }
+    assert!(!env.contains_key("HTTP_PROXY"));
+    let secret = harness.secret();
+    assert_eq!(secret["stringData"][CAMPUS_EGRESS_CA_SECRET_KEY], TEST_CA);
+
+    // Without the slot's egress policy the session is refused before
+    // anything is created.
+    let missing = Harness::with(FakeKube::with_runtime_class("runsc", POOL), egress_config());
+    missing.kube.state().objects.remove(&(
+        CampusKubeKind::NetworkPolicy,
+        "campus-lab-slot-2".into(),
+        "campus-lab-session-egress".into(),
+    ));
+    missing.admit(
+        "session-code",
+        compose(
+            CODING,
+            json!({
+                "cpu_millicores": 1500, "memory_mib": 1024, "ephemeral_storage_mib": 1024,
+            }),
+        ),
+    );
+    let spec = missing.spec("session-code", "campus-lab-slot-2", 1);
+    let reason = rejected(missing.provider.provision(OP, &spec).await.expect("call"));
+    assert!(reason.contains("campus-lab-session-egress"), "{reason}");
+    assert!(missing.kube.state().creates.is_empty());
+    assert!(missing.issuer.tokens().is_empty());
+}
+
+#[tokio::test]
+async fn missing_or_weakened_slot_isolation_prevents_launch() {
+    for (removed, weaken) in [
+        (Some("campus-lab-default-deny"), false),
+        (Some("campus-lab-session-broker"), false),
+        (None, true),
+    ] {
+        let harness = Harness::new();
+        {
+            let mut state = harness.kube.state();
+            let key = |name: &str| {
+                (
+                    CampusKubeKind::NetworkPolicy,
+                    "campus-lab-slot-1".to_string(),
+                    name.to_string(),
+                )
+            };
+            if let Some(name) = removed {
+                state.objects.remove(&key(name));
+            }
+            if weaken {
+                let policy = state
+                    .objects
+                    .get_mut(&key("campus-lab-default-deny"))
+                    .expect("policy");
+                policy["spec"]["egress"] =
+                    json!([{ "to": [{ "ipBlock": { "cidr": "0.0.0.0/0" } }] }]);
+            }
+        }
+        harness.admit("session-a", compose(RESEARCH, json!({})));
+        let spec = harness.spec("session-a", "campus-lab-slot-1", 1);
+        let reason = rejected(harness.provider.provision(OP, &spec).await.expect("call"));
+        assert!(reason.contains("campus-lab-"), "{reason}");
+        assert!(harness.kube.state().creates.is_empty(), "{reason}");
+        assert!(harness.issuer.tokens().is_empty());
+    }
+    let unreadable = Harness::new();
+    unreadable.kube.state().unreachable = true;
+    unreadable.admit("session-a", compose(RESEARCH, json!({})));
+    let spec = unreadable.spec("session-a", "campus-lab-slot-1", 1);
+    assert!(matches!(
+        unreadable.provider.provision(OP, &spec).await,
+        Err(CampusProviderError::Unreachable(_))
+    ));
+}
+
+#[tokio::test]
+async fn tokens_rotate_in_place_and_go_with_the_occupancy() {
+    let harness = Harness::new();
+    harness.admit("session-a", compose(RESEARCH, json!({})));
+    let spec = harness.spec("session-a", "campus-lab-slot-1", 1);
+    harness
+        .provider
+        .provision(OP, &spec)
+        .await
+        .expect("provision");
+    harness.kube.state().start_pods(true);
+    assert!(!harness
+        .provider
+        .rotate_broker_token(&spec.workload)
+        .await
+        .expect("not due"));
+
+    harness.clock.0.store(START + 450, Ordering::SeqCst);
+    assert!(harness
+        .provider
+        .rotate_broker_token(&spec.workload)
+        .await
+        .expect("rotate"));
+    let tokens = harness.issuer.tokens();
+    assert_eq!(tokens.len(), 2);
+    let secret = harness.secret();
+    assert_eq!(secret["stringData"]["token"], tokens[1].secret.expose());
+    assert_eq!(
+        secret["metadata"]["annotations"]
+            [crate::campus_sandbox_pod::CAMPUS_BROKER_TOKEN_ID_ANNOTATION],
+        "cbt-2"
+    );
+    assert_eq!(harness.kube.state().replaces.len(), 1);
+    // A repeated provision after the next rotation point rotates too.
+    harness.clock.0.store(START + 900, Ordering::SeqCst);
+    let spec_later = CampusProvisionSpec {
+        expires_at: START + 3_600,
+        ..spec.clone()
+    };
+    harness
+        .provider
+        .provision(OP, &spec_later)
+        .await
+        .expect("again");
+    assert_eq!(harness.issuer.tokens().len(), 3);
+
+    assert_eq!(
+        harness
+            .provider
+            .delete("del", &spec.workload)
+            .await
+            .expect("delete"),
+        CampusDeleteOutcome::Deleted
+    );
+    assert_eq!(harness.kube.state().count(CampusKubeKind::Secret), 0);
+    assert!(harness
+        .provider
+        .rotate_broker_token(&spec.workload)
+        .await
+        .is_err());
+}
+
+#[tokio::test]
+async fn a_refused_token_means_no_workload() {
+    let harness = Harness::new();
+    harness.admit("session-a", compose(RESEARCH, json!({})));
+    let spec = harness.spec("session-a", "campus-lab-slot-1", 1);
+    *harness.issuer.refuse.lock().expect("lock") = Some(CampusBrokerTokenError::NotIssuable(
+        "the session was asked to stop".into(),
+    ));
+    let reason = rejected(harness.provider.provision(OP, &spec).await.expect("call"));
+    assert!(reason.contains("no broker token can be issued"), "{reason}");
+    assert_eq!(harness.kube.state().count(CampusKubeKind::Job), 0);
+    assert_eq!(harness.kube.state().count(CampusKubeKind::Secret), 0);
+
+    *harness.issuer.refuse.lock().expect("lock") = Some(CampusBrokerTokenError::Unavailable(
+        "database is down".into(),
+    ));
+    assert!(matches!(
+        harness.provider.provision(OP, &spec).await,
+        Err(CampusProviderError::Unreachable(_))
+    ));
+    assert_eq!(harness.kube.state().count(CampusKubeKind::Job), 0);
+}
+
+#[test]
+fn provider_config_refuses_unsafe_broker_proxy_and_gate_settings() {
+    assert_eq!(egress_config().validate(), Ok(()));
+    let mut config = KubernetesCampusProviderConfig::m1_lab();
+    config.broker_url = Url::parse("http://127.0.0.1:4790/").expect("url");
+    assert!(config.validate().is_err());
+    let mut config = KubernetesCampusProviderConfig::m1_lab();
+    config.broker_url = Url::parse("http://169.254.169.254/").expect("url");
+    assert!(config.validate().is_err());
+    let mut config = KubernetesCampusProviderConfig::m1_lab();
+    config.required_network_policies = vec!["campus-lab-session-broker".into()];
+    assert!(config.validate().is_err());
+    let mut config = KubernetesCampusProviderConfig::m1_lab();
+    config.network_gate.canaries = vec!["kubernetes.default:443".into()];
+    assert!(config.validate().is_err());
+    let mut config = KubernetesCampusProviderConfig::m1_lab();
+    config.network_gate.timeout_seconds = 0;
+    assert!(config.validate().is_err());
+    for (proxy, ca) in [
+        ("https://10.43.130.30:3128", TEST_CA),
+        ("http://10.43.130.30", TEST_CA),
+        ("http://user:pw@10.43.130.30:3128", TEST_CA),
+        ("http://localhost:3128", TEST_CA),
+        (
+            "http://10.43.130.30:3128",
+            "-----BEGIN PRIVATE KEY-----\nMII\n-----END PRIVATE KEY-----",
+        ),
+        ("http://10.43.130.30:3128", ""),
+    ] {
+        let mut config = egress_config();
+        let egress = config.egress.as_mut().expect("egress");
+        egress.proxy_url = Url::parse(proxy).expect("url");
+        egress.ca_certificate_pem = ca.into();
+        assert!(config.validate().is_err(), "{proxy} {ca:?}");
+    }
+}
+
+#[test]
+fn the_network_gate_waits_for_isolation_and_fails_closed() {
+    let argv = network_gate_command(60, &["10.43.0.1:443".into(), "1.1.1.1:443".into()]);
+    assert_eq!(&argv[..2], ["/bin/sh", "-c"]);
+    assert_eq!(
+        &argv[3..],
+        ["campus-network-gate", "60", "10.43.0.1:443", "1.1.1.1:443"]
+    );
+    let script = &argv[2];
+    assert!(script.contains("python3") && script.contains("node"));
+    assert!(script.contains("exit 3"), "no probe tool fails closed");
+    assert!(
+        script.trim_end().ends_with("exit 1"),
+        "timeout fails closed"
+    );
 }

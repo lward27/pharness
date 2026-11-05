@@ -105,13 +105,17 @@ fn non_campus_routes() -> Vec<(String, String, String)> {
     routes
 }
 
-async fn ready_session(harness: &Harness, session: &Session, assignment: &str) -> String {
+pub(super) async fn ready_session(
+    harness: &Harness,
+    session: &Session,
+    assignment: &str,
+) -> String {
     let view = launched(harness, session, assignment).await;
     harness.reconcile().await;
     id(&view)
 }
 
-async fn workload(harness: &Harness, session_id: &str) -> CampusWorkloadRef {
+pub(super) async fn workload(harness: &Harness, session_id: &str) -> CampusWorkloadRef {
     harness
         .store
         .get_campus_lab_session(session_id)
@@ -168,7 +172,7 @@ fn bearer(token: &str) -> Vec<(HeaderName, String)> {
 }
 
 /// The denial code for a token on the token-description route.
-async fn denial(harness: &Harness, token: &str) -> Option<String> {
+pub(super) async fn denial(harness: &Harness, token: &str) -> Option<String> {
     let (status, body) =
         broker_call(&harness.broker, "GET", "/v1/token", &bearer(token), None).await;
     match status {

@@ -27,6 +27,102 @@
   ],
   "images": [
     {
+      "image": "registry.lucas.engineering/pharness-node-runner@sha256:3cc3cd8dc39fc89e2cd443156a96b401d4da38caf5e0762d17f2fa2ec7345acd",
+      "repository": "registry.lucas.engineering/pharness-node-runner",
+      "digest": "sha256:3cc3cd8dc39fc89e2cd443156a96b401d4da38caf5e0762d17f2fa2ec7345acd",
+      "component": "node-runner",
+      "status": "approved",
+      "source_revision": "9761707332da8f6558d5c35e50af73bbe731734b",
+      "release_record": {
+        "pipeline_run": "pharness-node-runner-9761707332da",
+        "build_executor": "in-cluster BuildKit",
+        "config_digest": "sha256:564dad0341e96b4898f7c6c60dabd159d8f1cf121f1ae65723f6b2c324f9dece",
+        "platform": "linux/amd64",
+        "build_json_sha256": "sha256:16f15e23b4d98a0c37fa4dd08f0b1285d4fed1c83021fc029600bbbbc6c04390",
+        "artifacts_json_sha256": "sha256:a4febec7a644a0dd1c523beca5f05bd2123fbd100e437031fd46f10f6627d199"
+      },
+      "assessed_at": "2026-11-05T02:00:33Z",
+      "approval_run": {
+        "namespace": "tekton-pipelines",
+        "taskrun": "campus-approve-node-runner-3cc3cd8dc39f-015350",
+        "tool_images": {
+          "syft": "docker.io/anchore/syft:v1.56.0@sha256:697ae864af1299cfa43c54b161cea3dd65c6d54de82e3dba66ea3dccb3acc313",
+          "grype": "docker.io/anchore/grype:v0.121.1@sha256:6b06708b036f74b2cd70e94b706b4586af96d1932e6ac46255940b2e39dd44a9",
+          "cosign": "ghcr.io/sigstore/cosign/cosign:v3.1.4@sha256:0f06154836d2de34f887a5c273506d52ca43edaa1d9e53e6510fa78a48f69c2d",
+          "python": "docker.io/library/python:3.11-slim@sha256:a630a63cdb314e2d138a2fca3e375e319e8568346ffafac5b980f888630ac4f1"
+        }
+      },
+      "sbom": {
+        "format": "spdx-json",
+        "predicate_type": "https://spdx.dev/Document",
+        "canonical_sha256": "sha256:3b4a12da92170e97612ab1b1766852249e026abf62222fe15a963bb56f4ced3d",
+        "packages": 263,
+        "files": 5086,
+        "generator": "Tool: syft-1.56.0"
+      },
+      "vulnerability_scan": {
+        "predicate_type": "https://pharness.dev/attestations/campus-vulnerability-disposition/v1",
+        "canonical_sha256": "sha256:f02ac20d99346cce8f90e7df128a3e0f32801943d43dda16c386f1467f70e4b4",
+        "scanner": {
+          "db_built": "2026-11-04T06:20:59Z",
+          "db_schema": "v6.1.10",
+          "db_source": "https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.10_2026-11-04T00:19:46Z_1793773259.tar.zst",
+          "distro": {
+            "idLike": [
+              "debian"
+            ],
+            "name": "debian",
+            "version": "12.15"
+          },
+          "name": "grype",
+          "version": "0.121.1"
+        },
+        "decision": "approved",
+        "summary": {
+          "blocking": 0,
+          "by_severity": {
+            "Critical": 10,
+            "High": 81,
+            "Low": 13,
+            "Medium": 98,
+            "Negligible": 109,
+            "Unknown": 0
+          },
+          "dispositions": {
+            "below-threshold": 220,
+            "contain-no-fix": 91
+          },
+          "fix_available_by_severity": {
+            "Critical": 0,
+            "High": 0,
+            "Low": 0,
+            "Medium": 2,
+            "Negligible": 0,
+            "Unknown": 0
+          },
+          "total": 311,
+          "unique_vulnerabilities": 160
+        },
+        "exceptions_sha256": "sha256:0c85e6b220763f5bec2e218225374f92abfabab041818d6270cfb746f6f0ce32",
+        "exceptions_used": [],
+        "blocking_findings": []
+      },
+      "attestations": {
+        "reference": "registry.lucas.engineering/pharness-node-runner:sha256-3cc3cd8dc39fc89e2cd443156a96b401d4da38caf5e0762d17f2fa2ec7345acd.att",
+        "manifest_digest": "sha256:77ea2f15dc6150e4aefc8384a4a121adf6be1888bd113464e748b291c52c81de"
+      },
+      "signature": {
+        "docker_reference": "registry.lucas.engineering/pharness-node-runner",
+        "annotations": {
+          "dev.pharness.campus/approval-run": "campus-approve-node-runner-3cc3cd8dc39f-015350",
+          "dev.pharness.campus/component": "node-runner",
+          "dev.pharness.campus/source-revision": "9761707332da8f6558d5c35e50af73bbe731734b"
+        },
+        "reference": "registry.lucas.engineering/pharness-node-runner:sha256-3cc3cd8dc39fc89e2cd443156a96b401d4da38caf5e0762d17f2fa2ec7345acd.sig",
+        "manifest_digest": "sha256:a9f8552a3e60960f9d69ae8df10185794de077bde6b4c2cf9ebfcf6ca2f279fb"
+      }
+    },
+    {
       "image": "registry.lucas.engineering/pharness-node-runner@sha256:c478a31d341af1d1c7a13a99236120c870d0b88d1a9b80ac59159dd1a145a7bd",
       "repository": "registry.lucas.engineering/pharness-node-runner",
       "digest": "sha256:c478a31d341af1d1c7a13a99236120c870d0b88d1a9b80ac59159dd1a145a7bd",
@@ -1429,6 +1525,102 @@
         "manifest_digest": "sha256:a44a56418eca03e61f2020c61dc9fe2362fd386d343b71b3151f5045d274ac40"
       },
       "signature": null
+    },
+    {
+      "image": "registry.lucas.engineering/pharness-python-runner@sha256:bb5cc07a648ba4803a87aff4129cd21434b4364d098a2723b96d4952c0bb7400",
+      "repository": "registry.lucas.engineering/pharness-python-runner",
+      "digest": "sha256:bb5cc07a648ba4803a87aff4129cd21434b4364d098a2723b96d4952c0bb7400",
+      "component": "python-runner",
+      "status": "approved",
+      "source_revision": "9761707332da8f6558d5c35e50af73bbe731734b",
+      "release_record": {
+        "pipeline_run": "pharness-python-runner-9761707332da",
+        "build_executor": "in-cluster BuildKit",
+        "config_digest": "sha256:1ecfdfd3ea08956b62e464e9cb0a534f7f4f31dd5a3f466a1b163eea5791f04f",
+        "platform": "linux/amd64",
+        "build_json_sha256": "sha256:16f15e23b4d98a0c37fa4dd08f0b1285d4fed1c83021fc029600bbbbc6c04390",
+        "artifacts_json_sha256": "sha256:a4febec7a644a0dd1c523beca5f05bd2123fbd100e437031fd46f10f6627d199"
+      },
+      "assessed_at": "2026-11-05T01:53:36Z",
+      "approval_run": {
+        "namespace": "tekton-pipelines",
+        "taskrun": "campus-approve-python-runner-bb5cc07a648b-014731",
+        "tool_images": {
+          "syft": "docker.io/anchore/syft:v1.56.0@sha256:697ae864af1299cfa43c54b161cea3dd65c6d54de82e3dba66ea3dccb3acc313",
+          "grype": "docker.io/anchore/grype:v0.121.1@sha256:6b06708b036f74b2cd70e94b706b4586af96d1932e6ac46255940b2e39dd44a9",
+          "cosign": "ghcr.io/sigstore/cosign/cosign:v3.1.4@sha256:0f06154836d2de34f887a5c273506d52ca43edaa1d9e53e6510fa78a48f69c2d",
+          "python": "docker.io/library/python:3.11-slim@sha256:a630a63cdb314e2d138a2fca3e375e319e8568346ffafac5b980f888630ac4f1"
+        }
+      },
+      "sbom": {
+        "format": "spdx-json",
+        "predicate_type": "https://spdx.dev/Document",
+        "canonical_sha256": "sha256:8c8914d135521936d3b5cc08781cce6fc8d9112c0def46cc394ef914afbea4f3",
+        "packages": 152,
+        "files": 4742,
+        "generator": "Tool: syft-1.56.0"
+      },
+      "vulnerability_scan": {
+        "predicate_type": "https://pharness.dev/attestations/campus-vulnerability-disposition/v1",
+        "canonical_sha256": "sha256:a6be57bd899215d2a25899fefcd699bac83d9e876b0c12b8b5d9beb9630a73df",
+        "scanner": {
+          "db_built": "2026-11-04T06:20:59Z",
+          "db_schema": "v6.1.10",
+          "db_source": "https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.10_2026-11-04T00:19:46Z_1793773259.tar.zst",
+          "distro": {
+            "idLike": [
+              "debian"
+            ],
+            "name": "debian",
+            "version": "13.7"
+          },
+          "name": "grype",
+          "version": "0.121.1"
+        },
+        "decision": "approved",
+        "summary": {
+          "blocking": 0,
+          "by_severity": {
+            "Critical": 8,
+            "High": 99,
+            "Low": 14,
+            "Medium": 87,
+            "Negligible": 91,
+            "Unknown": 0
+          },
+          "dispositions": {
+            "below-threshold": 192,
+            "contain-no-fix": 107
+          },
+          "fix_available_by_severity": {
+            "Critical": 0,
+            "High": 0,
+            "Low": 3,
+            "Medium": 12,
+            "Negligible": 1,
+            "Unknown": 0
+          },
+          "total": 299,
+          "unique_vulnerabilities": 166
+        },
+        "exceptions_sha256": "sha256:0c85e6b220763f5bec2e218225374f92abfabab041818d6270cfb746f6f0ce32",
+        "exceptions_used": [],
+        "blocking_findings": []
+      },
+      "attestations": {
+        "reference": "registry.lucas.engineering/pharness-python-runner:sha256-bb5cc07a648ba4803a87aff4129cd21434b4364d098a2723b96d4952c0bb7400.att",
+        "manifest_digest": "sha256:d8207f67b112f0729e8e4a7ac3d0119b42e2b085c46e2c8427fc3e2a6173a097"
+      },
+      "signature": {
+        "docker_reference": "registry.lucas.engineering/pharness-python-runner",
+        "annotations": {
+          "dev.pharness.campus/approval-run": "campus-approve-python-runner-bb5cc07a648b-014731",
+          "dev.pharness.campus/component": "python-runner",
+          "dev.pharness.campus/source-revision": "9761707332da8f6558d5c35e50af73bbe731734b"
+        },
+        "reference": "registry.lucas.engineering/pharness-python-runner:sha256-bb5cc07a648ba4803a87aff4129cd21434b4364d098a2723b96d4952c0bb7400.sig",
+        "manifest_digest": "sha256:0302aaeedd4f94c93a9ea664cbc4d5b216198f3afcb08ea8c9c81891a613a54a"
+      }
     }
   ]
 }

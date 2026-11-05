@@ -17,18 +17,22 @@ The slots and their guardrails are Argo-managed from `lucas_engineering`
 | --- | --- |
 | RuntimeClass `gvisor` | handler `runsc`, `scheduling.nodeSelector pharness.dev/campus-lab-runtime=gvisor`, `overhead.podFixed` 50m / 128Mi |
 | Namespaces `campus-lab-slot-1..5` | Pod Security `restricted` (enforce, latest), labels `pharness.dev/campus-lab=true` and `pharness.dev/campus-slot=<ns>` |
-| ResourceQuota `campus-lab-slot` | one Job, one Pod, 16 ConfigMaps; no Secrets, Services, PVCs or other workload kinds; 2 CPU / 3 GiB / 256 MiB ephemeral storage (requests and limits) |
+| ResourceQuota `campus-lab-slot` | one Job, one Pod, 16 ConfigMaps, two Secrets (the session's broker token); no Services, PVCs or other workload kinds; 2 CPU / 3 GiB / 256 MiB ephemeral storage (requests and limits) |
 | LimitRange, NetworkPolicy `campus-lab-default-deny` | default limits; no ingress or egress |
+| NetworkPolicies `campus-lab-session-broker`, `campus-lab-session-egress` | the broker port, and the Campus egress proxy for Pods labelled for egress ([campus-egress.md](campus-egress.md)) |
 | default ServiceAccount | `automountServiceAccountToken: false` |
-| Role/RoleBinding `pharness-campus-controller` | `pharness/pharness-campus-controller` may create/get/list/watch/delete Jobs, create/get/list/delete ConfigMaps and get/list/watch/delete Pods in the slot; nothing else (no exec, update, patch or Secrets) |
+| Role/RoleBinding `pharness-campus-controller` | `pharness/pharness-campus-controller` may create/get/list/watch/delete Jobs, create/get/list/delete ConfigMaps, get/list/watch/delete Pods, create/get/list/update/delete Secrets and get/list NetworkPolicies in the slot; nothing else (no exec, patch, watch on Secrets, or policy changes) |
 | ClusterRole `pharness-campus-controller-runtime` | get on `runtimeclasses/gvisor` only |
 | VAP `pharness-campus-lab-session-guard` | independent admission for Pods and Jobs in `pharness.dev/campus-lab=true` namespaces (below) |
-| VAP `pharness-campus-lab-image-allowlist` (LUC-121) | digest allowlist; currently empty, so every session image is refused |
+| VAP `pharness-campus-lab-secret-guard` | slot Secrets may only be the session's broker token Secret ([campus-egress.md](campus-egress.md#cluster-objects-chartscampus-lab)) |
+| VAP `pharness-campus-lab-image-allowlist` (LUC-121) | digest allowlist; admits the approved runner images |
 | node `ubuntu-lucas-engineering-2` | gVisor `release-20261026.0`, `kubepods.slice` `MemorySwapMax=0` |
 
 The guard refuses, whoever the requester is: privileged containers,
-privilege escalation, added capabilities, any volume except `emptyDir`
-(so no hostPath, projected token, Secret or ConfigMap volumes), token
+privilege escalation, added capabilities, any volume except `emptyDir` and
+the session's read-only broker token Secret (so no hostPath, projected
+token, other Secret or ConfigMap volumes), a missing `network-gate` init
+container, egress labels or hosts outside the approved routes, token
 automount (unset or true), hostNetwork/hostPID/hostIPC, host ports, a
 runtimeClassName other than `gvisor`, a nodeSelector other than the pool,
 `nodeName`, tolerations, tag-only images, environment from Secrets or
@@ -57,13 +61,20 @@ quota refuses a duplicate create before the API reports AlreadyExists.
   already deleted.
 - A missing or unreadable RuntimeClass refuses the provision before anything
   is created; there is no fallback to runc. Security profiles, non-gVisor
-  isolation, disabled launch gates and any approved egress are refused
-  because the slots cannot provide them.
+  isolation and disabled launch gates are refused because the slots cannot
+  provide them.
+- A missing or weakened slot NetworkPolicy refuses the provision, and so does
+  approved egress without the egress proxy configuration or the slot's
+  egress policy ([campus-egress.md](campus-egress.md#provider-enforcement)).
 
 `KubernetesCampusProviderConfig::m1_lab()` maps slot ids to namespaces with
 slot id = namespace name (`campus-lab-slot-N`). Journal slot ids are
 free-form (`register_campus_lab_slot`), so register the M1 slots under those
-names.
+names. The slot label on every object must equal the namespace's
+`pharness.dev/campus-slot` label, or admission refuses it. Note that the
+pharness-api lab catalog currently registers `<tenant>-lab-slot-NN`. The
+wiring that constructs this provider in the API must map those ids, or
+register `campus-lab-slot-N`, before Campus is enabled.
 
 ## Session limits (research profile)
 
@@ -88,9 +99,9 @@ scripts/campus-session-jobs-cluster-test.sh \
 
 It needs cluster-admin on `lucas_engineering`, helm, jq and cargo. It
 creates five temporary probe slots (`campus-lab-probe-N`) from the same
-chart plus a test-only image allowlist that admits only the research
-profile digest, because the Argo-managed slots refuse every image while the
-LUC-121 allowlist is empty. The provider runs as the controller identity
+chart, plus a test-only image allowlist that admits only the research
+profile digest. It also checks that an Argo-managed slot admits the
+provider's session Job and refuses an unapproved digest. The provider runs as the controller identity
 (`kubectl --as system:serviceaccount:pharness:pharness-campus-controller`)
 through the ignored test `crates/pharness-core/tests/campus_session_jobs_live.rs`.
 Phases: preconditions and versions, controller RBAC (25 `can-i` checks),
@@ -104,10 +115,10 @@ node label and the swap setting.
 
 ## Residual risks
 
-- The LUC-121 allowlist is empty, so the real slots refuse every session
-  until an image digest is approved there.
-- Sessions with approved egress are refused: the slots are default-deny and
-  there is no FQDN egress control yet.
+- The real slots admit only the two LUC-121 approved runner digests
+  (release `9761707`); the profile fixtures pin those digests.
+- Approved egress goes only through the Campus egress proxy; see
+  [campus-egress.md](campus-egress.md#residual-risks).
 - Node 2 is shared with production. It has no kube/system reservations, no
   taint for the pool, `podPidsLimit` unset, about 10 GiB of free disk and
   4 GiB swap (now closed to Pods).
