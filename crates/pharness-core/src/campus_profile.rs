@@ -212,6 +212,11 @@ pub(crate) fn is_campus_tool(tool: &str) -> bool {
     CAMPUS_TOOL_CATALOG.iter().any(|(name, _)| *name == tool)
 }
 
+#[cfg(test)]
+pub(crate) fn campus_tool_catalog() -> &'static [(&'static str, CampusCapabilityScope)] {
+    CAMPUS_TOOL_CATALOG
+}
+
 impl CampusProfile {
     /// Parse and fully validate a profile document.
     pub fn parse(document: &str) -> Result<Self, CampusProfileError> {

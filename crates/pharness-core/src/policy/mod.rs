@@ -2,6 +2,7 @@ mod campus;
 mod command_classifier;
 mod safety_policy;
 
+pub(crate) use campus::command_line;
 pub use campus::{
     CampusApproval, CampusApproverRole, CampusAuthority, CampusAuthorityDenies,
     CampusDecisionOutcome, CampusDecisionReason, CampusDecisionRecord, CampusEffectiveConstraints,

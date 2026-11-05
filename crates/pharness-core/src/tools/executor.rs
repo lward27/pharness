@@ -70,6 +70,9 @@ pub enum ToolError {
     },
     #[error("network error: {message}")]
     Network { message: String },
+    /// A trusted capability broker refused the action before any effect.
+    #[error("capability denied for {action}: {reason}")]
+    CapabilityDenied { action: String, reason: String },
 }
 
 /// Whether a tool failure is safe to show to the model for a bounded retry.
@@ -84,9 +87,9 @@ pub enum ToolErrorDisposition {
 impl ToolError {
     pub fn disposition(&self) -> ToolErrorDisposition {
         match self {
-            Self::UnsupportedAction { .. } | Self::OutsideWorkspace { .. } => {
-                ToolErrorDisposition::Terminal
-            }
+            Self::UnsupportedAction { .. }
+            | Self::OutsideWorkspace { .. }
+            | Self::CapabilityDenied { .. } => ToolErrorDisposition::Terminal,
             Self::Io { .. }
             | Self::NonUtf8 { .. }
             | Self::NotDirectory { .. }
@@ -108,6 +111,7 @@ impl ToolError {
             Self::TimedOut { .. } => "timed_out",
             Self::CommandFailed { .. } => "command_failed",
             Self::Network { .. } => "network",
+            Self::CapabilityDenied { .. } => "capability_denied",
         }
     }
 }
