@@ -3,9 +3,9 @@
 Status: implemented and tested against the in-process fake terminal and a
 real `pharness-api` process in the browser. The Kubernetes attacher
 (`kubectl exec`) is implemented and unit-tested but has not run against the
-real lab slots: they refuse every session image until the LUC-121 allowlist
-approves one, and the terminal identity's RBAC lives on the unmerged
-`lucas_engineering` branch `lucas/luc-134-campus-terminal-rbac`.
+real lab slots: the terminal identity's RBAC lives on the unmerged
+`lucas_engineering` branch `lucas/luc-134-campus-terminal-rbac`, and no
+Campus API is deployed with a terminal configuration yet.
 
 A student opens the terminal of their own ready lab session in the browser
 and gets an interactive shell in the session's container, where the runner
@@ -263,7 +263,7 @@ the Campus API, which is not in GitOps yet.
 1. Merge the RBAC branch, then confirm with
    `kubectl auth can-i create pods/exec -n campus-lab-slot-1 --as system:serviceaccount:pharness:pharness-campus-terminal`
    (yes) and the same for `-n pharness`, Secrets and Jobs (no).
-2. Once an image digest is approved, attach to a real session through the
+2. With an approved runner image (LUC-121), attach to a real session through the
    kubectl attacher: `ulimit -u` shows the policy limit, `codex --version`
    answers, and stop closes the terminal and ends the exec process in the
    Pod (check with `ps` from a second terminal before stopping).
