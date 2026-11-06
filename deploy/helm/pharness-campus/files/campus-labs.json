@@ -230,6 +230,28 @@
     },
     {
       "course_id": "cs101",
+      "assignment_id": "research-timeout-demo",
+      "title": "Research lab, five-minute limit (M1 demo)",
+      "profile_id": "campus-research",
+      "assignment_layer": {
+        "schema_version": "pharness.dev/campus-policy-layer/v1alpha1",
+        "authority": "assignment",
+        "id": "cs101-research-timeout-demo",
+        "version": "v1",
+        "constraints": {
+          "ttl_seconds": 300,
+          "active_execution_seconds": 300
+        },
+        "mandatory_denies": {
+          "tools": [],
+          "egress_hosts": [],
+          "model_aliases": [],
+          "approval_kinds": []
+        }
+      }
+    },
+    {
+      "course_id": "cs101",
       "assignment_id": "coding-lab",
       "title": "Coding lab",
       "profile_id": "campus-coding",
