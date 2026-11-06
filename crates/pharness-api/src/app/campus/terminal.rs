@@ -67,15 +67,21 @@ pub(crate) fn terminal_admissible(
     now: i64,
 ) -> Result<CampusWorkloadRef, TerminalDenial> {
     let session = &record.session;
+    // The reconciler stops an expired session soon after its expiry, so
+    // expiry is reported as such unless the session was stopped, revoked
+    // or quarantined before it ran out.
+    let ended_by_expiry = session.expires_at <= now
+        && session.quarantined_at.is_none()
+        && !matches!(session.revoked_at, Some(revoked) if revoked < session.expires_at);
+    if ended_by_expiry {
+        return Err(TerminalDenial::Expired);
+    }
     if session.desired_state == CampusLabDesiredState::Terminated
         || session.revoked_at.is_some()
         || session.quarantined_at.is_some()
         || session.state.is_terminal()
     {
         return Err(TerminalDenial::Stopped);
-    }
-    if session.expires_at <= now {
-        return Err(TerminalDenial::Expired);
     }
     if !record.is_current() || record.lab.reset_requested_at.is_some() {
         return Err(TerminalDenial::Superseded);

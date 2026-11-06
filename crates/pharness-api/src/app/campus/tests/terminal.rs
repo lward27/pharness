@@ -17,6 +17,7 @@ use pharness_core::campus_terminal::{
     CampusTerminalError, CampusTerminalSize, FakeCampusTerminal, FAKE_AGENT_CLI_VERSION,
     FAKE_TERMINAL_PROMPT, TERMINAL_OUTPUT_CHUNK_BYTES,
 };
+use pharness_core::CampusLabDesiredState;
 use pharness_store::{CampusIdentityKey, SqliteStore};
 use serde_json::{json, Value};
 use std::net::SocketAddr;
@@ -666,6 +667,29 @@ async fn a_replaced_generation_cannot_be_attached() {
         .unwrap();
     assert_eq!(
         terminal_admissible(&replaced, None, now),
+        Err(TerminalDenial::Stopped)
+    );
+
+    // Once the reconciler has stopped an expired session, it still reads as
+    // expired; a session stopped before its expiry stays stopped.
+    let mut expired = after.clone();
+    expired.session.expires_at = now;
+    expired.session.desired_state = CampusLabDesiredState::Terminated;
+    expired.session.revoked_at = Some(now + 2);
+    assert_eq!(
+        terminal_admissible(&expired, Some(&grant), now + 3),
+        Err(TerminalDenial::Expired)
+    );
+    let mut stopped_early = expired.clone();
+    stopped_early.session.revoked_at = Some(now - 1);
+    assert_eq!(
+        terminal_admissible(&stopped_early, Some(&grant), now + 3),
+        Err(TerminalDenial::Stopped)
+    );
+    let mut quarantined = expired.clone();
+    quarantined.session.quarantined_at = Some(now + 1);
+    assert_eq!(
+        terminal_admissible(&quarantined, Some(&grant), now + 3),
         Err(TerminalDenial::Stopped)
     );
 }

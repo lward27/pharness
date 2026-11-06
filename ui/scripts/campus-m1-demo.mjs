@@ -30,6 +30,8 @@ const USERS = ["campus-admin", "instructor1", "student1", "student2"];
 const TERMINAL_PROTOCOL = "pharness.campus.terminal.v1";
 const SESSION_COOKIE = "__Host-pharness-campus";
 const LABEL_SESSION = "pharness.dev/campus-session";
+// pharness_core campus_lab_session::kubernetes::template::SESSION_CONTAINER.
+const SESSION_CONTAINER = "workspace";
 const LIVE = new Set(["provisioning", "ready", "stopping", "cleanup_blocked"]);
 const REVOKE_LIMIT_MS = 60_000;
 const REMOVAL_LIMIT_MS = 300_000;
@@ -357,7 +359,7 @@ function describeWorkload(slot, sessionId) {
   const pod = pods[0];
   const job = jobs[0];
   const spec = pod?.spec ?? {};
-  const session = spec.containers?.find(item => item.name === "session");
+  const session = spec.containers?.find(item => item.name === SESSION_CONTAINER);
   return {
     slot,
     job: job && { name: job.metadata.name, active_deadline_seconds: job.spec.activeDeadlineSeconds, backoff_limit: job.spec.backoffLimit, annotations: job.metadata.annotations, labels: job.metadata.labels },
@@ -388,8 +390,8 @@ function startPoller(slot, pod, runner, until, fastAfter) {
   const script = readFileSync(runner === "node" ? PROBE_MJS : PROBE_PY);
   const command = runner === "node" ? ["node", "--input-type=module", "-", "poll"] : ["python3", "-", "poll"];
   const args = [`until=${until}`, `fast_after=${fastAfter}`];
-  commandLog.push(`${nowIso()} kubectl --context ${OPTIONS.context} -n ${slot} exec -i ${pod} -c session -- ${[...command, ...args].join(" ")}`);
-  const child = spawn("kubectl", ["--context", OPTIONS.context, "-n", slot, "exec", "-i", pod, "-c", "session", "--", ...command, ...args], { stdio: ["pipe", "pipe", "pipe"] });
+  commandLog.push(`${nowIso()} kubectl --context ${OPTIONS.context} -n ${slot} exec -i ${pod} -c ${SESSION_CONTAINER} -- ${[...command, ...args].join(" ")}`);
+  const child = spawn("kubectl", ["--context", OPTIONS.context, "-n", slot, "exec", "-i", pod, "-c", SESSION_CONTAINER, "--", ...command, ...args], { stdio: ["pipe", "pipe", "pipe"] });
   children.add(child);
   const poller = { lines: [], stderr: "", exited: null, waiters: [] };
   let buffer = "";
@@ -810,7 +812,7 @@ async function labPhase(owner, peer, instructor, phase, assignment, probe, runne
   check(phase, "the Pod's images are pinned by digest", pod?.images?.every(item => item.digest), pod?.images?.map(item => `${item.container} ${item.digest}`));
   const profileId = evidence.assignments.find?.(item => item.assignment_id === assignment)?.profile?.id;
   const profileImage = evidence.pinned.catalog?.profiles?.find(item => item.id === profileId)?.image ?? null;
-  const sessionDigest = pod?.images?.find(image => image.container === "session")?.digest ?? null;
+  const sessionDigest = pod?.images?.find(image => image.container === SESSION_CONTAINER)?.digest ?? null;
   check(phase, "the session image is the catalog profile's digest", Boolean(profileImage && sessionDigest && profileImage.endsWith(`@${sessionDigest}`)), { profile: profileId, catalog: profileImage, running: sessionDigest });
   check(phase, "the Job's deadline is at most the session lifetime", workload.job && workload.job.active_deadline_seconds <= session.expires_at - Math.floor(started / 1000) + 5, { active_deadline_seconds: workload.job?.active_deadline_seconds, expires_at: session.expires_at });
 
