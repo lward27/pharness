@@ -13,6 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPOSITORY_ROOT="$(git -C "${SCRIPT_DIR}/.." rev-parse --show-toplevel)"
 CONTEXT="${PHARNESS_CLUSTER_CONTEXT:-lucas_engineering}"
 VALUES="deploy/helm/pharness/values.yaml"
+CAMPUS_VALUES="deploy/helm/pharness-campus/values.yaml"
 MERGE=false
 ARTIFACTS_ROOT="${PHARNESS_RELEASE_ARTIFACTS:-${REPOSITORY_ROOT}/dist/releases}"
 
@@ -85,10 +86,16 @@ fi
   >"${OUT}/PIN.log"
 BRANCH="release/pin-${REVISION:0:12}"
 git checkout --quiet -B "$BRANCH"
-git add "$VALUES" deploy/helm/pharness/files/agent-execution-registry.json
+git add "$VALUES" "$CAMPUS_VALUES" deploy/helm/pharness/files/agent-execution-registry.json
 git commit --quiet -m "release: pin ${REVISION:0:7} images
 
 $(jq -r '.components[] | select(.build_target != "bundle") | "\(.component)  \(.digest)"' "${OUT}/BUILD.json")"
+[[ -z "$(git status --porcelain)" ]] || {
+  echo "release pin left uncommitted changes; stage every file pharness-release-pin.sh writes" >&2
+  git status --short >&2
+  exit 1
+}
+PIN_COMMIT="$(git rev-parse HEAD)"
 git push --quiet -u origin "$BRANCH"
 PR_URL="$(gh pr create --base main --head "$BRANCH" --title "release: pin ${REVISION:0:7} images" \
   --body "Digest pin for \`${REVISION}\`, built by \`scripts/pharness-release.sh\`. Previous runtime: \`${PREVIOUS_REVISION}\`.")"
@@ -102,7 +109,8 @@ if [[ "$MERGE" == true ]]; then
     sleep 5
   done
   gh pr checks "$PR_URL" --watch --interval 10 >/dev/null
-  gh pr merge "$PR_URL" --merge
+  # A push to the branch during the watch replaces its checks; refuse to merge a head that was not watched.
+  gh pr merge "$PR_URL" --merge --match-head-commit "$PIN_COMMIT"
   echo "merged; Argo applies the pin from main"
 fi
 git checkout --quiet --detach "$REVISION"
