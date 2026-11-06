@@ -17,6 +17,7 @@ fn context(worker: &str, now: i64) -> CampusDriverContext<'_> {
         now,
         lease_seconds: LEASE,
         central_authority: true,
+        teardown_hooks: &[],
     }
 }
 

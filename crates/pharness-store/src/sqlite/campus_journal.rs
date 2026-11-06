@@ -190,9 +190,13 @@ impl SqliteStore {
                      SET occupant_session_id = ?1, occupant_generation = occupant_generation + 1,
                          occupied_at = ?2, updated_at = ?2
                      WHERE slot_id = (
-                       SELECT slot_id FROM campus_lab_slots
-                       WHERE tenant_id = ?3 AND occupant_session_id IS NULL
-                       ORDER BY slot_id LIMIT 1
+                       SELECT s.slot_id FROM campus_lab_slots s
+                       WHERE s.tenant_id = ?3 AND s.occupant_session_id IS NULL
+                         AND NOT EXISTS (
+                           SELECT 1 FROM campus_lab_slot_holds h
+                           WHERE h.slot_id = s.slot_id AND h.released_at IS NULL
+                         )
+                       ORDER BY s.slot_id LIMIT 1
                      )
                      RETURNING slot_id, occupant_generation",
                 )
@@ -1044,7 +1048,7 @@ async fn load_operation(
         .transpose()
 }
 
-async fn load_slot(
+pub(super) async fn load_slot(
     connection: &mut SqliteConnection,
     slot_id: &str,
 ) -> CampusResult<Option<StoredCampusLabSlot>> {

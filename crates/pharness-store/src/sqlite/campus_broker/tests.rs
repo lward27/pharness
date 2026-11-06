@@ -108,6 +108,7 @@ impl Fixture {
             now: self.now(),
             lease_seconds: 60,
             central_authority: true,
+            teardown_hooks: &[],
         };
         advance_campus_lab_session(&self.store, &self.provider, &context, session_id)
             .await

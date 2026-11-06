@@ -32,13 +32,17 @@ impl InMemoryCampusAuthoritySource {
     }
 
     pub fn revoke(&self, session_id: &str) {
+        self.set_status(session_id, CampusAuthorityStatus::Revoked);
+    }
+
+    pub fn set_status(&self, session_id: &str, status: CampusAuthorityStatus) {
         if let Some(snapshot) = self
             .sessions
             .lock()
             .expect("authority lock")
             .get_mut(session_id)
         {
-            snapshot.status = CampusAuthorityStatus::Revoked;
+            snapshot.status = status;
         }
     }
 

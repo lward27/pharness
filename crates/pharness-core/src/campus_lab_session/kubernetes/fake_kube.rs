@@ -24,6 +24,8 @@ pub struct FakeKubeState {
     pub pods_hang_on_delete: bool,
     /// Deleted Jobs keep a finalizer instead of disappearing.
     pub jobs_hang_on_delete: bool,
+    /// The next create of this kind fails as if the API server went away.
+    pub fail_next_create: Option<CampusKubeKind>,
     /// Runs right after the next Job is stored.
     after_job_create: Option<CreateHook>,
 }
@@ -368,6 +370,10 @@ impl CampusKubeApi for FakeKube {
             .unwrap_or_default()
             .to_string();
         state.creates.push(format!("{kind:?}/{namespace}/{name}"));
+        if state.fail_next_create == Some(kind) {
+            state.fail_next_create = None;
+            return Err(CampusKubeError::Unreachable("connection reset".into()));
+        }
         if let Some((rejected, message)) = &state.reject_kind {
             if *rejected == kind {
                 return Err(CampusKubeError::Rejected(message.clone()));

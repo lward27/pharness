@@ -122,6 +122,13 @@ async fn at_schema_60(path: &Path) -> SqliteStore {
 async fn schema_59(path: &Path) -> SqliteStore {
     let pool = pool_at(path).await;
     migrator_through(59).run(&pool).await.unwrap();
+    // Admission reads slot holds (0061). A connection-local TEMP table stands
+    // in for them: it is not part of the main schema the test compares and
+    // is gone once the pool closes.
+    sqlx::query("CREATE TEMP TABLE campus_lab_slot_holds (slot_id TEXT, released_at INTEGER)")
+        .execute(&pool)
+        .await
+        .unwrap();
     let store = SqliteStore { pool };
     student(&store, "alice").await;
     store
@@ -195,7 +202,12 @@ async fn schema_59_data_survives_0060_and_the_previous_release_refuses_it() {
         .unwrap()
         .is_empty());
 
-    // The pre-existing session keeps working under the new trigger.
+    // The pre-existing session keeps working under the new trigger, with the
+    // current code on the latest schema.
+    sqlx::migrate!("./migrations")
+        .run(&upgraded.pool)
+        .await
+        .unwrap();
     upgraded
         .request_campus_lab_stop("session", "student:alice", "stop requested", false, 300)
         .await

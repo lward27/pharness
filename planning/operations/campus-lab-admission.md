@@ -35,7 +35,9 @@ Migration `0059` adds the admission tables (see
 - **Five slots by default** (`lab_slots`), registered at startup as
   `<tenant>-lab-slot-NN`, or under the ids listed in `lab_slot_ids` (which
   sets `lab_slots` to its length). The Kubernetes provider maps these ids
-  to slot namespaces; the Campus PoC lists `campus-lab-slot-1..5`.
+  to slot namespaces; the Campus PoC lists `campus-lab-slot-1..5`. Startup
+  retires registered ids the catalog no longer lists and restores listed
+  ones that were retired ([campus-teardown.md](campus-teardown.md#slot-ids)).
 - **Static catalog.** Assignments come from a JSON file; there is no
   instructor UI, LMS sync or billing.
 
@@ -149,6 +151,9 @@ reduced) is cleared instead of holding capacity.
 journal: `Active` only while the session is `ready`, its desired state is
 `ready`, it is not revoked and not expired, and the assignment's current
 effective policy hash and profile equal the ones the session launched with.
+Under the same conditions a session that is still `provisioning` reports
+`Provisioning` (LUC-133): the Kubernetes provider may launch its workload,
+while the capability broker, which grants only `Active`, still refuses it.
 
 ## Restore procedure
 

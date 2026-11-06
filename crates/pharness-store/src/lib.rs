@@ -7,6 +7,7 @@ mod campus_authority;
 mod campus_broker;
 mod campus_driver;
 mod campus_journal;
+mod campus_teardown;
 mod data_lifecycle;
 mod hosted_controller;
 mod inference;
@@ -46,6 +47,13 @@ pub use campus_journal::{
     campus_operation_key, CampusJournalError, CampusLabOrphan, CampusLabTransition,
     CampusLabTransitionOutcome, CampusOperationLease, CampusOrphanReason, CreateCampusLabSession,
     StoredCampusLabEvent, StoredCampusLabOperation, StoredCampusLabSession, StoredCampusLabSlot,
+};
+pub use campus_teardown::{
+    campus_cleanup_retry_at, campus_janitor_op_key, reconcile_campus_lab_orphans,
+    CampusCleanupBlockedSession, CampusJanitorReport, CampusLabSlotCondition,
+    CampusLabSlotHoldKind, CampusLabSlotSync, CampusOrphanTracker, CampusTenantLabMetrics,
+    StoredCampusLabSlotHold, CAMPUS_CLEANUP_RETRY_BASE_SECONDS, CAMPUS_CLEANUP_RETRY_MAX_SECONDS,
+    CAMPUS_JANITOR_ACTOR, CAMPUS_ORPHAN_GRACE_SECONDS,
 };
 pub use hosted_controller::{
     BeginWorkflowOperation, DatabaseSize, FinishWorkflowReconciliation, HostedControllerMetrics,

@@ -225,13 +225,22 @@ impl SqliteStore {
         .fetch_one(&mut *tx)
         .await?;
         // A session can only run in a registered slot, so the configured
-        // count never admits more sessions than slots exist.
-        let registered_slots: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM campus_lab_slots WHERE tenant_id = ?1")
-                .bind(&r.tenant_id)
-                .fetch_one(&mut *tx)
-                .await?;
-        if tenant_live >= limits.lab_slots.min(registered_slots) {
+        // count never admits more sessions than slots exist. A held
+        // (quarantined or retired) slot counts only while its occupant,
+        // already in `tenant_live`, still holds it.
+        let usable_slots: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM campus_lab_slots s
+             WHERE s.tenant_id = ?1 AND (
+               s.occupant_session_id IS NOT NULL OR NOT EXISTS (
+                 SELECT 1 FROM campus_lab_slot_holds h
+                 WHERE h.slot_id = s.slot_id AND h.released_at IS NULL
+               )
+             )",
+        )
+        .bind(&r.tenant_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        if tenant_live >= limits.lab_slots.min(usable_slots) {
             return Ok(CampusLabAdmission::Rejected(
                 CampusLabRejection::NoSlotsAvailable,
             ));

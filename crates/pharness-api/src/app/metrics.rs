@@ -4,12 +4,14 @@
 //! scrape never needs an operator credential and the public ingress, which
 //! forwards the whole operator port, never exposes it.
 
+use super::campus::CAMPUS_JANITOR;
 use super::{AppState, OperationalMode};
 use axum::extract::State;
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
+use pharness_store::{CampusLabSlotCondition, CampusTenantLabMetrics};
 use std::fmt::Write;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 
@@ -230,7 +232,93 @@ async fn render(state: &AppState) -> Result<String, String> {
         &[(&[], database.freelist_bytes as f64)],
     );
 
+    let campus = state
+        .store
+        .campus_lab_metrics(now / 1000)
+        .await
+        .map_err(|error| error.to_string())?;
+    render_campus(&mut out, &campus, now / 1000);
+
     Ok(out)
+}
+
+/// Campus lab gauges from the journal, so every replica reports the same
+/// values, plus this process's most recent janitor pass.
+fn render_campus(out: &mut String, tenants: &[CampusTenantLabMetrics], now: i64) {
+    let mut sessions = Vec::new();
+    let mut slots = Vec::new();
+    let mut oldest = Vec::new();
+    let mut expired = Vec::new();
+    for tenant in tenants {
+        let id = tenant.tenant_id.as_str();
+        for (state, count) in &tenant.sessions {
+            sessions.push((
+                vec![("tenant", id), ("state", state.as_str())],
+                *count as f64,
+            ));
+        }
+        for condition in CampusLabSlotCondition::ALL {
+            let count = tenant.slots.get(&condition).copied().unwrap_or(0);
+            slots.push((
+                vec![("tenant", id), ("condition", condition.as_str())],
+                count as f64,
+            ));
+        }
+        oldest.push((
+            vec![("tenant", id)],
+            tenant
+                .oldest_quarantined_at
+                .map(|since| (now - since).max(0) as f64)
+                .unwrap_or(f64::NAN),
+        ));
+        expired.push((vec![("tenant", id)], tenant.expired_live as f64));
+    }
+    gauge_owned(
+        out,
+        "pharness_campus_lab_sessions",
+        "Campus lab sessions that are not terminal, by journal state.",
+        &sessions,
+    );
+    gauge_owned(
+        out,
+        "pharness_campus_lab_slots",
+        "Campus lab slots by condition; cleanup_blocked and quarantined slots take no new session.",
+        &slots,
+    );
+    gauge_owned(
+        out,
+        "pharness_campus_lab_oldest_quarantine_age_seconds",
+        "Age of the oldest blocked cleanup or quarantined slot; NaN when there is none.",
+        &oldest,
+    );
+    gauge_owned(
+        out,
+        "pharness_campus_lab_sessions_expired_live",
+        "Campus lab sessions past their absolute expiry that are neither terminal nor quarantined.",
+        &expired,
+    );
+    let last_pass = CAMPUS_JANITOR.last_pass.load(Ordering::Relaxed);
+    gauge(
+        out,
+        "pharness_campus_lab_janitor_last_pass_timestamp_seconds",
+        "Unix time of this process's most recent Campus lab janitor pass; 0 before the first.",
+        &[(&[], last_pass as f64)],
+    );
+    gauge(
+        out,
+        "pharness_campus_lab_janitor_orphaned_workloads",
+        "Provider workloads no live session accounted for at the most recent janitor pass.",
+        &[(
+            &[],
+            CAMPUS_JANITOR.orphaned_workloads.load(Ordering::Relaxed) as f64,
+        )],
+    );
+    counter(
+        out,
+        "pharness_campus_lab_janitor_errors_total",
+        "Campus lab janitor inventory, delete or journal errors since process start.",
+        CAMPUS_JANITOR.errors.load(Ordering::Relaxed),
+    );
 }
 
 fn gauge(out: &mut String, name: &str, help: &str, samples: &[(&[(&str, &str)], f64)]) {
@@ -293,7 +381,9 @@ fn format_value(value: f64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{escape_label, format_value, gauge, sample};
+    use super::{escape_label, format_value, gauge, render_campus, sample};
+    use pharness_core::CampusLabSessionState;
+    use pharness_store::{CampusLabSlotCondition, CampusTenantLabMetrics};
 
     #[test]
     fn exposition_lines_follow_the_text_format() {
@@ -314,5 +404,41 @@ mod tests {
         assert_eq!(format_value(1234567.0), "1234567");
         assert_eq!(format_value(f64::INFINITY), "+Inf");
         assert_eq!(escape_label("line\nbreak"), "line\\nbreak");
+    }
+
+    #[test]
+    fn campus_gauges_report_every_slot_condition_and_the_quarantine_age() {
+        let tenant = CampusTenantLabMetrics {
+            tenant_id: "tenant-a".into(),
+            sessions: [(CampusLabSessionState::CleanupBlocked, 1)].into(),
+            slots: [
+                (CampusLabSlotCondition::CleanupBlocked, 1),
+                (CampusLabSlotCondition::Free, 4),
+            ]
+            .into(),
+            oldest_quarantined_at: Some(900),
+            expired_live: 2,
+        };
+        let mut out = String::new();
+        render_campus(&mut out, &[tenant], 1_000);
+        for line in [
+            "pharness_campus_lab_sessions{tenant=\"tenant-a\",state=\"cleanup_blocked\"} 1",
+            "pharness_campus_lab_slots{tenant=\"tenant-a\",condition=\"free\"} 4",
+            "pharness_campus_lab_slots{tenant=\"tenant-a\",condition=\"cleanup_blocked\"} 1",
+            "pharness_campus_lab_slots{tenant=\"tenant-a\",condition=\"quarantined\"} 0",
+            "pharness_campus_lab_slots{tenant=\"tenant-a\",condition=\"retired\"} 0",
+            "pharness_campus_lab_oldest_quarantine_age_seconds{tenant=\"tenant-a\"} 100",
+            "pharness_campus_lab_sessions_expired_live{tenant=\"tenant-a\"} 2",
+            "# TYPE pharness_campus_lab_janitor_errors_total counter",
+        ] {
+            assert!(
+                out.lines().any(|candidate| candidate == line),
+                "{line} in\n{out}"
+            );
+        }
+        let mut none = String::new();
+        render_campus(&mut none, &[], 1_000);
+        assert!(none.contains("# TYPE pharness_campus_lab_slots gauge"));
+        assert!(!none.contains("pharness_campus_lab_slots{"));
     }
 }

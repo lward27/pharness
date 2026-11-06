@@ -91,3 +91,62 @@ groups:
         annotations:
           summary: no SQLite backup Job has completed in 36 hours
           description: The nightly backup CronJob has not produced a successful archive recently.
+  - name: pharness-campus
+    rules:
+      - alert: PharnessCampusCleanupBlocked
+        # A teardown that cannot be confirmed (unreachable node or storage,
+        # a finalizer that does not clear) holds its slot. The controller
+        # never force-deletes or strips finalizers, so this needs an operator.
+        expr: pharness_campus_lab_slots{condition="cleanup_blocked"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: a Campus lab session cleanup is blocked
+          description: '{{ $value }} lab slots of tenant {{ $labels.tenant }} hold a session whose teardown is not confirmed; see planning/operations/campus-teardown.md.'
+      - alert: PharnessCampusSlotQuarantined
+        # Orphans are deleted after a 60 s grace; a slot that stays
+        # quarantined means the janitor cannot remove what it found.
+        expr: pharness_campus_lab_slots{condition="quarantined"} > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: a Campus lab slot is quarantined by the orphan janitor
+          description: '{{ $value }} lab slots of tenant {{ $labels.tenant }} hold workloads no live session owns.'
+      - alert: PharnessCampusQuarantineAging
+        expr: pharness_campus_lab_oldest_quarantine_age_seconds > 3600
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: a Campus lab slot has been out of service for over an hour
+          description: The oldest blocked or quarantined slot of tenant {{ $labels.tenant }} is {{ $value | humanizeDuration }} old.
+      - alert: PharnessCampusExpiredSessionsLive
+        # The reconciler revokes expired sessions on its next pass, every
+        # few seconds; anything older means expiry is not being enforced.
+        expr: pharness_campus_lab_sessions_expired_live > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Campus lab sessions are live past their absolute expiry
+          description: '{{ $value }} sessions of tenant {{ $labels.tenant }} are past expires_at and neither terminal nor quarantined.'
+      - alert: PharnessCampusJanitorStalled
+        # The janitor passes every 30 s once a provider is configured; the
+        # timestamp stays 0 in a process without one.
+        expr: pharness_campus_lab_janitor_last_pass_timestamp_seconds > 0 and time() - pharness_campus_lab_janitor_last_pass_timestamp_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: the Campus lab orphan janitor has not completed a pass for 5 minutes
+          description: The last janitor pass finished {{ $value | humanizeDuration }} ago.
+      - alert: PharnessCampusJanitorErrors
+        expr: increase(pharness_campus_lab_janitor_errors_total[15m]) > 3
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: Campus lab janitor passes are failing
+          description: More than three janitor inventory, delete or journal errors in the last 15 minutes.
