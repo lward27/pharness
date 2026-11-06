@@ -24,6 +24,8 @@ and effect boundary before it runs.
 
 - [Campus browser terminals](campus-browser-terminal.md) describes the terminal ticket and WebSocket routes, the single-use ticket design, revocation and measured close latency, limits, audit events, configuration, the terminal RBAC, ingress needs and accessibility.
 
+- [Campus M1 demonstration](campus-m1-demo.md) runs one governed lab session from Keycloak sign-in through Stop lab and absolute expiry to verified teardown, with pinned inputs, peer and envelope refusals, in-sandbox probes and a secret-scanned evidence bundle.
+
 - [Exact-policy gateway preflight](ASTRA-M04-GATEWAY-PREFLIGHT.md) binds protocol evidence to the selected stage policy before diagnostics or qualification.
 
 - [Minisforum Windows local-model setup](ASTRA-MINISFORUM-WINDOWS-LOCAL-MODELS.md)

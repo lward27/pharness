@@ -213,7 +213,8 @@ Through `kubectl -n campus-poc port-forward svc/pharness-campus-api 4777`
   provider or kubeconfig error.
 
 After switch-on, sign in as each synthetic user from a browser, launch and
-stop a lab, and open its terminal. That scripted demo is a separate step.
+stop a lab, and open its terminal. The scripted version is the
+[M1 demonstration](campus-m1-demo.md).
 
 ## Teardown
 

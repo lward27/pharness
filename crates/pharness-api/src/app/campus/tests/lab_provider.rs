@@ -259,6 +259,12 @@ async fn the_campus_chart_configuration_starts_the_kubernetes_provider() {
     let catalog = CampusLabCatalog::parse("campus-poc", CHART_CATALOG).unwrap();
     assert!(catalog.assignment("cs101", "research-lab").is_some());
     assert!(catalog.assignment("cs101", "coding-lab").is_some());
+    // The M1 demonstration (planning/operations/campus-m1-demo.md) waits
+    // for this assignment's absolute expiry.
+    let timeout_demo = catalog
+        .assignment("cs101", "research-timeout-demo")
+        .unwrap();
+    assert_eq!(timeout_demo.session_seconds, 300);
     let file = KubernetesLabProviderFile::parse(CHART_PROVIDER, &catalog).unwrap();
     assert!(file.provider.egress.is_some());
 
