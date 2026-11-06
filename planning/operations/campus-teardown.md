@@ -229,8 +229,8 @@ the probe namespace and bindings, and leftovers are printed.
 ## Results
 
 Run on 2026-11-05 against `lucas_engineering` (Argo `campus-lab`
-Synced/Healthy at `fa05e31`), with evidence in `/tmp/luc133-live-4`:
-14 checks passed, 0 failed, and no probe namespace, probe binding or
+Synced/Healthy at `fa05e31`), with evidence in `/tmp/luc133-live-5`:
+15 checks passed, 0 failed, and no probe namespace, probe binding or
 controller object was left in any slot.
 
 **Stuck finalizers and orphans** (311 s):
@@ -238,26 +238,27 @@ controller object was left in any slot.
 | Case | Result |
 | --- | --- |
 | Session of another journal in the slot | quarantined on the first janitor pass and not deleted; removed and the slot released 6 s after the grace period |
-| Pod held by a finalizer | `cleanup_blocked` after 125 s: "Pod ... on node ubuntu-lucas-engineering-2 has not confirmed termination" (the node-loss signal); the 30 s retry stayed blocked; the finalizer was untouched; finished 5 s after the operator removed it |
+| Pod held by a finalizer | `cleanup_blocked` after 125 s: "Pod ... on node ubuntu-lucas-engineering-2 has not confirmed termination" (the node-loss signal); the 30 s retry stayed blocked; the finalizer was untouched; finished 6 s after the operator removed it |
 | Job held by a finalizer | `cleanup_blocked` after 125 s: "Job ... is held by finalizers [\"pharness.dev/luc-133-probe\"]"; the retry stayed blocked; finished 6 s after removal |
 
-**100 cycles** (20 batches of 5, both runner images, 10.5 minutes, 0 sweep
+**100 cycles** (20 batches of 5, both runner images, 10.4 minutes, 0 sweep
 errors): every session ended `terminated` with its original `expires_at`
 and every broker token revoked. The final janitor pass found no orphan, no
 hold and no live session, and all five slots were free.
 
 | Ending (5 batches each) | Ready | Broker refuses the token, max | Resources removed, max |
 | --- | --- | --- | --- |
-| Stop | 18-21 s | 6 ms | 14 s |
+| Stop | 15-19 s | 6 ms | 14 s |
 | Expire | 18-20 s | 1 ms | 14 s |
 | Stop while provisioning | stopped after the first sweep, 5-6 s | 5 ms | 13 s |
-| Duplicate stop, then restart | 18-20 s | 3374 ms | 13 s |
+| Duplicate stop, then restart | 19-20 s | 3171 ms | 13 s |
 
-Over all 100 sessions, revocation took p50 4 ms, p95 3064 ms and max
-3374 ms (limit 60 s), and removal took p50 13 s, p95 14 s and max 14 s
+Over all 100 sessions, revocation took p50 4 ms, p95 2999 ms and max
+3171 ms (limit 60 s), and removal took p50 13 s, p95 14 s and max 14 s
 (limit 300 s). The restart batches measure revocation after one sweep that
 the first reconciler runs before it is replaced. The tokens were already
 revoked in the stop transaction, as the other batches show.
+
 ## Restore procedure
 
 Migration `0061` only creates two tables, one index and four triggers; it
