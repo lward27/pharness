@@ -3,7 +3,7 @@ use crate::{
     CampusJournalError, CampusLabTransition, CampusOperationLease, CampusOrphanReason, SqliteStore,
     StoredCampusLabSession,
 };
-use pharness_core::{
+use pharness_workspaces::{
     CampusLabDesiredState, CampusLabOperationStatus, CampusLabSessionState as State,
     CampusLabTransitionError, CampusWorkloadRef, OwnedCampusResource,
 };

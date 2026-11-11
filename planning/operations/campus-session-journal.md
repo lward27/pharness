@@ -14,7 +14,7 @@ separate from SDLC runs and WorkItems and from Campus browser sessions
 
 | Piece | Location |
 | --- | --- |
-| States, transition table, provider trait, fake provider | `crates/pharness-core/src/campus_lab_session.rs` |
+| States, transition table, provider trait, fake provider | `crates/pharness-workspaces/src/campus_lab_session.rs` |
 | Records and typed journal errors | `crates/pharness-store/src/campus_journal.rs` |
 | SQL and fencing | `crates/pharness-store/src/sqlite/campus_journal.rs` |
 | One-step driver | `crates/pharness-store/src/campus_driver.rs` |

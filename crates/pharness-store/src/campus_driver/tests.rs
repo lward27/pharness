@@ -1,7 +1,7 @@
 use super::*;
 use crate::campus_journal::test_support::{seed, DiskStore, TENANT, TTL};
 use async_trait::async_trait;
-use pharness_core::{
+use pharness_workspaces::{
     CampusLabOperationStatus, CampusWorkloadRef, FakeCampusProvider, FakeFault, FakeFaultPoint,
     OwnedCampusResource,
 };

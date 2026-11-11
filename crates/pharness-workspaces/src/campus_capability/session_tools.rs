@@ -2,8 +2,8 @@
 
 use super::broker::CampusCapabilityBroker;
 use super::{CampusCaller, CampusCapabilityRequest, CampusSessionClaims};
-use crate::{AgentAction, ToolError, ToolExecutor, ToolResult};
 use async_trait::async_trait;
+use pharness_core::{AgentAction, ToolError, ToolExecutor, ToolResult};
 use std::sync::Arc;
 
 /// The [`ToolExecutor`] a Campus agent runtime is given. It holds no

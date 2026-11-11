@@ -25,6 +25,7 @@ globset.workspace = true
 hmac.workspace = true
 jsonwebtoken.workspace = true
 pharness-core = { path = "../pharness-core" }
+pharness-workspaces = { path = "../pharness-workspaces" }
 pharness-config = { path = "../pharness-config" }
 pharness-fireworks = { path = "../pharness-fireworks" }
 pharness-openai-compatible = { path = "../pharness-openai-compatible" }

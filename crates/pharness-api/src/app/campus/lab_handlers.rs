@@ -21,11 +21,11 @@ use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use pharness_core::{CampusLabDesiredState, CampusLabSessionState};
 use pharness_store::{
     CampusLabAdmission, CampusLabRejection, CampusLabSessionRecord, StoredCampusLabSession,
     CENTRAL_AUTHORITY_UNAVAILABLE,
 };
+use pharness_workspaces::{CampusLabDesiredState, CampusLabSessionState};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Value};

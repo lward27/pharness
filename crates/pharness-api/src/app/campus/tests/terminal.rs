@@ -13,12 +13,12 @@ use axum::body::Body;
 use axum::http::{header, StatusCode};
 use axum::Router;
 use futures::{SinkExt, StreamExt};
-use pharness_core::campus_terminal::{
+use pharness_store::{CampusIdentityKey, SqliteStore};
+use pharness_workspaces::campus_terminal::{
     CampusTerminalError, CampusTerminalSize, FakeCampusTerminal, FAKE_AGENT_CLI_VERSION,
     FAKE_TERMINAL_PROMPT, TERMINAL_OUTPUT_CHUNK_BYTES,
 };
-use pharness_core::CampusLabDesiredState;
-use pharness_store::{CampusIdentityKey, SqliteStore};
+use pharness_workspaces::CampusLabDesiredState;
 use serde_json::{json, Value};
 use std::net::SocketAddr;
 use std::path::PathBuf;

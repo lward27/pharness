@@ -4,10 +4,10 @@ use crate::{
     CampusDriverContext, CampusLabAdmission, CampusLabLimits, CampusLabRejection,
     CampusLabSessionRecord, JournalCampusAuthoritySource, SqliteStore,
 };
-use pharness_core::campus_capability::{
+use pharness_workspaces::campus_capability::{
     CampusAuthoritySource, CampusAuthorityStatus, CampusBrokerClock,
 };
-use pharness_core::{
+use pharness_workspaces::{
     CampusLabSessionState as State, CampusPolicyLayer, CampusProfile, EffectiveCampusPolicy,
     FakeCampusProvider, CAMPUS_POLICY_LAYER_SCHEMA,
 };
@@ -109,7 +109,7 @@ async fn settle(store: &SqliteStore, provider: &FakeCampusProvider, session_id: 
         if session.state.is_terminal()
             || session.state == State::CleanupBlocked
             || (session.state == State::Ready
-                && session.desired_state == pharness_core::CampusLabDesiredState::Ready)
+                && session.desired_state == pharness_workspaces::CampusLabDesiredState::Ready)
         {
             return;
         }
@@ -728,7 +728,7 @@ impl CampusBrokerClock for Clock {
 
 fn coding_policy() -> EffectiveCampusPolicy {
     let profile = CampusProfile::parse(include_str!(
-        "../../../../pharness-core/src/campus_profile/fixtures/coding.json"
+        "../../../../pharness-workspaces/src/campus_profile/fixtures/coding.json"
     ))
     .unwrap();
     let layer = |authority: &str| {
@@ -774,9 +774,9 @@ async fn journal_authority_is_active_only_while_the_session_is_ready_and_unexpir
     let record = created(store.admit_campus_lab_launch(request).await.unwrap());
     let id = record.session.session_id.clone();
 
-    let status = |snapshot: Option<pharness_core::campus_capability::CampusAuthoritySnapshot>| {
-        snapshot.map(|snapshot| snapshot.status)
-    };
+    let status = |snapshot: Option<
+        pharness_workspaces::campus_capability::CampusAuthoritySnapshot,
+    >| { snapshot.map(|snapshot| snapshot.status) };
     assert_eq!(
         status(source.session(&id).await.unwrap()),
         Some(CampusAuthorityStatus::Revoked)
@@ -784,8 +784,8 @@ async fn journal_authority_is_active_only_while_the_session_is_ready_and_unexpir
     // While the workload is launched the provider may start it, but the
     // capability broker grants nothing yet.
     provider.inject(
-        pharness_core::FakeFaultPoint::AfterProvision,
-        pharness_core::FakeFault::InProgress,
+        pharness_workspaces::FakeFaultPoint::AfterProvision,
+        pharness_workspaces::FakeFault::InProgress,
     );
     let context = CampusDriverContext {
         worker_id: "test-worker",

@@ -4,7 +4,7 @@ use crate::{
     CampusLabTransitionOutcome, CampusOperationLease, CampusOrphanReason, CreateCampusLabSession,
     StoredCampusLabEvent, StoredCampusLabOperation, StoredCampusLabSession, StoredCampusLabSlot,
 };
-use pharness_core::{
+use pharness_workspaces::{
     CampusLabDesiredState, CampusLabObservedState, CampusLabOperationKind,
     CampusLabOperationStatus, CampusLabSessionState, OwnedCampusResource,
 };

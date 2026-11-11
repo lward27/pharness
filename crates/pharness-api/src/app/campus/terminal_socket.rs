@@ -37,7 +37,7 @@ use axum::extract::{Path, State};
 use axum::http::{header, HeaderMap};
 use axum::response::{IntoResponse, Response};
 use axum::Extension;
-use pharness_core::campus_terminal::{
+use pharness_workspaces::campus_terminal::{
     CampusTerminalError, CampusTerminalInput, CampusTerminalSize, CampusTerminalStream,
     CampusTerminalTarget,
 };

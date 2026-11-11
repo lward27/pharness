@@ -33,9 +33,9 @@ use axum::Router;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use jsonwebtoken::Algorithm;
-use pharness_core::campus_broker_token::CampusBrokerTokenIssuer;
-use pharness_core::FakeCampusProvider;
 use pharness_store::SqliteStore;
+use pharness_workspaces::campus_broker_token::CampusBrokerTokenIssuer;
+use pharness_workspaces::FakeCampusProvider;
 use ring::rand::{SecureRandom, SystemRandom};
 use ring::signature::{EcdsaKeyPair, KeyPair, ECDSA_P256_SHA256_FIXED_SIGNING};
 use secrecy::{Secret, SecretString};
@@ -415,7 +415,7 @@ impl Harness {
         let labs = Arc::new(CampusLabs::new(
             catalog,
             with_provider
-                .then(|| provider.clone() as Arc<dyn pharness_core::CampusExecutionProvider>),
+                .then(|| provider.clone() as Arc<dyn pharness_workspaces::CampusExecutionProvider>),
         ));
         labs.register_slots(&store, START).await.unwrap();
         let mut harness = Self::build(test_config(), store, disk, Some(labs), terminals);

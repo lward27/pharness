@@ -10,13 +10,12 @@
 
 use crate::SqliteStore;
 use async_trait::async_trait;
-use pharness_core::campus_capability::{
+use pharness_core::ActionId;
+use pharness_workspaces::campus_capability::{
     CampusActorRef, CampusAuthorityError, CampusAuthoritySnapshot, CampusAuthoritySource,
     CampusAuthorityStatus, CampusBrokerClock, CampusSessionAuthority, CampusTrustedApproval,
 };
-use pharness_core::{
-    ActionId, CampusLabDesiredState, CampusLabSessionState, EffectiveCampusPolicy,
-};
+use pharness_workspaces::{CampusLabDesiredState, CampusLabSessionState, EffectiveCampusPolicy};
 use std::sync::Arc;
 
 /// The effective policy each assignment is configured with now.

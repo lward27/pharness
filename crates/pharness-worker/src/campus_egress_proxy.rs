@@ -2,7 +2,7 @@
 //!
 //! Campus session Pods have no route to anything but this proxy and the
 //! broker, and no DNS. The proxy is the only way out, and it lets through
-//! only what [`pharness_core::campus_egress`] approves:
+//! only what [`pharness_workspaces::campus_egress`] approves:
 //!
 //! 1. `CONNECT <approved host>:443` only. Any other method, port, raw IP or
 //!    host is refused before anything is resolved.
@@ -28,7 +28,7 @@ use hyper::body::{Bytes, Incoming};
 use hyper::header::{self, HeaderMap, HeaderName};
 use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::{TokioIo, TokioTimer};
-use pharness_core::campus_egress::{
+use pharness_workspaces::campus_egress::{
     check_campus_egress_request, parse_campus_connect_target, parse_campus_egress_hosts,
     select_campus_egress_addresses, CampusEgressDenial, CampusEgressRequest,
     CAMPUS_EGRESS_HOSTS_ANNOTATION, CAMPUS_EGRESS_LABEL, CAMPUS_EGRESS_LABEL_VALUE,

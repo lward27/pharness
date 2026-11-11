@@ -4,7 +4,7 @@ use crate::{
     CampusIdentityKey, CreateCampusLabSession, SqliteStore, StoredCampusLabSession,
     UpsertCampusIdentity,
 };
-use pharness_core::CampusProfileRef;
+use pharness_workspaces::CampusProfileRef;
 
 pub const TENANT: &str = "tenant-a";
 pub const ISSUER: &str = "https://idp.example.test";

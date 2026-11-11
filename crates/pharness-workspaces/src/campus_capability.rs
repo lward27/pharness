@@ -66,9 +66,10 @@ pub use sandbox::{check_sandbox_environment, CampusSandboxError, CampusSandboxNe
 pub use selector::{CampusResourceSelector, CampusSelectorError};
 pub use session_tools::CampusSessionTools;
 
-use crate::policy::{CampusApproval, CampusApproverRole};
-use crate::{ActionId, AgentAction, ApprovalKind, EffectiveCampusPolicy, ToolError, ToolResult};
+use crate::campus_policy::{CampusApproval, CampusApproverRole};
+use crate::EffectiveCampusPolicy;
 use async_trait::async_trait;
+use pharness_core::{ActionId, AgentAction, ApprovalKind, ToolError, ToolResult};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};

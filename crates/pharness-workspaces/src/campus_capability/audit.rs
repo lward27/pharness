@@ -6,15 +6,15 @@ use super::selector::CampusResourceSelector;
 use super::{
     CampusActorRef, CampusCallPath, CampusCaller, CampusCapabilityRequest, CampusEffectClass,
 };
-use crate::campus_profile::CampusCapabilityScope;
-use crate::policy::{
+use crate::campus_policy::{
     CampusApproverRole, CampusDecisionOutcome, CampusDecisionReason, CampusPolicySource,
 };
-use crate::{
+use crate::campus_profile::CampusCapabilityScope;
+use async_trait::async_trait;
+use pharness_core::{
     canonical_json_sha256, AgentAction, ApprovalKind, CapabilityKind, RiskLevel, ToolError,
     ToolResult, ToolResultStatus,
 };
-use async_trait::async_trait;
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;

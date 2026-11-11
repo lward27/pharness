@@ -8,7 +8,7 @@ holds and teardown hook records (see [Restore procedure](#restore-procedure)).
 
 | Piece | Location |
 | --- | --- |
-| Teardown hook trait | `crates/pharness-core/src/campus_lab_session.rs` (`CampusTeardownHook`) |
+| Teardown hook trait | `crates/pharness-workspaces/src/campus_lab_session.rs` (`CampusTeardownHook`) |
 | Delete confirmation and hooks in the driver | `crates/pharness-store/src/campus_driver.rs` (`confirm_teardown`) |
 | Backoff, slot holds, janitor | `crates/pharness-store/src/campus_teardown.rs` |
 | Slot sync, hold, metrics SQL | `crates/pharness-store/src/sqlite/campus_teardown.rs` |

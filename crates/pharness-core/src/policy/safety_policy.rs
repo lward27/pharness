@@ -150,7 +150,10 @@ impl SafetyPolicy {
         self.apply_permission_grants(action, run_scope, decision)
     }
 
-    pub(super) fn evaluate_action_without_grants(&self, action: &AgentAction) -> PolicyDecision {
+    /// The baseline decision before any permission grant is applied. Layered
+    /// policies (see `pharness-workspaces`) check their own denies between
+    /// this and [`Self::apply_permission_grants`].
+    pub fn evaluate_action_without_grants(&self, action: &AgentAction) -> PolicyDecision {
         match action {
             AgentAction::Respond { .. }
             | AgentAction::Finish { .. }
@@ -243,7 +246,8 @@ impl SafetyPolicy {
         }
     }
 
-    pub(super) fn apply_permission_grants(
+    /// Let this policy's permission grants lift an `Ask` decision.
+    pub fn apply_permission_grants(
         &self,
         action: &AgentAction,
         run_scope: &RunScope,

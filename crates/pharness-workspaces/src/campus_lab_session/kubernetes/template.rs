@@ -17,10 +17,10 @@ use crate::campus_egress::{
     format_campus_egress_hosts, CAMPUS_EGRESS_HOSTS_ANNOTATION, CAMPUS_EGRESS_LABEL,
     CAMPUS_EGRESS_LABEL_VALUE, CAMPUS_EGRESS_PORT, CAMPUS_EGRESS_ROUTES,
 };
+use crate::campus_policy::CampusEffectiveConstraints;
 use crate::campus_sandbox_pod::{
     check_campus_sandbox_pod_spec, CampusPodSpecViolation, CampusSandboxBrokerBinding,
 };
-use crate::policy::CampusEffectiveConstraints;
 use crate::{
     CampusIsolation, CampusLaunchGate, CampusNetworkMode, CampusProfile, CampusProfileKind,
     CampusWorkloadRef,

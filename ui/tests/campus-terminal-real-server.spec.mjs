@@ -17,7 +17,7 @@ import { createServer as createViteServer } from "vite";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const workspace = resolve(here, "../..");
-const fixtures = join(workspace, "crates/pharness-core/src/campus_profile/fixtures");
+const fixtures = join(workspace, "crates/pharness-workspaces/src/campus_profile/fixtures");
 const issuerSubject = "student-e2e";
 const fakeAgentVersion = "codex-cli 0.0.0-campus-fake";
 const closeBoundMs = 2_000;

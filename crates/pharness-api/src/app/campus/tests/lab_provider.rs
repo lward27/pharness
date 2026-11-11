@@ -9,17 +9,17 @@ use super::super::lab_catalog::{
 use super::super::lab_provider::build_campus_labs;
 use super::super::state::{CampusRuntime, SystemClock};
 use super::{test_config, MockIdp, TENANT};
-use pharness_core::campus_lab_session::kubernetes::KubernetesCampusProviderConfig;
-use pharness_core::campus_terminal::KubectlCampusTerminalConfig;
 use pharness_store::SqliteStore;
+use pharness_workspaces::campus_lab_session::kubernetes::KubernetesCampusProviderConfig;
+use pharness_workspaces::campus_terminal::KubectlCampusTerminalConfig;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 const RESEARCH: &str =
-    include_str!("../../../../../pharness-core/src/campus_profile/fixtures/research.json");
+    include_str!("../../../../../pharness-workspaces/src/campus_profile/fixtures/research.json");
 const CODING: &str =
-    include_str!("../../../../../pharness-core/src/campus_profile/fixtures/coding.json");
+    include_str!("../../../../../pharness-workspaces/src/campus_profile/fixtures/coding.json");
 
 fn layer(authority: &str, constraints: Value) -> Value {
     json!({

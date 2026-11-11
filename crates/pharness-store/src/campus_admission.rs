@@ -7,7 +7,7 @@
 //! one generation.
 
 use crate::StoredCampusLabSession;
-use pharness_core::CampusProfileRef;
+use pharness_workspaces::CampusProfileRef;
 use serde::{Deserialize, Serialize};
 
 /// Admission limits, enforced in the same transaction that creates a

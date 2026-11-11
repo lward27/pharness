@@ -9,11 +9,13 @@
 
 use super::config::CampusConfig;
 use anyhow::{bail, Context};
-use pharness_core::campus_lab_session::kubernetes::{
+use pharness_store::{CampusAssignmentPolicies, CampusLabLimits};
+use pharness_workspaces::campus_lab_session::kubernetes::{
     is_label_value, CampusSessionSizing, KubernetesCampusProviderConfig,
 };
-use pharness_core::{CampusPolicyLayer, CampusProfile, CampusProfileKind, EffectiveCampusPolicy};
-use pharness_store::{CampusAssignmentPolicies, CampusLabLimits};
+use pharness_workspaces::{
+    CampusPolicyLayer, CampusProfile, CampusProfileKind, EffectiveCampusPolicy,
+};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;

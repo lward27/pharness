@@ -31,26 +31,26 @@ use super::super::labs::{CampusLabSweep, CampusLabs, JANITOR_INTERVAL_SECONDS};
 use super::broker::denial;
 use super::labs::{act, catalog_value, enroll_students, id, launched, parse};
 use super::{Harness, Session, TestClock, TENANT};
-use pharness_core::campus_capability::{CampusBrokerClock, SystemCampusBrokerClock};
-use pharness_core::campus_lab_session::kubernetes::{
-    KubectlCampusKubeApi, KubernetesCampusProvider, KubernetesCampusProviderConfig, LABEL_RECORD,
-    LABEL_SESSION, RECORD_TOMBSTONE,
-};
-use pharness_core::campus_sandbox_pod::CAMPUS_BROKER_TOKEN_PATH;
-use pharness_core::{CampusExecutionProvider, CampusLabSessionState as State, CampusProfile};
 use pharness_store::{
     CampusLabSlotCondition, JournalCampusAuthoritySource, StoredCampusLabSession,
     CAMPUS_ORPHAN_GRACE_SECONDS,
 };
+use pharness_workspaces::campus_capability::{CampusBrokerClock, SystemCampusBrokerClock};
+use pharness_workspaces::campus_lab_session::kubernetes::{
+    KubectlCampusKubeApi, KubernetesCampusProvider, KubernetesCampusProviderConfig, LABEL_RECORD,
+    LABEL_SESSION, RECORD_TOMBSTONE,
+};
+use pharness_workspaces::campus_sandbox_pod::CAMPUS_BROKER_TOKEN_PATH;
+use pharness_workspaces::{CampusExecutionProvider, CampusLabSessionState as State, CampusProfile};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const RESEARCH: &str =
-    include_str!("../../../../../pharness-core/src/campus_profile/fixtures/research.json");
+    include_str!("../../../../../pharness-workspaces/src/campus_profile/fixtures/research.json");
 const CODING: &str =
-    include_str!("../../../../../pharness-core/src/campus_profile/fixtures/coding.json");
+    include_str!("../../../../../pharness-workspaces/src/campus_profile/fixtures/coding.json");
 const PROBE_FINALIZER: &str = "pharness.dev/luc-133-probe";
 const PROBE_SLOT: &str = "campus-lab-slot-1";
 const LEASE_SECONDS: i64 = 120;

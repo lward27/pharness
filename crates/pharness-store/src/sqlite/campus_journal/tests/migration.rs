@@ -3,7 +3,8 @@ use crate::{
     CampusIdentityKey, CampusJournalError, CreateAuditEvent, CreateCampusLabSession, CreateRun,
     CreateSession, PutCampusMembership, SqliteStore, UpsertCampusIdentity,
 };
-use pharness_core::{CampusLabSessionState, RunId, SessionId};
+use pharness_core::{RunId, SessionId};
+use pharness_workspaces::CampusLabSessionState;
 use serde_json::json;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{Row, SqlitePool};

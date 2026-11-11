@@ -5358,10 +5358,10 @@ mod tests {
     /// sandbox spec.
     #[tokio::test]
     async fn sdlc_worker_pod_specs_never_pass_the_campus_sandbox_contract() {
-        use pharness_core::campus_sandbox_pod::{
+        use pharness_workspaces::campus_sandbox_pod::{
             check_campus_sandbox_pod_spec, CampusPodSpecRule, CampusSandboxBrokerBinding,
         };
-        use pharness_core::CampusWorkloadRef;
+        use pharness_workspaces::CampusWorkloadRef;
 
         let dispatcher = test_dispatcher(None).await;
         let binding = CampusSandboxBrokerBinding::new(

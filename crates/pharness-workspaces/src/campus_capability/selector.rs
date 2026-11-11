@@ -1,8 +1,8 @@
 //! Resource selectors: the part of the session a call touches.
 
 use super::registry::CampusSelectorKind;
-use crate::AgentAction;
 use camino::Utf8PathBuf;
+use pharness_core::AgentAction;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 

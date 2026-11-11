@@ -1,18 +1,18 @@
 //! Campus broker tokens (migration 0060) and the journal-backed issuer a
 //! trusted execution provider uses to mint them.
 //!
-//! See [`pharness_core::campus_broker_token`] for the token model. This
+//! See [`pharness_workspaces::campus_broker_token`] for the token model. This
 //! module adds the stored record and [`JournalCampusBrokerTokenIssuer`],
 //! which draws each secret from the system CSPRNG and stores only its hash.
 
 use crate::{CampusJournalError, SqliteStore};
 use async_trait::async_trait;
-use pharness_core::campus_broker_token::{
+use pharness_workspaces::campus_broker_token::{
     CampusBrokerAudience, CampusBrokerSecret, CampusBrokerTokenError, CampusBrokerTokenIssuer,
     CampusIssuedBrokerToken, CAMPUS_BROKER_TOKEN_MAX_TTL_SECONDS,
 };
-use pharness_core::campus_capability::CampusBrokerClock;
-use pharness_core::CampusWorkloadRef;
+use pharness_workspaces::campus_capability::CampusBrokerClock;
+use pharness_workspaces::CampusWorkloadRef;
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::Serialize;
 use std::fmt::Write;
@@ -38,7 +38,7 @@ pub struct StoredCampusBrokerToken {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IssueCampusBrokerToken {
     pub token_id: String,
-    /// [`pharness_core::campus_broker_token::campus_broker_token_hash`] of the
+    /// [`pharness_workspaces::campus_broker_token::campus_broker_token_hash`] of the
     /// raw token.
     pub token_hash: String,
     pub workload: CampusWorkloadRef,

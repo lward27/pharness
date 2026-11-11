@@ -5,7 +5,7 @@ use crate::{
     CampusLabSlotSync, CampusTenantLabMetrics, StoreError, StoredCampusLabSlot,
     StoredCampusLabSlotHold,
 };
-use pharness_core::{CampusLabSessionState, CampusWorkloadRef};
+use pharness_workspaces::{CampusLabSessionState, CampusWorkloadRef};
 use sqlx::sqlite::SqliteRow;
 use sqlx::{Row, SqliteConnection};
 use std::collections::BTreeMap;
