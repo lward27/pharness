@@ -4,7 +4,7 @@ use axum::extract::{Request, State};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::Extension;
-use pharness_core::campus_broker_token::is_campus_broker_token;
+use pharness_workspaces::campus_broker_token::is_campus_broker_token;
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 

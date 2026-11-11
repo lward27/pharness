@@ -6,7 +6,7 @@ use crate::{
     CampusLabSlotHoldKind, CampusOrphanTracker, CampusStepOutcome, SqliteStore,
     CAMPUS_JANITOR_ACTOR, CAMPUS_ORPHAN_GRACE_SECONDS,
 };
-use pharness_core::{
+use pharness_workspaces::{
     CampusExecutionProvider, CampusLabSessionState as State, CampusProviderError,
     CampusProvisionSpec, CampusTeardownHook, CampusWorkloadRef, FakeCampusProvider, FakeFault,
     FakeFaultPoint, FakeTeardownHook,

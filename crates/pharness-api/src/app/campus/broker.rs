@@ -2,7 +2,7 @@
 //! on a listener of their own (`PHARNESS_CAMPUS_BROKER_BIND`).
 //!
 //! The sandbox holds exactly one credential, a Campus broker token
-//! ([`pharness_core::campus_broker_token`]). This listener accepts nothing
+//! ([`pharness_workspaces::campus_broker_token`]). This listener accepts nothing
 //! else: no Campus session cookie, no worker or operator token. Every
 //! request is checked against the lab journal, so a stopped, reset, expired
 //! or failed session loses access on its next request. The listener runs in
@@ -24,7 +24,7 @@ use axum::middleware::{from_fn_with_state, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
-use pharness_core::campus_broker_token::{
+use pharness_workspaces::campus_broker_token::{
     campus_broker_token_hash, is_well_formed_campus_broker_token, CampusBrokerAudience,
     CampusBrokerDenial, CampusBrokerGrant,
 };

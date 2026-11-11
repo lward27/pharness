@@ -1,11 +1,11 @@
 use super::campus_admission::load_record;
 use super::SqliteStore;
 use crate::{CampusJournalError, IssueCampusBrokerToken, StoredCampusBrokerToken};
-use pharness_core::campus_broker_token::{
+use pharness_workspaces::campus_broker_token::{
     CampusBrokerAudience, CampusBrokerDenial, CampusBrokerGrant, CampusBrokerTokenFacts,
     CAMPUS_BROKER_MAX_LIVE_TOKENS, CAMPUS_BROKER_TOKEN_MAX_TTL_SECONDS,
 };
-use pharness_core::{CampusLabDesiredState, CampusLabSessionState, CampusWorkloadRef};
+use pharness_workspaces::{CampusLabDesiredState, CampusLabSessionState, CampusWorkloadRef};
 use sqlx::sqlite::SqliteRow;
 use sqlx::{Row, SqliteConnection};
 

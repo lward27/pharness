@@ -6,7 +6,7 @@
 //! Campus session runs under. Every field is required: an omitted field must
 //! never fall back to a default that grants more authority.
 
-use crate::{canonical_json_sha256, AgentProfile, RunBudget};
+use pharness_core::{canonical_json_sha256, AgentProfile, RunBudget};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 

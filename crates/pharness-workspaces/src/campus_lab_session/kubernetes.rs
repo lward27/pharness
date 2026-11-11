@@ -61,8 +61,9 @@ use crate::campus_sandbox_pod::{
     CampusSandboxBrokerBinding, CampusSandboxEgress, CAMPUS_BROKER_TOKEN_ROTATE_AT_ANNOTATION,
     CAMPUS_SANDBOX_AUDIENCE,
 };
-use crate::{canonical_json_sha256, CampusProfile};
+use crate::CampusProfile;
 use async_trait::async_trait;
+use pharness_core::canonical_json_sha256;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};

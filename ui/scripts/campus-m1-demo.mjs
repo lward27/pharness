@@ -30,7 +30,7 @@ const USERS = ["campus-admin", "instructor1", "student1", "student2"];
 const TERMINAL_PROTOCOL = "pharness.campus.terminal.v1";
 const SESSION_COOKIE = "__Host-pharness-campus";
 const LABEL_SESSION = "pharness.dev/campus-session";
-// pharness_core campus_lab_session::kubernetes::template::SESSION_CONTAINER.
+// pharness_workspaces campus_lab_session::kubernetes::template::SESSION_CONTAINER.
 const SESSION_CONTAINER = "workspace";
 const LIVE = new Set(["provisioning", "ready", "stopping", "cleanup_blocked"]);
 const REVOKE_LIMIT_MS = 60_000;

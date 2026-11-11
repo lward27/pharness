@@ -20,12 +20,12 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use pharness_core::campus_lab_session::kubernetes::KubectlCampusKubeApi;
-use pharness_core::campus_terminal::{
+use pharness_store::CampusLabSessionRecord;
+use pharness_workspaces::campus_lab_session::kubernetes::KubectlCampusKubeApi;
+use pharness_workspaces::campus_terminal::{
     CampusTerminalAttacher, FakeCampusTerminal, KubectlCampusTerminal, KubectlCampusTerminalConfig,
 };
-use pharness_core::{CampusLabDesiredState, CampusWorkloadRef};
-use pharness_store::CampusLabSessionRecord;
+use pharness_workspaces::{CampusLabDesiredState, CampusWorkloadRef};
 use serde_json::json;
 use std::sync::Arc;
 

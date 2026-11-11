@@ -21,7 +21,7 @@ There is no DNS in a slot. Session tools use `HTTPS_PROXY`, and the proxy
 does the name resolution.
 
 The proxy (`pharness-worker`, execution kind `campus_egress_proxy`;
-rules in `crates/pharness-core/src/campus_egress.rs`) accepts only
+rules in `crates/pharness-workspaces/src/campus_egress.rs`) accepts only
 `CONNECT <approved host>:443`. It then:
 
 1. finds the session Pod that owns the source address by listing Pods in the
@@ -106,7 +106,7 @@ scripts/campus-egress-cluster-test.sh \
 
 The script needs cluster-admin, helm, jq, openssl and cargo. It launches
 real sessions through the controller identity, using the ignored tests
-`crates/pharness-core/tests/campus_session_jobs_live.rs` (phases
+`crates/pharness-workspaces/tests/campus_session_jobs_live.rs` (phases
 `egress-provision`, `egress-delete`, `enforcement`) and
 `crates/pharness-api/src/app/campus/tests/broker_live.rs`. The probes
 (`scripts/campus-egress-probe.py`) run inside the sessions. It deletes

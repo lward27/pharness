@@ -42,7 +42,7 @@ OPEN_NS="campus-egress-open"
 PROBE_LABEL="pharness.dev/campus-lab-probe"
 GUARD="pharness-campus-lab-session-guard"
 SECRET_GUARD="pharness-campus-lab-secret-guard"
-PYTHON_IMAGE="$(jq -r .image "${ROOT}/crates/pharness-core/src/campus_profile/fixtures/research.json")"
+PYTHON_IMAGE="$(jq -r .image "${ROOT}/crates/pharness-workspaces/src/campus_profile/fixtures/research.json")"
 RUN="$(date -u +%H%M%S)"
 OUT=""
 SKIP_BROKER=false
@@ -86,7 +86,7 @@ live() {
     PHARNESS_CAMPUS_LIVE_EGRESS_CA_FILE="${OUT}/egress-ca.pem" \
     PHARNESS_CAMPUS_LIVE_CONTROLLER_ARGS="--context ${CONTEXT} --as ${CONTROLLER_SA}" \
     PHARNESS_CAMPUS_LIVE_ADMIN_ARGS="--context ${CONTEXT}" PHARNESS_CAMPUS_LIVE_OUT="$OUT" "$@" \
-    cargo test --quiet --manifest-path "${ROOT}/Cargo.toml" -p pharness-core --test campus_session_jobs_live \
+    cargo test --quiet --manifest-path "${ROOT}/Cargo.toml" -p pharness-workspaces --test campus_session_jobs_live \
     -- --ignored --nocapture >"${OUT}/live-${phase}.log" 2>&1
 }
 

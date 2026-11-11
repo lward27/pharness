@@ -2,13 +2,6 @@
 
 pub mod agent;
 pub mod agent_execution;
-pub mod campus_broker_token;
-pub mod campus_capability;
-pub mod campus_egress;
-pub mod campus_lab_session;
-pub mod campus_profile;
-pub mod campus_sandbox_pod;
-pub mod campus_terminal;
 pub mod events;
 pub mod execution;
 pub mod hosted_sdlc;
@@ -37,19 +30,6 @@ pub use agent_execution::{
     CODEX_PROTOCOL_FIXTURE_REVISION, CODEX_PROTOCOL_SUITE_ID,
     RESOLVED_AGENT_EXECUTION_BINDING_SCHEMA,
 };
-pub use campus_lab_session::{
-    CampusDeleteOutcome, CampusExecutionProvider, CampusLabDesiredState, CampusLabObservedState,
-    CampusLabOperationKind, CampusLabOperationStatus, CampusLabSessionState,
-    CampusLabTransitionError, CampusObservation, CampusProviderError, CampusProvisionOutcome,
-    CampusProvisionSpec, CampusTeardownHook, CampusWorkloadRef, FakeCampusProvider, FakeFault,
-    FakeFaultPoint, FakeTeardownHook, OwnedCampusResource,
-};
-pub use campus_profile::{
-    CampusAgentBudget, CampusCapabilityBinding, CampusCapabilityScope, CampusEgressDestination,
-    CampusIsolation, CampusLaunchGate, CampusModelPolicy, CampusNetworkMode, CampusNetworkProfile,
-    CampusProfile, CampusProfileError, CampusProfileKind, CampusProfileRef, CampusResourceCeilings,
-    CampusStudentChoices, CAMPUS_PROFILE_SCHEMA, SECURITY_PROFILE_QUALIFICATION,
-};
 pub use events::{AgentEvent, EventKind, EventSink, InMemoryEventSink};
 pub use execution::{EnvironmentRef, EnvironmentTier, ExecutionTarget, RunScope, WorkspaceMount};
 pub use ids::{ActionId, ArtifactId, EventId, RunId, SessionId, ToolCallId};
@@ -71,13 +51,8 @@ pub use model::{
     ProviderProtocolErrorKind, TextPatch, TokenUsage, ToolChoiceMode, ToolProtocolMode, ToolSpec,
 };
 pub use policy::{
-    classify_command, CampusApproval, CampusApproverRole, CampusAuthority, CampusAuthorityDenies,
-    CampusDecisionOutcome, CampusDecisionReason, CampusDecisionRecord, CampusEffectiveConstraints,
-    CampusMandatoryDenies, CampusPolicyConstraints, CampusPolicyDimension, CampusPolicyError,
-    CampusPolicyLayer, CampusPolicyLayerRef, CampusPolicySource, CommandClass,
-    EffectiveCampusPolicy, PermissionGrant, PermissionGrantPolicy, PermissionGrantScope,
-    PolicyDecision, PolicyMode, RiskLevel, SafetyPolicy, CAMPUS_POLICY_LAYER_SCHEMA,
-    EFFECTIVE_CAMPUS_POLICY_SCHEMA, MAX_HARD_TOKENS,
+    classify_command, CommandClass, PermissionGrant, PermissionGrantPolicy, PermissionGrantScope,
+    PolicyDecision, PolicyMode, RiskLevel, SafetyPolicy,
 };
 pub use project::{
     AcceptanceCommand, AgentNetworkPolicy, DependencyLock, EnvironmentProfile,

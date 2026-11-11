@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 async-trait.workspace = true
 pharness-core = { path = "../pharness-core" }
+pharness-workspaces = { path = "../pharness-workspaces" }
 ring.workspace = true
 serde.workspace = true
 serde_json.workspace = true

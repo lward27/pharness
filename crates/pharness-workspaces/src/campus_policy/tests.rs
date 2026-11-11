@@ -1,12 +1,12 @@
 use super::*;
-use crate::{
+use pharness_core::{
     CapabilityKind, PermissionGrant, PermissionGrantPolicy, PermissionGrantScope, PolicyMode,
 };
 use serde_json::{json, Value};
 
-const RESEARCH: &str = include_str!("../../campus_profile/fixtures/research.json");
-const CODING: &str = include_str!("../../campus_profile/fixtures/coding.json");
-const SECURITY: &str = include_str!("../../campus_profile/fixtures/security.json");
+const RESEARCH: &str = include_str!("../campus_profile/fixtures/research.json");
+const CODING: &str = include_str!("../campus_profile/fixtures/coding.json");
+const SECURITY: &str = include_str!("../campus_profile/fixtures/security.json");
 
 // Changing this value means the canonical effective form of an unchanged
 // profile and layer set moved; recorded decisions would no longer match.

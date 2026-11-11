@@ -11,8 +11,8 @@ Migration `0060` adds the token table (see
 
 | Piece | Location |
 | --- | --- |
-| Token model, hashing, per-request decision | `crates/pharness-core/src/campus_broker_token.rs` |
-| Sandbox Pod-spec contract and broker binding | `crates/pharness-core/src/campus_sandbox_pod.rs` |
+| Token model, hashing, per-request decision | `crates/pharness-workspaces/src/campus_broker_token.rs` |
+| Sandbox Pod-spec contract and broker binding | `crates/pharness-workspaces/src/campus_sandbox_pod.rs` |
 | Journal-backed issuer | `crates/pharness-store/src/campus_broker.rs` |
 | Issue, authenticate, list, revoke SQL | `crates/pharness-store/src/sqlite/campus_broker.rs` |
 | Schema | `crates/pharness-store/migrations/0060_campus_broker_tokens.sql` |

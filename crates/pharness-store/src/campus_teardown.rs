@@ -8,7 +8,7 @@
 //! hold, until a later inventory confirms it is gone.
 
 use crate::{CampusJournalError, CampusOrphanReason, SqliteStore};
-use pharness_core::{
+use pharness_workspaces::{
     CampusDeleteOutcome, CampusExecutionProvider, CampusLabSessionState, CampusProviderError,
     CampusWorkloadRef,
 };

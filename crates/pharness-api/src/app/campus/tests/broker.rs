@@ -10,11 +10,11 @@ use super::{
 use axum::body::Body;
 use axum::http::{header, HeaderName, StatusCode};
 use axum::Router;
-use pharness_core::campus_broker_token::{
+use pharness_workspaces::campus_broker_token::{
     CampusBrokerAudience as Audience, CampusBrokerTokenError, CAMPUS_BROKER_TOKEN_MAX_TTL_SECONDS,
     CAMPUS_BROKER_TOKEN_PREFIX,
 };
-use pharness_core::CampusWorkloadRef;
+use pharness_workspaces::CampusWorkloadRef;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::net::SocketAddr;

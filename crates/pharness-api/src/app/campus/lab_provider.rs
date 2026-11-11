@@ -4,11 +4,11 @@ use super::lab_catalog::{CampusLabProviderKind, CampusLabsConfig};
 use super::labs::{CampusLabs, RECONCILER_ACTOR};
 use super::state::CampusRuntime;
 use anyhow::Context;
-use pharness_core::campus_lab_session::kubernetes::{
+use pharness_store::{JournalCampusAuthoritySource, SqliteStore};
+use pharness_workspaces::campus_lab_session::kubernetes::{
     KubectlCampusKubeApi, KubernetesCampusProvider,
 };
-use pharness_core::{CampusExecutionProvider, FakeCampusProvider};
-use pharness_store::{JournalCampusAuthoritySource, SqliteStore};
+use pharness_workspaces::{CampusExecutionProvider, FakeCampusProvider};
 use std::sync::Arc;
 
 /// The lab runtime for `config`, with the execution provider it selects.

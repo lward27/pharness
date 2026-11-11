@@ -13,7 +13,7 @@
 # Phases:
 #   1. preconditions and versions (Argo, RuntimeClass, guard, node, CNI)
 #   2. controller RBAC
-#   3. provider provision (crates/pharness-core/tests/campus_session_jobs_live.rs)
+#   3. provider provision (crates/pharness-workspaces/tests/campus_session_jobs_live.rs)
 #   4. stress: fork, processes, memory, disk, logs, updates, concurrency
 #   5. provider delete
 #   6. independent admission matrix
@@ -30,7 +30,7 @@ PROBE_PREFIX="campus-lab-probe-"
 PROBE_LABEL="pharness.dev/campus-lab-probe"
 GUARD="pharness-campus-lab-session-guard"
 TEST_POLICY="pharness-campus-session-probe-allowlist"
-RESEARCH_IMAGE="$(jq -r .image "${ROOT}/crates/pharness-core/src/campus_profile/fixtures/research.json")"
+RESEARCH_IMAGE="$(jq -r .image "${ROOT}/crates/pharness-workspaces/src/campus_profile/fixtures/research.json")"
 ALT_IMAGE="docker.io/library/busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662"
 RUN="$(date -u +%H%M%S)"
 OUT=""
@@ -258,7 +258,7 @@ live() {
     PHARNESS_CAMPUS_LIVE_SLOTS="$(IFS=,; echo "${PROBES[*]}")" PHARNESS_CAMPUS_LIVE_REAL_SLOT="$REAL_SLOT" \
     PHARNESS_CAMPUS_LIVE_CONTROLLER_ARGS="--context ${CONTEXT} --as ${CONTROLLER_SA}" \
     PHARNESS_CAMPUS_LIVE_ADMIN_ARGS="--context ${CONTEXT}" PHARNESS_CAMPUS_LIVE_OUT="$OUT" \
-    cargo test --quiet --manifest-path "${ROOT}/Cargo.toml" -p pharness-core --test campus_session_jobs_live \
+    cargo test --quiet --manifest-path "${ROOT}/Cargo.toml" -p pharness-workspaces --test campus_session_jobs_live \
     -- --ignored --nocapture >"${OUT}/live-$1.log" 2>&1
 }
 if live provision; then pass "provider provision phase"; else fail "provider provision phase"; fi

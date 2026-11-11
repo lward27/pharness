@@ -28,20 +28,20 @@
 //!   prepared probe slot must produce.
 
 use async_trait::async_trait;
-use pharness_core::campus_broker_token::{
+use pharness_workspaces::campus_broker_token::{
     CampusBrokerAudience, CampusBrokerSecret, CampusBrokerTokenError, CampusBrokerTokenIssuer,
     CampusIssuedBrokerToken,
 };
-use pharness_core::campus_capability::{
+use pharness_workspaces::campus_capability::{
     CampusActorRef, CampusBrokerClock, CampusSessionAuthority, InMemoryCampusAuthoritySource,
     SystemCampusBrokerClock,
 };
-use pharness_core::campus_lab_session::kubernetes::{
+use pharness_workspaces::campus_lab_session::kubernetes::{
     session_resource_name, CampusEgressProxyConfig, CampusKubeApi, CampusKubeKind,
     KubectlCampusKubeApi, KubernetesCampusProvider, KubernetesCampusProviderConfig,
 };
-use pharness_core::policy::CAMPUS_POLICY_LAYER_SCHEMA;
-use pharness_core::{
+use pharness_workspaces::campus_policy::CAMPUS_POLICY_LAYER_SCHEMA;
+use pharness_workspaces::{
     CampusDeleteOutcome, CampusExecutionProvider, CampusPolicyLayer, CampusProfile,
     CampusProvisionOutcome, CampusProvisionSpec, CampusWorkloadRef, EffectiveCampusPolicy,
     SECURITY_PROFILE_QUALIFICATION,

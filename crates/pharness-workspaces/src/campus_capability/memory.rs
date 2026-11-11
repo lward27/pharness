@@ -5,8 +5,8 @@ use super::{
     CampusAuthorityError, CampusAuthoritySnapshot, CampusAuthoritySource, CampusAuthorityStatus,
     CampusSessionAuthority, CampusTrustedApproval,
 };
-use crate::ActionId;
 use async_trait::async_trait;
+use pharness_core::ActionId;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};

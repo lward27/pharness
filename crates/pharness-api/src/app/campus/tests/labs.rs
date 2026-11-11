@@ -9,23 +9,23 @@ use super::{body_json, request, send, test_config, Harness, Session, ISSUER, ORI
 use axum::body::Body;
 use axum::http::{header, StatusCode};
 use axum::response::Response;
-use pharness_core::campus_capability::{
-    CampusAuthoritySource, CampusAuthorityStatus, CampusBrokerClock,
-};
-use pharness_core::{FakeFault, FakeFaultPoint};
 use pharness_store::{
     retry_campus_lab_cleanup, CampusDriverContext, CampusIdentityKey, JournalCampusAuthoritySource,
 };
+use pharness_workspaces::campus_capability::{
+    CampusAuthoritySource, CampusAuthorityStatus, CampusBrokerClock,
+};
+use pharness_workspaces::{FakeFault, FakeFaultPoint};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 const CODING: &str =
-    include_str!("../../../../../pharness-core/src/campus_profile/fixtures/coding.json");
+    include_str!("../../../../../pharness-workspaces/src/campus_profile/fixtures/coding.json");
 const RESEARCH: &str =
-    include_str!("../../../../../pharness-core/src/campus_profile/fixtures/research.json");
+    include_str!("../../../../../pharness-workspaces/src/campus_profile/fixtures/research.json");
 const SECURITY: &str =
-    include_str!("../../../../../pharness-core/src/campus_profile/fixtures/security.json");
+    include_str!("../../../../../pharness-workspaces/src/campus_profile/fixtures/security.json");
 
 fn layer(authority: &str) -> Value {
     json!({

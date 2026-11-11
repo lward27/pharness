@@ -18,8 +18,8 @@ upstream.
 
 | Piece | Location |
 | --- | --- |
-| Terminal contract, wrapper command, fake terminal | `crates/pharness-core/src/campus_terminal.rs`, `campus_terminal/fake.rs` |
-| Kubernetes attacher (`kubectl exec` under a pty) | `crates/pharness-core/src/campus_terminal/kubectl.rs` |
+| Terminal contract, wrapper command, fake terminal | `crates/pharness-workspaces/src/campus_terminal.rs`, `campus_terminal/fake.rs` |
+| Kubernetes attacher (`kubectl exec` under a pty) | `crates/pharness-workspaces/src/campus_terminal/kubectl.rs` |
 | Configuration, ticket issuance, admission checks | `crates/pharness-api/src/app/campus/terminal.rs` |
 | Tickets, limits, connection count, revalidation signal | `crates/pharness-api/src/app/campus/terminal_registry.rs` |
 | WebSocket protocol, rechecks, rate limits, audit | `crates/pharness-api/src/app/campus/terminal_socket.rs` |
@@ -250,7 +250,7 @@ read-only into the API container and named by a separate kubeconfig
   generations; stop, logout, expiry and membership-removal latency;
   reconnect after the API process is killed; limits, rate and idleness;
   attach failures and their audit; configuration).
-- `cargo test -p pharness-core campus_terminal`: wrapper command, fake
+- `cargo test -p pharness-workspaces campus_terminal`: wrapper command, fake
   terminal, Pod selection and kubectl arguments.
 - `npm test` in `ui/`: protocol and page tests (`src/campus/`).
 - `npx playwright test tests/campus-terminal-real-server.spec.mjs --project=desktop`:

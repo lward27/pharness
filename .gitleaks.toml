@@ -19,7 +19,7 @@ description = "Campus sandbox Pod-spec tests feed truncated PEM private-key mark
 condition = "AND"
 regexTarget = "line"
 targetRules = ["private-key"]
-paths = ['''^crates/pharness-core/src/campus_sandbox_pod/tests\.rs$''']
+paths = ['''^crates/pharness-workspaces/src/campus_sandbox_pod/tests\.rs$''']
 regexes = ['''MIIB\\n-----END PRIVATE KEY''']
 
 [[allowlists]]

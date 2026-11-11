@@ -1,21 +1,30 @@
 # PHarness
 
-PHarness is an SDLC control plane embedded in the environment that hosts a
-product. Its approved direction is one bounded request progressing through
-coding, tests, source delivery, immutable builds, staging, human production
-approval, and runtime verification in `lucas_engineering`.
+PHarness runs agent workspaces that an organization can constrain, govern and
+observe. A user launches a workspace from an approved template and works in it
+with the agent and model provider they choose; the organization fixes in
+advance what the workspace can reach, spend and run for. The
+[product direction](planning/design/agent-workspaces.md) states the promise,
+what exists and the work sequence.
 
-**Current reality:** the cluster runtime, product/repository registration,
-bounded coding machinery, source-only WorkItems, typed delivery capabilities,
-and Lamina operator console exist. They do not yet establish one accepted,
-fully autonomous hosted journey. The existing gateway coding path still needs
-to pass its frozen reliability qualification. The
-[ASTRA program](planning/programs/autonomous-sdlc/ASTRA-00-PROGRAM.md) implements
-and proves that connection; its status must not be confused with deployed behavior.
+**Current reality:** the Campus proof of concept runs governed, gVisor-isolated
+lab sessions with OIDC login, layered policy, an egress proxy, per-session
+broker tokens, browser terminals and verified teardown. Inference through the
+broker is a fake, there is no agent image contract yet, and templates come from
+a static file. The workspace core lives in `crates/pharness-workspaces`.
+
+**The autonomous SDLC is frozen** as of 2026-11-11. The
+[ASTRA program](planning/programs/autonomous-sdlc/ASTRA-00-PROGRAM.md), its
+WorkItem lifecycle, hosted controller, qualification harness and Lamina
+operator console remain in the tree and keep building, but receive no new
+features. The sections below that describe the operator console, releases and
+reliability gates apply to that frozen code.
 
 ## Get started
 
-Start with the [documentation map](planning/README.md), then the
+Start with the [product direction](planning/design/agent-workspaces.md) and the
+[Campus runbooks](planning/operations/README.md). For the frozen SDLC code, use
+the [documentation map](planning/README.md), then the
 [program baseline](planning/evidence/assessments/ASTRA-CURRENT-BASELINE-ADDENDUM.md).
 The [operator checkpoint](planning/evidence/autonomous-sdlc/ASTRA-CLUSTER-OPERATOR-CHECKPOINT.md)
 records the latest deployment and the next implementation step.
@@ -29,8 +38,8 @@ success remains valid history and does not imply that anything was deployed.
 
 ## Develop
 
-The workspace contains the Rust runtime, API, store, workers, gateway, evaluator,
-and CLI, with the React/Vite console under `ui/`. Local runtime configuration is
+The workspace contains the Rust runtime, workspace core, API, store, workers,
+gateway, evaluator, and CLI, with the React/Vite console under `ui/`. Local runtime configuration is
 illustrated in [config/pharness.example.toml](config/pharness.example.toml).
 Local execution remains useful for development; it is not the primary product promise.
 

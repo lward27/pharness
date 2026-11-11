@@ -1,14 +1,14 @@
 use super::*;
-use crate::campus_profile::campus_tool_catalog;
-use crate::policy::{
+use crate::campus_policy::{
     CampusDecisionOutcome as O, CampusDecisionReason, CampusPolicyLayer, CampusPolicySource,
     CAMPUS_POLICY_LAYER_SCHEMA,
 };
-use crate::{
-    CampusEgressDestination, CampusNetworkMode, CampusProfile, CompositeToolExecutor,
-    LocalReadOnlyFsTools, LocalShellTools, TextPatch, ToolExecutor,
-};
+use crate::campus_profile::campus_tool_catalog;
+use crate::{CampusEgressDestination, CampusNetworkMode, CampusProfile};
 use camino::Utf8PathBuf;
+use pharness_core::{
+    CompositeToolExecutor, LocalReadOnlyFsTools, LocalShellTools, TextPatch, ToolExecutor,
+};
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -1191,7 +1191,10 @@ async fn audit_events_carry_trusted_identity_and_no_argument_values() {
     assert_eq!(finished.arguments.fields["success"], json!(true));
     let result = finished.result.as_ref().unwrap();
     assert!(!result.trusted);
-    assert_eq!(result.reported_status, Some(crate::ToolResultStatus::Ok));
+    assert_eq!(
+        result.reported_status,
+        Some(pharness_core::ToolResultStatus::Ok)
+    );
 
     // A denied direct call names the authenticated caller as the actor and
     // the session's real owner separately.

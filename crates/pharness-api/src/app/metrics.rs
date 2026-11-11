@@ -382,8 +382,8 @@ fn format_value(value: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::{escape_label, format_value, gauge, render_campus, sample};
-    use pharness_core::CampusLabSessionState;
     use pharness_store::{CampusLabSlotCondition, CampusTenantLabMetrics};
+    use pharness_workspaces::CampusLabSessionState;
 
     #[test]
     fn exposition_lines_follow_the_text_format() {

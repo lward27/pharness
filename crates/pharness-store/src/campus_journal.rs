@@ -5,7 +5,7 @@
 //! workspace, not a login.
 
 use crate::StoreError;
-use pharness_core::{
+use pharness_workspaces::{
     CampusLabDesiredState, CampusLabObservedState, CampusLabOperationKind,
     CampusLabOperationStatus, CampusLabSessionState, CampusLabTransitionError, CampusProfileRef,
     CampusWorkloadRef, OwnedCampusResource,

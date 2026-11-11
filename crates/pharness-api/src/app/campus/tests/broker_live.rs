@@ -21,26 +21,26 @@
 use super::broker::{denial, ready_session, workload};
 use super::labs::{act, enroll_students, labs_harness};
 use super::{Harness, TestClock, TENANT};
-use pharness_core::campus_capability::{CampusAuthoritySource, CampusBrokerClock};
-use pharness_core::campus_lab_session::kubernetes::{
+use pharness_store::JournalCampusAuthoritySource;
+use pharness_workspaces::campus_capability::{CampusAuthoritySource, CampusBrokerClock};
+use pharness_workspaces::campus_lab_session::kubernetes::{
     KubectlCampusKubeApi, KubernetesCampusProvider, KubernetesCampusProviderConfig,
 };
-use pharness_core::campus_sandbox_pod::{
+use pharness_workspaces::campus_sandbox_pod::{
     campus_broker_token_secret_name, CAMPUS_BROKER_TOKEN_ID_ANNOTATION, CAMPUS_BROKER_TOKEN_PATH,
 };
-use pharness_core::{
+use pharness_workspaces::{
     CampusDeleteOutcome, CampusExecutionProvider, CampusProvisionOutcome, CampusProvisionSpec,
     CampusWorkloadRef,
 };
-use pharness_store::JournalCampusAuthoritySource;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 const RESEARCH: &str =
-    include_str!("../../../../../pharness-core/src/campus_profile/fixtures/research.json");
+    include_str!("../../../../../pharness-workspaces/src/campus_profile/fixtures/research.json");
 const CODING: &str =
-    include_str!("../../../../../pharness-core/src/campus_profile/fixtures/coding.json");
+    include_str!("../../../../../pharness-workspaces/src/campus_profile/fixtures/coding.json");
 
 fn env(name: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| panic!("{name} is required"))
@@ -124,8 +124,8 @@ impl Live {
         KubernetesCampusProvider::new(
             config,
             [
-                pharness_core::CampusProfile::parse(RESEARCH).expect("research"),
-                pharness_core::CampusProfile::parse(CODING).expect("coding"),
+                pharness_workspaces::CampusProfile::parse(RESEARCH).expect("research"),
+                pharness_workspaces::CampusProfile::parse(CODING).expect("coding"),
             ],
             authority,
             harness.broker_tokens.clone(),
@@ -436,7 +436,7 @@ async fn campus_broker_live() {
     let teardown = live.provider(
         &harness,
         &workload.slot_id,
-        Arc::new(pharness_core::campus_capability::SystemCampusBrokerClock),
+        Arc::new(pharness_workspaces::campus_capability::SystemCampusBrokerClock),
     );
     let seconds = delete(&teardown, &workload).await;
     let left = live.kubectl(&[

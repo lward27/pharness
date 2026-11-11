@@ -7,15 +7,15 @@ use super::broker::{denial, issue, ready_session, workload};
 use super::labs::{act, catalog_value, enroll_students, id, labs_harness, launch, launched, parse};
 use super::{body_json, Harness, Session, TENANT};
 use axum::http::StatusCode;
-use pharness_core::campus_broker_token::CampusBrokerAudience as Audience;
-use pharness_core::{
-    CampusExecutionProvider, CampusLabSessionState as State, CampusProviderError,
-    CampusProvisionSpec, CampusTeardownHook, CampusWorkloadRef, FakeFault, FakeFaultPoint,
-    FakeTeardownHook,
-};
 use pharness_store::{
     CampusLabSlotCondition, CampusLabSlotHoldKind, StoredCampusLabSession,
     CAMPUS_ORPHAN_GRACE_SECONDS,
+};
+use pharness_workspaces::campus_broker_token::CampusBrokerAudience as Audience;
+use pharness_workspaces::{
+    CampusExecutionProvider, CampusLabSessionState as State, CampusProviderError,
+    CampusProvisionSpec, CampusTeardownHook, CampusWorkloadRef, FakeFault, FakeFaultPoint,
+    FakeTeardownHook,
 };
 use serde_json::json;
 use std::sync::Arc;

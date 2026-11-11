@@ -19,6 +19,7 @@ hyper.workspace = true
 hyper-util.workspace = true
 pharness-config = { path = "../pharness-config" }
 pharness-core = { path = "../pharness-core" }
+pharness-workspaces = { path = "../pharness-workspaces" }
 pharness-fireworks = { path = "../pharness-fireworks" }
 pharness-openai-compatible = { path = "../pharness-openai-compatible" }
 pharness-runhost = { path = "../pharness-runhost" }

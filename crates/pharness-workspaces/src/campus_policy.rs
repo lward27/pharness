@@ -28,17 +28,15 @@
 //! isolation boundary: shell access still depends on the sandbox, network and
 //! resource controls the execution provider enforces.
 
-use super::{classify_command, CommandClass, PolicyDecision, RiskLevel, SafetyPolicy};
 use crate::campus_profile::{
     is_campus_tool, validate_egress_host, validate_identifier, MAX_CONCURRENT_MODEL_REQUESTS,
     MAX_CPU_MILLICORES, MAX_EGRESS_DESTINATIONS, MAX_EPHEMERAL_STORAGE_MIB, MAX_MEMORY_MIB,
     MAX_OUTPUT_TOKENS, MAX_PIDS, MAX_SESSION_ALLOCATION_MICRO_USD, MAX_TTL_SECONDS, MIN_PIDS,
     MIN_TTL_SECONDS,
 };
-use crate::{
-    canonical_json_sha256, ActionId, AgentAction, ApprovalKind, CampusEgressDestination,
-    CampusProfile, CampusProfileError, CampusProfileRef, RunScope,
-};
+use crate::{CampusEgressDestination, CampusProfile, CampusProfileError, CampusProfileRef};
+use pharness_core::{canonical_json_sha256, ActionId, AgentAction, ApprovalKind, RunScope};
+use pharness_core::{classify_command, CommandClass, PolicyDecision, RiskLevel, SafetyPolicy};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;

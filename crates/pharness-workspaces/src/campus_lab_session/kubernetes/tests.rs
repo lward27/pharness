@@ -6,11 +6,11 @@ use crate::campus_broker_token::{
 use crate::campus_capability::{
     CampusActorRef, CampusSandboxNetwork, CampusSessionAuthority, InMemoryCampusAuthoritySource,
 };
+use crate::campus_policy::{CampusPolicyLayer, CAMPUS_POLICY_LAYER_SCHEMA};
 use crate::campus_sandbox_pod::{
     campus_broker_token_secret_name, CAMPUS_BROKER_TOKEN_DIR, CAMPUS_BROKER_TOKEN_VOLUME,
     CAMPUS_EGRESS_CA_SECRET_KEY,
 };
-use crate::policy::{CampusPolicyLayer, CAMPUS_POLICY_LAYER_SCHEMA};
 use crate::{EffectiveCampusPolicy, SECURITY_PROFILE_QUALIFICATION};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Mutex;

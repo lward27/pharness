@@ -1,6 +1,6 @@
 # Campus session Jobs in lab slots
 
-`KubernetesCampusProvider` (`crates/pharness-core/src/campus_lab_session/kubernetes.rs`)
+`KubernetesCampusProvider` (`crates/pharness-workspaces/src/campus_lab_session/kubernetes.rs`)
 is the real `CampusExecutionProvider` for the lab-session journal
 ([campus-session-journal.md](campus-session-journal.md)). Each session
 occupancy runs as one Kubernetes Job in an admin-precreated slot namespace.
@@ -107,7 +107,7 @@ chart, plus a test-only image allowlist that admits only the research
 profile digest. It also checks that an Argo-managed slot admits the
 provider's session Job and refuses an unapproved digest. The provider runs as the controller identity
 (`kubectl --as system:serviceaccount:campus-poc:pharness-campus-controller`)
-through the ignored test `crates/pharness-core/tests/campus_session_jobs_live.rs`.
+through the ignored test `crates/pharness-workspaces/tests/campus_session_jobs_live.rs`.
 Phases: preconditions and versions, controller RBAC (30 `can-i` checks),
 provider provision, stress, provider delete, admission matrix. The probe
 namespaces and policies are deleted on exit, and the script prints what

@@ -11,8 +11,8 @@
 //! ends with the process.
 
 use super::tokens::sha256_hex;
-use pharness_core::campus_terminal::CampusTerminalAttacher;
-use pharness_core::CampusWorkloadRef;
+use pharness_workspaces::campus_terminal::CampusTerminalAttacher;
+use pharness_workspaces::CampusWorkloadRef;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

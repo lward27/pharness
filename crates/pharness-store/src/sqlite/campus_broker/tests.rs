@@ -4,12 +4,12 @@ use crate::{
     CampusLabAdmission, CampusLabLimits, IssueCampusBrokerToken, JournalCampusBrokerTokenIssuer,
     SqliteStore,
 };
-use pharness_core::campus_broker_token::{
+use pharness_workspaces::campus_broker_token::{
     CampusBrokerAudience as Audience, CampusBrokerDenial as Denial, CampusBrokerTokenError,
     CampusBrokerTokenIssuer, CampusIssuedBrokerToken, CAMPUS_BROKER_TOKEN_MAX_TTL_SECONDS,
 };
-use pharness_core::campus_capability::CampusBrokerClock;
-use pharness_core::{
+use pharness_workspaces::campus_capability::CampusBrokerClock;
+use pharness_workspaces::{
     CampusLabDesiredState, CampusLabSessionState as State, CampusWorkloadRef, FakeCampusProvider,
     FakeFault, FakeFaultPoint,
 };

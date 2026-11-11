@@ -22,7 +22,7 @@ use crate::{
     CampusJournalError, CampusLabTransition, SqliteStore, StoredCampusLabOperation,
     StoredCampusLabSession,
 };
-use pharness_core::{
+use pharness_workspaces::{
     CampusDeleteOutcome, CampusExecutionProvider, CampusLabDesiredState, CampusLabObservedState,
     CampusLabOperationKind, CampusLabSessionState, CampusObservation, CampusProviderError,
     CampusProvisionOutcome, CampusProvisionSpec, CampusTeardownHook, CampusWorkloadRef,

@@ -1,7 +1,7 @@
 //! The typed capability each Campus tool binds to.
 
 use crate::campus_profile::CampusCapabilityScope;
-use crate::{CapabilityKind, ToolCapability};
+use pharness_core::{CapabilityKind, ToolCapability};
 use serde::{Deserialize, Serialize};
 
 /// The shape of resource selector a tool's calls are checked against.

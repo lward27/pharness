@@ -23,13 +23,13 @@
 //! slot, and leftovers no session accounts for keep their slot quarantined.
 
 use super::lab_catalog::{CampusLabAssignment, CampusLabCatalog};
-use pharness_core::{CampusExecutionProvider, CampusTeardownHook};
 use pharness_store::{
     advance_campus_lab_session, reconcile_campus_lab_orphans, retry_campus_lab_cleanup,
     AdmitCampusLabLaunch, CampusDriverContext, CampusIdentityKey, CampusJournalError,
     CampusLabAdmission, CampusLabSlotSync, CampusOrphanTracker, CampusStepOutcome, SqliteStore,
     StoredCampusLab,
 };
+use pharness_workspaces::{CampusExecutionProvider, CampusTeardownHook};
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::Arc;

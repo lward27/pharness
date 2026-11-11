@@ -8,11 +8,11 @@ use super::{
     CampusBrokerClock, CampusCaller, CampusCapabilityRequest, CampusEffectClass,
     CampusEffectExecutor, CampusSessionAuthority, CampusTrustedApproval,
 };
-use crate::policy::{
+use crate::campus_policy::{
     command_line, CampusApproverRole, CampusDecisionOutcome, CampusDecisionRecord,
     CampusPolicySource,
 };
-use crate::{AgentAction, PolicyMode, RunScope, SafetyPolicy, ToolError, ToolResult};
+use pharness_core::{AgentAction, PolicyMode, RunScope, SafetyPolicy, ToolError, ToolResult};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 

@@ -10,6 +10,7 @@ members = [
     "crates/pharness-runhost",
     "crates/pharness-store",
     "crates/pharness-worker",
+    "crates/pharness-workspaces",
     "crates/pharness-eval",
     "crates/pharness-codex-host",
 ]
