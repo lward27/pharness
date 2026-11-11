@@ -1,6 +1,6 @@
 # PHarness documentation map
 
-Last organized: 2026-09-23. Current program: [ASTRA autonomous SDLC](programs/autonomous-sdlc/ASTRA-00-PROGRAM.md).
+Last organized: 2026-11-11. Current direction: [agent workspaces](design/agent-workspaces.md). The [ASTRA autonomous SDLC](programs/autonomous-sdlc/ASTRA-00-PROGRAM.md) program is frozen; the entry points below that refer to it describe frozen code.
 
 ## Choose an entry point
 

@@ -1,6 +1,6 @@
 # PHarness product vision and boundaries
 
-Status: living direction, approved 2026-09-04.
+Status: frozen 2026-11-11; superseded as the active product by [agent workspaces](agent-workspaces.md). Approved 2026-09-04.
 Implementation authority: [ASTRA program](../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md).
 Current implementation: [baseline addendum](../evidence/assessments/ASTRA-CURRENT-BASELINE-ADDENDUM.md).
 

@@ -1,5 +1,12 @@
 # Active implementation work
 
+**Current direction:** [agent workspaces](../design/agent-workspaces.md). Its work
+sequence (W1 to W9) owns new work.
+
+**Frozen 2026-11-11:** everything below belongs to the ASTRA autonomous SDLC
+program. No milestone, slice or qualification listed here is to be continued.
+The text is kept as the record of where that work stopped.
+
 The approved program is [ASTRA autonomous SDLC](../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md).
 Its numbered milestones, dependency graph, evidence, and finding ledger own execution.
 M01 establishes current reality; M02 and M03 then become independently eligible.

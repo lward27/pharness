@@ -1,6 +1,9 @@
 # Living design
 
 These documents explain durable intent. They do not prove implementation.
+
+**Current direction:** [agent workspaces](agent-workspaces.md). The references
+below describe the autonomous SDLC, which was frozen on 2026-11-11.
 The approved [ASTRA program](../programs/autonomous-sdlc/ASTRA-00-PROGRAM.md) owns new
 work and its acceptance gates; the [baseline addendum](../evidence/assessments/ASTRA-CURRENT-BASELINE-ADDENDUM.md)
 describes current reality. There are no competing Repo Mode planning entry points.
