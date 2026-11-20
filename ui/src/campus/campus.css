@@ -1,4 +1,5 @@
-:root {
+/* The terminal keeps its dark palette; the Campus pages around it are light. */
+.campus-terminal {
   color-scheme: dark;
   --campus-bg: #070b16;
   --campus-surface: #0f1628;
@@ -132,9 +133,31 @@ body {
   display: none;
 }
 
-:focus-visible {
+.campus-terminal :focus-visible {
   outline: 3px solid var(--campus-focus);
   outline-offset: 2px;
+}
+
+.campus-terminal--embedded {
+  min-height: 0;
+  max-width: none;
+  height: 100%;
+  margin: 0;
+  padding: 0.875rem;
+  border-radius: 10px;
+}
+
+.campus-terminal--embedded .campus-terminal__screen {
+  min-height: 26rem;
+}
+
+.campus-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 @media (max-width: 40rem) {
