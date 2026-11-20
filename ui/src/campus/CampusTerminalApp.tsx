@@ -14,6 +14,8 @@ export type CampusTerminalAppProps = {
   api?: CampusApi;
   connect?: (options: OpenTerminalOptions) => TerminalConnection;
   reconnectDelayMs?: (attempt: number) => number;
+  /** Rendered inside the Campus lab page, which shows the lab's own title. */
+  embedded?: boolean;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -50,6 +52,7 @@ export function CampusTerminalApp({
   api = campusApi,
   connect = openTerminal,
   reconnectDelayMs = attempt => 1000 * 2 ** (attempt - 1),
+  embedded = false,
 }: CampusTerminalAppProps) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [status, setStatus] = useState("Loading your lab.");
@@ -246,14 +249,16 @@ export function CampusTerminalApp({
     }
   }
 
+  const Root = embedded ? "div" : "main";
+  const Heading = embedded ? "h2" : "h1";
   const hasLab = phase === "idle" || phase === "connecting" || phase === "connected" || phase === "closed";
   const canConnect = phase === "idle" || (phase === "closed" && (closeInfo?.canReconnect ?? true));
   const showConnect = phase === "idle" || phase === "connecting" || canConnect;
 
   return (
-    <main className="campus-terminal" aria-labelledby="campus-terminal-title">
-      <header className="campus-terminal__header">
-        <h1 id="campus-terminal-title">Lab terminal</h1>
+    <Root className={embedded ? "campus-terminal campus-terminal--embedded" : "campus-terminal"} aria-labelledby="campus-terminal-title">
+      <header className={embedded ? "campus-terminal__header campus-sr" : "campus-terminal__header"}>
+        <Heading id="campus-terminal-title">Lab terminal</Heading>
         {session && (
           <p className="campus-terminal__lab">
             {session.course_id} / {session.assignment_id}
@@ -303,9 +308,11 @@ export function CampusTerminalApp({
           >
             Stop lab
           </button>
-          <button type="button" className="campus-button" onClick={() => void signOut()}>
-            Sign out
-          </button>
+          {!embedded && (
+            <button type="button" className="campus-button" onClick={() => void signOut()}>
+              Sign out
+            </button>
+          )}
           <label className="campus-terminal__toggle">
             <input type="checkbox" checked={screenReader} onChange={event => setScreenReader(event.target.checked)} />
             Screen reader mode
@@ -324,6 +331,6 @@ export function CampusTerminalApp({
       >
         <div ref={container} className="campus-terminal__xterm" />
       </section>
-    </main>
+    </Root>
   );
 }

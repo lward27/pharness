@@ -25,7 +25,7 @@ use pharness_store::{
     CampusLabAdmission, CampusLabRejection, CampusLabSessionRecord, StoredCampusLabSession,
     CENTRAL_AUTHORITY_UNAVAILABLE,
 };
-use pharness_workspaces::{CampusLabDesiredState, CampusLabSessionState};
+use pharness_workspaces::{CampusLabDesiredState, CampusLabSessionState, EffectiveCampusPolicy};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -194,6 +194,35 @@ fn session_view(record: &CampusLabSessionRecord) -> Value {
     })
 }
 
+/// The effective limits a lab runs under and the authority that set each one,
+/// so a student sees what the lab allows and who decided it. Only bounds and
+/// approved destinations are shown: never images, slots or credentials.
+fn limits_view(policy: &EffectiveCampusPolicy) -> Value {
+    let constraints = policy.constraints();
+    let set_by = policy
+        .provenance()
+        .iter()
+        .map(|(dimension, source)| (dimension.as_str().to_string(), json!(source)))
+        .collect::<serde_json::Map<_, _>>();
+    let egress = constraints
+        .egress
+        .iter()
+        .map(|destination| destination.host.clone())
+        .collect::<Vec<_>>();
+    json!({
+        "cpu_millicores": constraints.cpu_millicores,
+        "memory_mib": constraints.memory_mib,
+        "ephemeral_storage_mib": constraints.ephemeral_storage_mib,
+        "ttl_seconds": constraints.ttl_seconds,
+        "network": if egress.is_empty() { "denied" } else { "approved_egress" },
+        "egress_hosts": egress,
+        "model_aliases": constraints.model_aliases,
+        "session_allocation_micro_usd": constraints.session_allocation_micro_usd,
+        "max_output_tokens": constraints.max_output_tokens,
+        "set_by": set_by,
+    })
+}
+
 fn rejection_error(rejection: CampusLabRejection) -> CampusError {
     match rejection {
         CampusLabRejection::NoSlotsAvailable => {
@@ -346,6 +375,7 @@ pub(crate) async fn list_assignments(
                 "kind": assignment.profile_kind,
             },
             "session_seconds": assignment.session_seconds,
+            "limits": limits_view(&assignment.policy),
             "launchable": role.is_some() && labs.can_launch(),
             "session": session,
         }));

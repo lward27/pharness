@@ -280,6 +280,17 @@ async fn launch_derives_identity_profile_and_bounds_and_rejects_client_fields() 
     assert_eq!(long_entry["session_seconds"], 7_200);
     assert_eq!(long_entry["launchable"], true);
     assert_eq!(long_entry["session"]["session_id"], long["session_id"]);
+    let limits = &long_entry["limits"];
+    assert!(limits["cpu_millicores"].as_u64().unwrap() > 0);
+    assert!(limits["memory_mib"].as_u64().unwrap() > 0);
+    assert!(limits["ttl_seconds"].as_u64().unwrap() > 0);
+    assert!(matches!(
+        limits["network"].as_str(),
+        Some("denied" | "approved_egress")
+    ));
+    assert!(!limits["model_aliases"].as_array().unwrap().is_empty());
+    assert!(limits["set_by"]["ttl_seconds"].is_string());
+    assert!(limits.get("image").is_none());
     assert_safe(&assignments, &[]);
 }
 
