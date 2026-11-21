@@ -3,7 +3,7 @@ import "@testing-library/jest-dom/vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CampusApp, parseRoute } from "./CampusApp";
+import { CampusApp, parseRoute, terminalHints } from "./CampusApp";
 import { CampusApiError, CampusAssignment, CampusLabSession, CampusMe, CampusPortalApi } from "./campusApi";
 import { limitRows } from "./campusFormat";
 import type { TerminalWidget } from "./xtermWidget";
@@ -111,6 +111,20 @@ describe("parseRoute", () => {
     expect(parseRoute("#/courses/cs101/live")).toEqual({ name: "live", courseId: "cs101" });
     expect(parseRoute("#/profiles")).toEqual({ name: "profiles" });
     expect(parseRoute("#/courses/<script>")).toEqual({ name: "home" });
+  });
+});
+
+describe("terminalHints", () => {
+  it("uses tools each lab image has and shows its network policy", () => {
+    const research = { ...assignment(), profile: { id: "campus-research", version: "v1", kind: "research" }, limits: { ...limits, network: "denied" as const, egress_hosts: [] } };
+    const researchHints = terminalHints(research).map(h => h.command).join("\n");
+    expect(researchHints).toContain("python3");
+    expect(researchHints).not.toContain("curl");
+    const codingHints = terminalHints(assignment()).map(h => h.command);
+    expect(codingHints).toContain("git ls-remote https://github.com/git/git HEAD");
+    expect(codingHints.join("\n")).toContain("gitlab.com");
+    expect(codingHints.join("\n")).not.toContain("curl");
+    expect(terminalHints(null).map(h => h.command)).toEqual(["codex --version", "pwd && ls -la"]);
   });
 });
 
