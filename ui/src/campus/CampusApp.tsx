@@ -482,6 +482,42 @@ function AssignmentPage({ courseId, assignmentId }: { courseId: string; assignme
 
 // ---------------------------------------------------------------- student: lab session
 
+/** Commands that work in this lab's image and show its network policy. */
+export function terminalHints(assignment: CampusAssignment | null): { command: string; note: string }[] {
+  const hints = [
+    { command: "codex --version", note: "The agent harness in this lab." },
+    { command: "pwd && ls -la", note: "Your private workspace." },
+  ];
+  if (!assignment) return hints;
+  const network = assignment.limits?.network;
+  if (assignment.profile.kind === "research" || network === "denied") {
+    hints.push({
+      command: `python3 -c "import urllib.request as u; u.urlopen('https://example.com', timeout=5)"`,
+      note: "Fails: this lab has no internet.",
+    });
+  } else if (assignment.profile.kind === "coding") {
+    if (assignment.limits?.egress_hosts.includes("github.com")) {
+      hints.push({ command: "git ls-remote https://github.com/git/git HEAD", note: "Works: github.com is an approved site." });
+    }
+    hints.push({ command: "git ls-remote https://gitlab.com/gitlab-org/gitlab HEAD", note: "Refused: gitlab.com is not approved." });
+  }
+  return hints;
+}
+
+function TerminalHints({ assignment }: { assignment: CampusAssignment | null }) {
+  return (
+    <div className="cp-stack-6">
+      <span className="cp-side-label">Try in the terminal</span>
+      {terminalHints(assignment).map(hint => (
+        <div key={hint.command} className="cp-stack-2">
+          <code className="cp-code">{hint.command}</code>
+          <span className="cp-muted">{hint.note}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const STEPS = [
   { key: "queued", label: "Admitted", help: "A lab slot was reserved for you" },
   { key: "provisioning", label: "Provisioning", help: "Preparing your private sandbox" },
@@ -567,6 +603,14 @@ function LabPage({ sessionId }: { sessionId: string }) {
     ({ session }) => session.status !== "stopped" && session.status !== "failed",
   );
   const session = value?.session ?? null;
+  const courseId = session?.course_id ?? null;
+  const assignments = usePolled(
+    () => (courseId ? api.assignments(courseId) : Promise.resolve(null)),
+    [courseId],
+    60000,
+    () => false,
+  );
+  const assignment = assignments.value?.assignments.find(a => a.assignment_id === session?.assignment_id) ?? null;
   const ended = session && (session.status === "stopped" || session.status === "failed");
   const showTerminal = session && !ended && (session.status === "ready" || session.status === "stopping" || session.stop_requested);
   const [everReady, setEverReady] = useState(false);
@@ -611,13 +655,7 @@ function LabPage({ sessionId }: { sessionId: string }) {
               </span>
               <span className="cp-muted">Isolated, short-lived, and deleted when it ends.</span>
             </div>
-            <div className="cp-stack-6">
-              <span className="cp-side-label">Try in the terminal</span>
-              <code className="cp-code">codex --version</code>
-              <code className="cp-code">pwd &amp;&amp; ls -la</code>
-              <code className="cp-code">curl -sI https://example.com</code>
-              <span className="cp-muted">The last one shows the network policy at work.</span>
-            </div>
+            <TerminalHints assignment={assignment} />
             <a className="cp-button" href={href.assignment(session.course_id, session.assignment_id)}>
               Lab details
             </a>
