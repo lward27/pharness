@@ -149,6 +149,12 @@ async fn main() -> anyhow::Result<()> {
                 tracing::info!("campus browser terminals enabled");
                 runtime = runtime.with_terminals(Arc::new(terminals));
             }
+            if let Some(inference) = app::campus::load_campus_inference_from_env()
+                .context("failed to configure campus model inference")?
+            {
+                tracing::info!(models = ?inference.aliases(), "campus model inference enabled");
+                runtime = runtime.with_inference(Arc::new(inference));
+            }
             runtime.spawn_lab_reconciler(store.clone());
             app::campus::CampusMount::Enabled(Box::new(runtime))
         }

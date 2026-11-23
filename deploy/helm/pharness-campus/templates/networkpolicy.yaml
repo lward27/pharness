@@ -12,8 +12,9 @@ spec:
   policyTypes: ["Ingress", "Egress"]
 ---
 # The Campus API: browsers through Traefik, lab sessions on the broker port
-# only. Out: the Kubernetes API (controller and terminal identities) and the
-# Keycloak token and JWKS endpoints. No DNS and no internet.
+# only. Out: the Kubernetes API (controller and terminal identities), the
+# Keycloak token and JWKS endpoints and, with api.inference, DNS and the
+# model provider on public 443. Nothing else.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -58,6 +59,31 @@ spec:
       ports:
         - port: {{ .Values.keycloak.port }}
           protocol: TCP
+    {{- with .Values.api.inference }}
+    {{- if .enabled }}
+    # The model provider, by name: DNS, then 443 on public addresses only.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .dns.namespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml .dns.podLabels | nindent 14 }}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              {{- toYaml .egressExcept | nindent 14 }}
+      ports:
+        - port: 443
+          protocol: TCP
+    {{- end }}
+    {{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

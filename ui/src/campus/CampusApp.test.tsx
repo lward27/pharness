@@ -124,7 +124,7 @@ describe("terminalHints", () => {
     expect(codingHints).toContain("git ls-remote https://github.com/git/git HEAD");
     expect(codingHints.join("\n")).toContain("gitlab.com");
     expect(codingHints.join("\n")).not.toContain("curl");
-    expect(terminalHints(null).map(h => h.command)).toEqual(["codex --version", "pwd && ls -la"]);
+    expect(terminalHints(null).map(h => h.command)).toEqual(["opencode", "pwd && ls -la"]);
   });
 });
 

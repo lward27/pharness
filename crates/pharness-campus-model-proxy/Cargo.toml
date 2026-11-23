@@ -1,0 +1,15 @@
+[package]
+name = "pharness-campus-model-proxy"
+description = "Loopback model endpoint inside a Campus lab that forwards to the Campus broker with the session's current token."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "campus-model-proxy"
+path = "src/main.rs"

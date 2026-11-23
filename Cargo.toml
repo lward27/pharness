@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/pharness-api",
+    "crates/pharness-campus-model-proxy",
     "crates/pharness-cli",
     "crates/pharness-config",
     "crates/pharness-core",

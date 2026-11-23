@@ -1302,6 +1302,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "pharness-campus-model-proxy"
+version = "0.1.0"
+
+[[package]]
 name = "pharness-cli"
 version = "0.1.0"
 dependencies = [
