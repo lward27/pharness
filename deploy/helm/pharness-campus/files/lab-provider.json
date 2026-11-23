@@ -29,10 +29,20 @@
       "ephemeral_storage_mib": 256
     },
     "workspace_command": [
-      "sleep",
-      "2147483647"
+      "/bin/sh",
+      "-c",
+      "campus-model-proxy & exec sleep 2147483647"
     ],
-    "environment": {},
+    "environment": {
+      "OPENCODE_CONFIG": "/etc/pharness-campus/opencode/opencode.json",
+      "OPENCODE_CONFIG_DIR": "/etc/pharness-campus/opencode",
+      "OPENCODE_DISABLE_AUTOUPDATE": "true",
+      "OPENCODE_DISABLE_MODELS_FETCH": "true",
+      "OPENCODE_DISABLE_LSP_DOWNLOAD": "true",
+      "XDG_CACHE_HOME": "/tmp/.cache",
+      "XDG_DATA_HOME": "/tmp/.local/share",
+      "XDG_STATE_HOME": "/tmp/.local/state"
+    },
     "log_storage_mib": 128,
     "finished_job_ttl_seconds": 300,
     "stuck_termination_seconds": 120,

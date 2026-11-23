@@ -1,11 +1,14 @@
 //! The Campus broker listener and the separation of broker tokens from
 //! every other credential, through the HTTP boundary on the fake provider.
 
-use super::super::broker::{campus_broker_bind, FAKE_INFERENCE_MODEL};
+use super::super::broker::{campus_broker_bind, router as broker_router, FAKE_INFERENCE_MODEL};
+use super::super::inference::CampusInference;
 use super::super::state::CampusMount;
+use super::super::state::CampusState;
 use super::labs::{act, catalog_value, enroll_students, id, labs_harness, launched, parse};
 use super::{
-    body_json, full_routers, request, send, Harness, Session, OPERATOR_TOKEN, ORIGIN, WORKER_TOKEN,
+    body_json, body_text, full_routers, request, send, Harness, Session, OPERATOR_TOKEN, ORIGIN,
+    WORKER_TOKEN,
 };
 use axum::body::Body;
 use axum::http::{header, HeaderName, StatusCode};
@@ -15,15 +18,18 @@ use pharness_workspaces::campus_broker_token::{
     CAMPUS_BROKER_TOKEN_PREFIX,
 };
 use pharness_workspaces::CampusWorkloadRef;
+use secrecy::SecretString;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
 
 const OPERATOR_INVENTORY: &str = include_str!("../../../../tests/fixtures/app-route-inventory.tsv");
 
 /// Every broker route. Adding one without listing it here fails
 /// `broker_routes_are_served_only_on_the_broker_listener`.
 const BROKER_ROUTES: &[(&str, &str)] = &[
+    ("GET", "/v1/inference/models"),
     ("GET", "/v1/token"),
     ("POST", "/v1/inference/chat/completions"),
 ];
@@ -731,4 +737,136 @@ async fn forged_reports_cannot_move_a_lab_session_or_write_anything() {
     )
     .await;
     assert_eq!(view["session"]["status"], "ready");
+}
+
+/// A model provider on loopback that records what the broker sent it and
+/// streams a two-event answer.
+async fn fake_provider() -> (String, Arc<Mutex<Vec<(String, Value)>>>) {
+    use axum::routing::post;
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let record = seen.clone();
+    let provider = Router::new().route(
+        "/inference/v1/chat/completions",
+        post(
+            move |headers: axum::http::HeaderMap, body: axum::Json<Value>| {
+                let record = record.clone();
+                async move {
+                    let auth = headers
+                        .get(header::AUTHORIZATION)
+                        .and_then(|value| value.to_str().ok())
+                        .unwrap_or_default()
+                        .to_string();
+                    record.lock().unwrap().push((auth, body.0));
+                    (
+                    [(header::CONTENT_TYPE, "text/event-stream")],
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\ndata: [DONE]\n\n",
+                )
+                }
+            },
+        ),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, provider).await.unwrap() });
+    (format!("http://{address}/inference/v1/"), seen)
+}
+
+#[tokio::test]
+async fn inference_goes_to_the_provider_with_its_key_never_the_lab_token() {
+    let harness = labs_harness(5).await;
+    enroll_students(&harness, "cs101", &["alice"]).await;
+    let alice = harness.login("alice").await;
+    let session_id = ready_session(&harness, &alice, "lab-1").await;
+    let token = issue(&harness, &session_id, Audience::Inference).await;
+    let tools_token = issue(&harness, &session_id, Audience::Tools).await;
+
+    let (base_url, seen) = fake_provider().await;
+    let inference = CampusInference::new(
+        &base_url,
+        SecretString::from("provider-secret".to_string()),
+        BTreeMap::from([(
+            "campus-default".to_string(),
+            "accounts/fireworks/models/small".to_string(),
+        )]),
+        2048,
+    )
+    .unwrap();
+    let runtime = Harness::runtime_for(
+        &harness.config,
+        &harness.idp,
+        &harness.clock,
+        harness.labs.as_ref(),
+        None,
+    )
+    .with_inference(Arc::new(inference));
+    let broker = broker_router(CampusState {
+        store: harness.store.clone(),
+        runtime: Arc::new(runtime),
+    });
+
+    let (status, models) = broker_call(
+        &broker,
+        "GET",
+        "/v1/inference/models",
+        &bearer(&token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(models["data"][0]["id"], "campus-default");
+
+    let body = json!({
+        "model": "campus-default",
+        "stream": true,
+        "max_tokens": 100000,
+        "messages": [{ "role": "user", "content": "explain this loop" }],
+        "tools": [{ "type": "function", "function": { "name": "read", "parameters": {} } }],
+    });
+    let response = send(
+        &broker,
+        request("POST", CHAT)
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers()[header::CONTENT_TYPE],
+        "text/event-stream"
+    );
+    assert!(body_text(response).await.ends_with("data: [DONE]\n\n"));
+    {
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.len(), 1);
+        let (auth, sent) = &seen[0];
+        assert_eq!(auth, "Bearer provider-secret");
+        assert!(!sent.to_string().contains(&token));
+        assert_eq!(sent["model"], "accounts/fireworks/models/small");
+        assert_eq!(sent["max_tokens"], 2048);
+        assert_eq!(sent["tools"][0]["function"]["name"], "read");
+    }
+
+    // Only Campus aliases, only with an inference token.
+    let (status, refused) = broker_call(
+        &broker,
+        "POST",
+        CHAT,
+        &bearer(&token),
+        Some(json!({ "model": "accounts/fireworks/models/small", "messages": [{ "role": "user", "content": "x" }] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(refused["code"], "model_not_allowed");
+    let (status, _) = broker_call(
+        &broker,
+        "POST",
+        CHAT,
+        &bearer(&tools_token),
+        Some(chat_body()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(seen.lock().unwrap().len(), 1);
 }

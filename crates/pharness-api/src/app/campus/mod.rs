@@ -10,6 +10,7 @@ mod broker;
 mod config;
 mod error;
 mod handlers;
+mod inference;
 mod lab_catalog;
 mod lab_handlers;
 mod lab_provider;
@@ -28,6 +29,7 @@ mod tests;
 
 pub(crate) use broker::load_campus_broker_bind_from_env;
 pub(crate) use config::{load_campus_config_from_env, validate_campus_startup};
+pub(crate) use inference::load_campus_inference_from_env;
 pub(crate) use lab_catalog::load_campus_labs_from_env;
 pub(crate) use lab_provider::build_campus_labs;
 pub(crate) use labs::CAMPUS_JANITOR;

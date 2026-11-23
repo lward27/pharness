@@ -15,6 +15,8 @@
 #       operator-tokens     <name>=<token>; the operator API is never routed
 #                           publicly, but PHarness requires it on a
 #                           non-loopback bind
+#   - Secret pharness-campus-inference in campus-poc, when api.inference is
+#     enabled: api-key, the model provider key (Fireworks)
 
 namespace: campus-poc
 
@@ -59,6 +61,30 @@ api:
   broker:
     port: 4790
     clusterIP: 10.43.130.31
+  # Real model inference behind the broker. The provider key stays in this
+  # Pod; labs reach it only through the broker with their session token.
+  # Without it the broker serves its fake model. The key Secret is created
+  # out-of-band (see the prerequisites above).
+  inference:
+    enabled: true
+    secretName: pharness-campus-inference
+    baseUrl: https://api.fireworks.ai/inference/v1/
+    # Campus model alias -> provider model. US-developed open-weight models.
+    models:
+      campus-default: accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b
+    maxOutputTokens: 8192
+    # The API resolves the provider by DNS and reaches it on 443; private
+    # ranges stay closed.
+    dns:
+      namespace: kube-system
+      podLabels:
+        k8s-app: kube-dns
+    egressExcept:
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+      - 100.64.0.0/10
+      - 169.254.0.0/16
   resources:
     requests:
       cpu: 50m

@@ -146,6 +146,18 @@ spec:
               value: kubectl
             - name: PHARNESS_CAMPUS_TERMINAL_CONFIG_FILE
               value: /etc/pharness-campus/terminal.json
+            {{- with .Values.api.inference }}
+            {{- if .enabled }}
+            - name: PHARNESS_CAMPUS_INFERENCE_BASE_URL
+              value: {{ .baseUrl | quote }}
+            - name: PHARNESS_CAMPUS_INFERENCE_API_KEY_FILE
+              value: /var/run/pharness-campus/inference/api-key
+            - name: PHARNESS_CAMPUS_INFERENCE_MODELS
+              value: {{ .models | toJson | quote }}
+            - name: PHARNESS_CAMPUS_INFERENCE_MAX_OUTPUT_TOKENS
+              value: {{ .maxOutputTokens | quote }}
+            {{- end }}
+            {{- end }}
           volumeMounts:
             - name: data
               mountPath: /data
@@ -163,6 +175,11 @@ spec:
             - name: terminal-token
               mountPath: /var/run/pharness-campus/terminal
               readOnly: true
+            {{- if .Values.api.inference.enabled }}
+            - name: inference
+              mountPath: /var/run/pharness-campus/inference
+              readOnly: true
+            {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -198,6 +215,14 @@ spec:
               - { key: terminal.json, path: terminal.json }
               - { key: controller-kubeconfig, path: kube/controller-kubeconfig }
               - { key: terminal-kubeconfig, path: kube/terminal-kubeconfig }
+        {{- if .Values.api.inference.enabled }}
+        - name: inference
+          secret:
+            secretName: {{ .Values.api.inference.secretName }}
+            defaultMode: 0440
+            items:
+              - { key: api-key, path: api-key }
+        {{- end }}
         - name: secrets
           secret:
             secretName: {{ .Values.api.secretName }}

@@ -485,7 +485,7 @@ function AssignmentPage({ courseId, assignmentId }: { courseId: string; assignme
 /** Commands that work in this lab's image and show its network policy. */
 export function terminalHints(assignment: CampusAssignment | null): { command: string; note: string }[] {
   const hints = [
-    { command: "codex --version", note: "The agent harness in this lab." },
+    { command: "opencode", note: "Your AI tutor. Press Tab to switch to the build agent, which asks before every change." },
     { command: "pwd && ls -la", note: "Your private workspace." },
   ];
   if (!assignment) return hints;

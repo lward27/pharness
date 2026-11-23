@@ -10,14 +10,15 @@
 //! operator, worker or Campus browser route; a sandbox network policy should
 //! allow egress to this port only.
 //!
-//! Inference here is a fake: it answers deterministically and never calls a
-//! model provider. Real model routing is a later change.
+//! Inference goes to the configured model provider ([`super::inference`]),
+//! whose key never leaves this process. Without one, the broker serves a
+//! deterministic fake that never calls a provider.
 
 use super::error::CampusError;
+use super::inference::{models_view, MAX_REQUEST_BYTES};
 use super::state::CampusState;
 use anyhow::bail;
-use axum::body::Body;
-use axum::extract::rejection::JsonRejection;
+use axum::body::{Body, Bytes};
 use axum::extract::{DefaultBodyLimit, Request, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::middleware::{from_fn_with_state, Next};
@@ -86,7 +87,11 @@ pub(super) fn closed_router(status: StatusCode, message: &'static str) -> Router
 pub(super) fn router(state: CampusState) -> Router {
     let inference = Router::new()
         .route("/v1/token", get(describe_token))
-        .route("/v1/inference/chat/completions", post(fake_chat_completion))
+        .route("/v1/inference/models", get(list_models))
+        .route(
+            "/v1/inference/chat/completions",
+            post(chat_completion).layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES)),
+        )
         .route_layer(from_fn_with_state(state.clone(), require_inference_token));
     traced(
         inference
@@ -198,12 +203,50 @@ fn approximate_tokens(text: &str) -> usize {
     text.split_whitespace().count()
 }
 
-async fn fake_chat_completion(
+async fn list_models(State(state): State<CampusState>) -> Json<Value> {
+    Json(match &state.runtime.inference {
+        Some(inference) => inference.models_view(),
+        None => models_view([FAKE_INFERENCE_MODEL].into_iter()),
+    })
+}
+
+async fn chat_completion(
     State(state): State<CampusState>,
     Extension(grant): Extension<CampusBrokerGrant>,
-    body: Result<Json<ChatCompletionRequest>, JsonRejection>,
+    body: Bytes,
+) -> Result<Response, CampusError> {
+    let Some(inference) = &state.runtime.inference else {
+        return fake_chat_completion(&state, &grant, &body).map(IntoResponse::into_response);
+    };
+    let request: Value = serde_json::from_slice(&body).map_err(|_| {
+        CampusError::bad_request("the request body must be a chat completion request")
+    })?;
+    let streamed = request.get("stream").and_then(Value::as_bool) == Some(true);
+    let (alias, request) = inference.prepare(request)?;
+    let response = inference.forward(request).await?;
+    tracing::info!(
+        session_id = %grant.session_id(),
+        token_id = %grant.token_id,
+        model = %alias,
+        streamed,
+        status = response.status().as_u16(),
+        "campus inference forwarded"
+    );
+    Ok(response)
+}
+
+fn fake_chat_completion(
+    state: &CampusState,
+    grant: &CampusBrokerGrant,
+    body: &[u8],
 ) -> Result<Json<Value>, CampusError> {
-    let Json(request) = body.map_err(|_| {
+    if body.len() > MAX_BODY_BYTES {
+        return Err(CampusError::new(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "the request body is too large",
+        ));
+    }
+    let request: ChatCompletionRequest = serde_json::from_slice(body).map_err(|_| {
         CampusError::bad_request("the request body must be a chat completion request")
     })?;
     if request.messages.is_empty() || request.messages.len() > MAX_MESSAGES {

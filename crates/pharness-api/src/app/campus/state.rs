@@ -1,4 +1,5 @@
 use super::config::CampusConfig;
+use super::inference::CampusInference;
 use super::labs::CampusLabs;
 use super::login_cookie::LoginCookieKey;
 use super::oidc::{IdTokenValidator, OidcHttp, ReqwestOidcHttp};
@@ -47,6 +48,9 @@ pub(crate) struct CampusRuntime {
     pub(crate) labs: Option<Arc<CampusLabs>>,
     /// Absent unless browser terminals are configured.
     pub(crate) terminals: Option<Arc<CampusTerminals>>,
+    /// Absent unless a model provider is configured; the broker then
+    /// serves its fake model.
+    pub(crate) inference: Option<Arc<CampusInference>>,
 }
 
 impl CampusRuntime {
@@ -71,11 +75,17 @@ impl CampusRuntime {
             login_cookie_key,
             labs: None,
             terminals: None,
+            inference: None,
         }
     }
 
     pub(crate) fn with_labs(mut self, labs: Arc<CampusLabs>) -> Self {
         self.labs = Some(labs);
+        self
+    }
+
+    pub(crate) fn with_inference(mut self, inference: Arc<CampusInference>) -> Self {
+        self.inference = Some(inference);
         self
     }
 
