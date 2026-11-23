@@ -48,14 +48,17 @@ RUN test "${TARGETARCH}" = "amd64" \
     && tar -xzf /tmp/opencode.tgz -C /tmp/opencode \
     && install -m 0755 /tmp/opencode/package/bin/opencode /out/opencode
 
-FROM python:3.11-slim@sha256:db20d8506e2f15b6db39b40b6015ca46bae855dec6dd326d462cfe79ae972893
+FROM python:3.11-slim@sha256:07d4824036af339fa1b6ef769cc99d9c10a141769538b52b3b597c84f7a7b535
 ARG PHARNESS_BUILD_REVISION=unknown
 LABEL org.opencontainers.image.source="https://github.com/lward27/pharness" \
       org.opencontainers.image.revision="${PHARNESS_BUILD_REVISION}"
 ENV PHARNESS_BUILD_REVISION="${PHARNESS_BUILD_REVISION}" \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
+# Debian security fixes land in the archive before the official base images
+# are rebuilt, so upgrade the installed packages before removing apt.
 RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends bubblewrap ca-certificates git ripgrep \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --uid 65532 --user-group --home-dir /workspace --no-create-home pharness

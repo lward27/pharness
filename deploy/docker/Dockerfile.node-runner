@@ -61,14 +61,17 @@ RUN mkdir -p /npm \
       '/npm/npm-11.21.2.tgz' \
       | sha256sum --check --status
 
-FROM node:24-bookworm-slim@sha256:a43f7fc3e52e87d12a905f46eea0275def84ca8f2981a5b53fed44d7fb398ee0
+FROM node:24-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54
 ARG PHARNESS_BUILD_REVISION=unknown
 LABEL org.opencontainers.image.source="https://github.com/lward27/pharness" \
       org.opencontainers.image.revision="${PHARNESS_BUILD_REVISION}"
 ENV PHARNESS_BUILD_REVISION="${PHARNESS_BUILD_REVISION}" \
     NPM_CONFIG_AUDIT=false \
     NPM_CONFIG_FUND=false
+# Debian security fixes land in the archive before the official base images
+# are rebuilt, so upgrade the installed packages before removing apt.
 RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends bubblewrap ca-certificates git ripgrep \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 65532 pharness \
