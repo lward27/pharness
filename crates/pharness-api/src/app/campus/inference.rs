@@ -251,7 +251,10 @@ pub(crate) fn load_campus_inference_from_env() -> anyhow::Result<Option<CampusIn
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::CampusInference;
+    use secrecy::SecretString;
+    use serde_json::{json, Value};
+    use std::collections::BTreeMap;
 
     fn inference() -> CampusInference {
         CampusInference::new(
