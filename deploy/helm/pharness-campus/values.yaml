@@ -25,9 +25,9 @@ namespace: campus-poc
 api:
   image:
     repository: registry.lucas.engineering/pharness-runtime
-    digest: sha256:489182e64df35875937b4cbe3287b4b142366df5b41ebd61d25dceede675cff6
+    digest: sha256:ca9779fda53f0f016e14c5ea1b95c1d313f79de6e1b8d4355f41a92d1f76d9e0
     pullPolicy: IfNotPresent
-    revision: 79c1edd78c6fe747a99c261e26b9743ed582f923
+    revision: b63aae0ec4717419ceb5bc14519907a1edfd5168
   tenantId: campus-poc
   publicOrigin: https://campus.lucas.engineering
   oidc:
@@ -74,9 +74,9 @@ api:
 ui:
   image:
     repository: registry.lucas.engineering/pharness-ui
-    digest: sha256:a526fa3071bdaf783294d57883706275e1b79ca86c2590f45941e64ea36fbdfe
+    digest: sha256:d14cb5990230ce525a6a98ff24f1a225bdd2495e3a707551525cd41b5c36a3fb
     pullPolicy: IfNotPresent
-    revision: 79c1edd78c6fe747a99c261e26b9743ed582f923
+    revision: b63aae0ec4717419ceb5bc14519907a1edfd5168
   resources:
     requests:
       cpu: 10m
